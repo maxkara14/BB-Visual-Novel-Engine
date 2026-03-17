@@ -1,4 +1,4 @@
-**💖 BB Visual Novel Engine (VGE)**
+**💖 BB Visual Novel Engine (VNE)**
 
 Расширение для SillyTavern, превращающее текстовую ролевую игру в полноценную визуальную новеллу.
 
