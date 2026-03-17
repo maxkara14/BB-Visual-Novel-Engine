@@ -104,7 +104,6 @@
 .bb-char-header { display: flex; justify-content: space-between; align-items: center; }
 .bb-char-name { font-weight: 800; color: #e2e8f0; font-size: 15px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* ДИНАМИЧЕСКИЙ СТАТУС ОТ ИИ */
 .bb-char-tier {
     font-size: 10px; padding: 4px 8px; border-radius: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;
     max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;
@@ -113,12 +112,6 @@
 .tier-neutral { background: rgba(161, 161, 170, 0.2); color: #a1a1aa; border: 1px solid rgba(161, 161, 170, 0.3); }
 .tier-friend { background: rgba(74, 222, 128, 0.2); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.3); }
 .tier-close { background: rgba(192, 132, 252, 0.2); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.3); }
-
-.bb-btn-undo {
-    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-    color: #94a3b8; border-radius: 6px; padding: 4px 8px; cursor: pointer; transition: all 0.2s ease; font-size: 10px;
-}
-.bb-btn-undo:hover { background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: rgba(239, 68, 68, 0.4); }
 
 /* === ДВУСТОРОННЯЯ ШКАЛА === */
 .bb-progress-bg { width: 100%; height: 6px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; position: relative; }
@@ -183,14 +176,15 @@
 .bb-vn-op-head { display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: #fff; word-wrap: break-word; }
 .bb-vn-op-risk { font-size: 10px; text-transform: uppercase; font-weight: 800; padding: 2px 6px; border-radius: 4px; align-self: center; }
 
-.bb-vn-option.type-friendly { border-bottom: 3px solid #4ade80; }
-.bb-vn-option.type-friendly:hover { box-shadow: 0 5px 15px rgba(74, 222, 128, 0.3); }
-.bb-vn-option.type-friendly .bb-vn-op-risk { background: rgba(74, 222, 128, 0.2); color: #4ade80; }
+/* Цвета кнопок теперь зависят от РИСКА */
+.bb-vn-option.risk-low { border-bottom: 3px solid #4ade80; }
+.bb-vn-option.risk-low:hover { box-shadow: 0 5px 15px rgba(74, 222, 128, 0.3); }
+.bb-vn-option.risk-low .bb-vn-op-risk { background: rgba(74, 222, 128, 0.2); color: #4ade80; }
 
-.bb-vn-option.type-aggressive { border-bottom: 3px solid #ef4444; }
-.bb-vn-option.type-aggressive:hover { box-shadow: 0 5px 15px rgba(239, 68, 68, 0.3); }
-.bb-vn-option.type-aggressive .bb-vn-op-risk { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+.bb-vn-option.risk-high { border-bottom: 3px solid #ef4444; }
+.bb-vn-option.risk-high:hover { box-shadow: 0 5px 15px rgba(239, 68, 68, 0.3); }
+.bb-vn-option.risk-high .bb-vn-op-risk { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
 
-.bb-vn-option.type-neutral { border-bottom: 3px solid #60a5fa; }
-.bb-vn-option.type-neutral:hover { box-shadow: 0 5px 15px rgba(96, 165, 250, 0.3); }
-.bb-vn-option.type-neutral .bb-vn-op-risk { background: rgba(96, 165, 250, 0.2); color: #60a5fa; }
+.bb-vn-option.risk-med { border-bottom: 3px solid #60a5fa; }
+.bb-vn-option.risk-med:hover { box-shadow: 0 5px 15px rgba(96, 165, 250, 0.3); }
+.bb-vn-option.risk-med .bb-vn-op-risk { background: rgba(96, 165, 250, 0.2); color: #60a5fa; }
