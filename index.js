@@ -114,8 +114,8 @@ function scanAndCleanMessage(msg, messageId) {
     if (!msg || msg.is_user) return false;
     let modified = false;
 
-    const jsonRegex = /```json\s*({[\s\S]*?"social_updates"[\s\S]*?})\s*```/g;
-    const match = jsonRegex.exec(msg.mes);
+    const jsonRegex = /```json\s*({[\s\S]*?"social_updates"[\s\S]*?})\s*```/;
+    const match = msg.mes.match(jsonRegex);
     const swipeId = msg.swipe_id || 0;
 
     if (match) {
@@ -160,7 +160,20 @@ function recalculateAllStats(isNewMessage = false) {
         }
 
         const swipeId = msg.swipe_id || 0;
-        const activeUpdates = msg.extra?.bb_social_swipes?.[swipeId];
+        let activeUpdates = msg.extra?.bb_social_swipes?.[swipeId];
+
+        // === ИСПРАВЛЕНИЕ: ЗАЩИТА ПРИ ОТМЕНЕ СВАЙПА ===
+        // Если в текущем свайпе нет данных (отменили генерацию), ищем данные в других свайпах ЭТОГО ЖЕ сообщения
+        if (!activeUpdates || !Array.isArray(activeUpdates)) {
+            if (msg.extra && msg.extra.bb_social_swipes) {
+                for (const key in msg.extra.bb_social_swipes) {
+                    if (Array.isArray(msg.extra.bb_social_swipes[key])) {
+                        activeUpdates = msg.extra.bb_social_swipes[key];
+                        break; // Забираем статы из успешного свайпа!
+                    }
+                }
+            }
+        }
 
         if (activeUpdates && Array.isArray(activeUpdates)) {
             activeUpdates.forEach(update => {
@@ -188,7 +201,7 @@ function recalculateAllStats(isNewMessage = false) {
 
                 currentCalculatedStats[charName].history.push({ delta, reason: update.reason || "" });
                 
-                if (isNewMessage && idx === chat.length - 1) {
+                if (isNewMessage && idx === chat.length - 1 && delta !== 0) {
                     showAffinityToast(charName, delta, update.reason || "");
                     const sign = delta > 0 ? '+' : '';
                     addGlobalLog(delta > 0 ? 'plus' : 'minus', `<strong>${escapeHtml(charName)}</strong>: ${sign}${delta} <i>(${escapeHtml(update.reason)})</i>`);
@@ -218,10 +231,9 @@ function renderSocialHud() {
                 const tier = getTierInfo(affinity);
                 const displayStatus = currentCalculatedStats[charName].status || tier.label;
                 
-                // НОВАЯ ЛОГИКА ДВУСТОРОННЕЙ ШКАЛЫ
                 let barStyle = '';
                 if (affinity >= 0) {
-                    const w = Math.min(100, affinity); // Ограничитель
+                    const w = Math.min(100, affinity);
                     barStyle = `left: 50%; width: ${w / 2}%; background-color: ${tier.color};`;
                 } else {
                     const w = Math.min(100, Math.abs(affinity));
@@ -233,7 +245,9 @@ function renderSocialHud() {
                 [...historyArr].reverse().forEach(h => {
                     const sign = h.delta > 0 ? '+' : '';
                     const color = h.delta > 0 ? '#4ade80' : '#ef4444';
-                    historyHtml += `<div class="bb-log-entry"><span class="bb-log-delta" style="color:${color}">${sign}${h.delta}</span> <span class="bb-log-reason">"${escapeHtml(h.reason)}"</span></div>`;
+                    if (h.delta !== 0) {
+                        historyHtml += `<div class="bb-log-entry"><span class="bb-log-delta" style="color:${color}">${sign}${h.delta}</span> <span class="bb-log-reason">"${escapeHtml(h.reason)}"</span></div>`;
+                    }
                 });
                 if(historyHtml === '') historyHtml = '<i style="color:#64748b;">Нет записей</i>';
 
@@ -241,10 +255,7 @@ function renderSocialHud() {
                     <div class="bb-char-card" data-char="${escapeHtml(charName)}">
                         <div class="bb-char-header">
                             <span class="bb-char-name">${charName}</span>
-                            <div style="display:flex; gap:8px; align-items:center;">
-                                <span class="bb-char-tier ${tier.class}" title="${escapeHtml(displayStatus)}">${escapeHtml(displayStatus)}</span>
-                                <button class="bb-btn-undo" data-char="${escapeHtml(charName)}" title="Откатить последнее изменение"><i class="fa-solid fa-rotate-left"></i></button>
-                            </div>
+                            <span class="bb-char-tier ${tier.class}" title="${escapeHtml(displayStatus)}">${escapeHtml(displayStatus)}</span>
                         </div>
                         <div class="bb-progress-bg">
                             <div class="bb-progress-center-line"></div>
@@ -263,38 +274,8 @@ function renderSocialHud() {
             });
             charsBox.innerHTML = html;
 
-            $('.bb-char-card').off('click').on('click', function(e) {
-                if ($(e.target).closest('.bb-btn-undo').length) return; 
+            $('.bb-char-card').off('click').on('click', function() {
                 $(this).toggleClass('expanded');
-            });
-
-            $('.bb-btn-undo').off('click').on('click', function(e) {
-                e.stopPropagation();
-                const charName = $(this).attr('data-char');
-                const chat = SillyTavern.getContext().chat;
-                
-                let removed = false;
-                for (let i = chat.length - 1; i >= 0; i--) {
-                    const msg = chat[i];
-                    const swipeId = msg.swipe_id || 0;
-                    if (msg.extra && msg.extra.bb_social_swipes && msg.extra.bb_social_swipes[swipeId]) {
-                        const updates = msg.extra.bb_social_swipes[swipeId];
-                        const idx = updates.findIndex(u => u.name === charName);
-                        if (idx !== -1) {
-                            updates.splice(idx, 1);
-                            removed = true;
-                            break;
-                        }
-                    }
-                }
-                
-                if (removed) {
-                    addGlobalLog('system', `Отменено последнее изменение для <strong>${escapeHtml(charName)}</strong>.`);
-                    saveChatDebounced();
-                    recalculateAllStats();
-                    // @ts-ignore
-                    toastr.info(`Изменение для ${charName} отменено`);
-                }
             });
         }
     }
@@ -369,14 +350,13 @@ function ensureHudContainer() {
 
 const OPTIONS_PROMPT = `<task>
 Analyze the recent chat. Create 3 highly distinct, engaging actions {{user}} can take right now to respond to the situation.
-Make them feel like Visual Novel choices (e.g., Aggressive, Friendly, Deceptive, Diplomatic, Retreat).
+Make them feel like Visual Novel choices.
 Return STRICTLY as a JSON object in this format:
 {
   "options": [
     {
       "intent": "МАКСИМУМ 1-3 СЛОВА (например: 'Уйти на крышу', 'Грубо ответить')",
-      "risk": "Низкий/Средний/Высокий",
-      "type": "friendly" // must be: friendly, aggressive, or neutral
+      "risk": "Низкий/Средний/Высокий"
     }
   ]
 }
@@ -454,15 +434,20 @@ function injectVNActionsUI() {
             if (parsed.options && parsed.options.length > 0) {
                 let optionsHtml = '';
                 parsed.options.forEach(opt => {
+                    let riskClass = 'risk-med';
+                    const r = (opt.risk || '').toLowerCase();
+                    if (r.includes('низкий') || r.includes('low')) riskClass = 'risk-low';
+                    if (r.includes('высокий') || r.includes('high')) riskClass = 'risk-high';
+
                     optionsHtml += `
-                        <div class="bb-vn-option type-${opt.type || 'neutral'}" data-intent="${escapeHtml(opt.intent)}" data-risk="${escapeHtml(opt.risk)}">
+                        <div class="bb-vn-option ${riskClass}" data-intent="${escapeHtml(opt.intent)}" data-risk="${escapeHtml(opt.risk)}">
                             <div class="bb-vn-op-head">${opt.intent}</div>
                             <div class="bb-vn-op-risk">Риск: ${opt.risk || 'Неизвестно'}</div>
                         </div>
                     `;
                 });
                 
-                optionsHtml += `<div class="bb-vn-option type-neutral" id="bb-vn-btn-cancel" style="flex: 0 0 100%; text-align: center; border-color: #64748b;"><div class="bb-vn-op-head" style="justify-content:center;"><i class="fa-solid fa-xmark"></i>&nbsp; Отмена / Написать самостоятельно</div></div>`;
+                optionsHtml += `<div class="bb-vn-option risk-med" id="bb-vn-btn-cancel" style="flex: 0 0 100%; text-align: center; border-color: #64748b;"><div class="bb-vn-op-head" style="justify-content:center;"><i class="fa-solid fa-xmark"></i>&nbsp; Отмена / Написать самостоятельно</div></div>`;
 
                 $('#bb-vn-options-container').html(optionsHtml).addClass('active');
                 btn.hide();
@@ -505,7 +490,16 @@ async function executeVNOption(intent, risk) {
 
         // @ts-ignore
         let generatedText = await SillyTavern.getContext().generateQuietPrompt(prompt);
-        generatedText = String(generatedText).trim();
+        generatedText = String(generatedText || "").trim();
+        
+        if (!generatedText) {
+            console.warn("[BB VN] ИИ вернул пустой ответ (choices: [])");
+            // @ts-ignore
+            toastr.warning("Сработал фильтр или сбой API. Попробуйте другой вариант.", "BB Visual Novel");
+            container.removeClass('active').empty();
+            $('#bb-vn-btn-generate').show().removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Сгенерировать варианты действий');
+            return;
+        }
         
         /** @type {HTMLTextAreaElement | null} */
         const textarea = document.querySelector('#send_textarea');
@@ -625,6 +619,7 @@ jQuery(async () => {
         eventSource.on(event_types.MESSAGE_DELETED, () => { recalculateAllStats(); });
         eventSource.on(event_types.MESSAGE_SWIPED, () => { recalculateAllStats(); });
         eventSource.on(event_types.MESSAGE_UPDATED, () => { recalculateAllStats(); });
+        eventSource.on(event_types.GENERATION_STOPPED, () => { recalculateAllStats(); });
 
         eventSource.on(event_types.MESSAGE_RECEIVED, () => {
             if (extension_settings[MODULE_NAME].autoGen) {
