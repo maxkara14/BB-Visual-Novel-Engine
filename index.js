@@ -777,7 +777,7 @@ function setupExtensionSettings() {
                 <div id="bb-vn-custom-api-block" style="display: ${s.useCustomApi ? 'flex' : 'none'}; flex-direction: column; gap: 8px; margin-top: 8px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
                     <input type="text" id="bb-vn-cfg-url" class="text_pole" placeholder="URL: http://example:1234/v1" value="${s.customApiUrl || ''}">
                     <input type="password" id="bb-vn-cfg-key" class="text_pole" placeholder="API Ключ" value="${s.customApiKey || ''}">
-                    <button id="bb-vn-btn-connect" class="menu_button"><i class="fa-solid fa-plug"></i> Подключиться / Обновить</button>
+                    <button id="bb-vn-btn-connect" class="menu_button"><i class="fa-solid fa-plug"></i>&nbsp; Подключиться / Обновить</button>
                     <select id="bb-vn-cfg-model" class="text_pole" ${!s.customApiModel ? 'disabled' : ''}>
                         <option value="${s.customApiModel || ''}">${s.customApiModel || 'Модели не загружены'}</option>
                     </select>
@@ -792,10 +792,9 @@ function setupExtensionSettings() {
                     <span>Использовать макрос <code>{{bb_vn}}</code> вместо авто-вставки</span>
                 </label>
                 <span style="font-size: 10px; color: #94a3b8; line-height: 1.2; margin-bottom: 5px; display:block;">* Отключит автоматическое внедрение правил. Вам нужно будет вручную вписать <code>{{bb_vn}}</code> в ваш пресет.</span>
-
-                <button id="bb-social-restore-chars-btn" class="menu_button" style="width: 100%; margin-bottom: 5px;"><i class="fa-solid fa-users-viewfinder"></i> Вернуть скрытых персонажей</button>
-                <button id="bb-social-clear-log-btn" class="menu_button" style="width: 100%; margin-bottom: 5px;"><i class="fa-solid fa-eraser"></i> Очистить Журнал событий</button>
-                <button id="bb-social-wipe-btn" class="menu_button" style="width: 100%; background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: #ef4444;"><i class="fa-solid fa-trash-can"></i> Сбросить отношения в этом чате</button>
+<button id="bb-social-restore-chars-btn" class="menu_button" style="width: 100%; margin-bottom: 5px;"><i class="fa-solid fa-users-viewfinder"></i>&nbsp; Вернуть скрытых персонажей</button>
+<button id="bb-social-clear-log-btn" class="menu_button" style="width: 100%; margin-bottom: 5px;"><i class="fa-solid fa-eraser"></i>&nbsp; Очистить Журнал событий</button>
+<button id="bb-social-wipe-btn" class="menu_button" style="width: 100%; background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: #ef4444;"><i class="fa-solid fa-trash-can"></i>&nbsp; Сбросить отношения в этом чате</button>
             </div>
         </div>
     `;
