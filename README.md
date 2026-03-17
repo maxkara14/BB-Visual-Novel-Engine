@@ -28,4 +28,4 @@
 
 ---
 
-*[BruniikBron](https://maxkara14.github.io/BruniikBron/)* — создаю инструменты для тех, кто живет своими историями. 👀
+*[BruniikBron](https://maxkara14.github.io/BruniikBron/)*
