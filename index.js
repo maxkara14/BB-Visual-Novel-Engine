@@ -455,7 +455,7 @@ function injectVNActionsUI() {
                     `;
                 });
                 
-                optionsHtml += `<div class="bb-vn-option risk-med" id="bb-vn-btn-cancel" style="flex: 0 0 100%; text-align: center; border-color: #64748b;"><div class="bb-vn-op-head" style="justify-content:center;"><i class="fa-solid fa-xmark"></i>&nbsp; Отмена / Написать самому</div></div>`;
+                optionsHtml += `<div class="bb-vn-option risk-med" id="bb-vn-btn-cancel" style="flex: 0 0 100%; text-align: center; border-color: #64748b;"><div class="bb-vn-op-head" style="justify-content:center;"><i class="fa-solid fa-xmark"></i>&nbsp; Отмена / Написать самостоятельно</div></div>`;
 
                 $('#bb-vn-options-container').html(optionsHtml).addClass('active');
                 btn.hide();
