@@ -13,7 +13,7 @@ if (!extension_settings[MODULE_NAME]) {
         customApiUrl: 'https://api.groq.com/openai/v1',
         customApiKey: '',
         customApiModel: '',
-        useMacro: false // НОВАЯ НАСТРОЙКА: Использование макроса
+        useMacro: false
     };
 }
 
@@ -48,10 +48,8 @@ Format EXACTLY like this:
 }
 \`\`\``;
 
-// Функция для генерации склеенного промпта
 function getCombinedSocialPrompt() {
     let combinedStr = SOCIAL_PROMPT;
-    
     const characters = Object.keys(currentCalculatedStats);
     if (characters.length > 0) {
         combinedStr += `\n\n[CURRENT RELATIONSHIP STATUS WITH {{user}}]:\n`;
@@ -67,38 +65,12 @@ function getCombinedSocialPrompt() {
 function injectCombinedSocialPrompt() {
     try {
         if (extension_settings[MODULE_NAME].useMacro) {
-            // Если юзер использует макрос {{bb_vn}}, отключаем авто-инжект
             setExtensionPrompt('bb_social_injector', '', extension_prompt_types.IN_CHAT, 3, false, extension_prompt_roles.SYSTEM);
         } else {
-            // Дефолтная авто-вставка на глубину 3
             const promptText = getCombinedSocialPrompt();
             setExtensionPrompt('bb_social_injector', promptText, extension_prompt_types.IN_CHAT, 3, false, extension_prompt_roles.SYSTEM);
         }
     } catch (e) { console.error("[BB VN] Ошибка инъекции:", e); }
-}
-
-// --- РЕГИСТРАЦИЯ МАКРОСА ДЛЯ POWER USERS ---
-async function registerBBMacro() {
-    try {
-        // Пытаемся динамически импортировать систему макросов Таверны
-        let macroSystem;
-        try {
-            macroSystem = await import('../../../macros/macro-system.js');
-        } catch(e) {
-            macroSystem = await import('../../../../scripts/macros/macro-system.js');
-        }
-
-        if (macroSystem && macroSystem.macros && macroSystem.macros.registry) {
-            // @ts-ignore
-            macroSystem.macros.registry.registerMacro('bb_vn', () => {
-                // Макрос возвращает текст только если включена соответствующая настройка
-                return extension_settings[MODULE_NAME].useMacro ? getCombinedSocialPrompt() : '';
-            });
-            console.log('[BB VN] Макрос {{bb_vn}} успешно зарегистрирован.');
-        }
-    } catch (e) {
-        console.warn('[BB VN] Не удалось зарегистрировать макрос (возможно старая версия ST).', e);
-    }
 }
 
 function ensureToastContainer() {
@@ -110,7 +82,6 @@ function ensureToastContainer() {
 
 function showAffinityToast(name, delta, reason) {
     if (delta === 0) return; 
-
     ensureToastContainer();
     const isPositive = delta > 0;
     const sign = isPositive ? '+' : '';
@@ -146,19 +117,15 @@ function getTierInfo(affinity) {
 function addGlobalLog(type, text) {
     const chat = SillyTavern.getContext().chat;
     if (!chat || chat.length === 0) return;
-    
     if (!chat_metadata['bb_vn_global_log']) chat_metadata['bb_vn_global_log'] = [];
-    
     const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     chat_metadata['bb_vn_global_log'].push({ time, type, text });
-    
     if (chat_metadata['bb_vn_global_log'].length > 50) chat_metadata['bb_vn_global_log'].shift();
 }
 
 function scanAndCleanMessage(msg, messageId) {
     if (!msg || msg.is_user) return false;
     let modified = false;
-
     const jsonRegex = /```json\s*({[\s\S]*?"social_updates"[\s\S]*?})\s*```/;
     const match = msg.mes.match(jsonRegex);
     const swipeId = msg.swipe_id || 0;
@@ -170,7 +137,6 @@ function scanAndCleanMessage(msg, messageId) {
             if (!msg.extra.bb_social_swipes) msg.extra.bb_social_swipes = {};
             
             msg.extra.bb_social_swipes[swipeId] = parsed.social_updates;
-            
             msg.mes = msg.mes.replace(match[0], '').trim();
             if (msg.swipes && msg.swipes[swipeId] !== undefined) {
                 msg.swipes[swipeId] = msg.mes; 
@@ -179,9 +145,7 @@ function scanAndCleanMessage(msg, messageId) {
             
             if (messageId !== undefined) {
                 const msgElement = document.querySelector(`.mes[mesid="${messageId}"] .mes_text`);
-                if (msgElement) {
-                    msgElement.innerHTML = SillyTavern.getContext().markdownToHtml(msg.mes);
-                }
+                if (msgElement) msgElement.innerHTML = SillyTavern.getContext().markdownToHtml(msg.mes);
             }
         } catch(e) {}
     }
@@ -191,6 +155,10 @@ function scanAndCleanMessage(msg, messageId) {
 function recalculateAllStats(isNewMessage = false) {
     currentCalculatedStats = {};
     const chat = SillyTavern.getContext().chat;
+    
+    if (!chat_metadata['bb_vn_char_bases']) chat_metadata['bb_vn_char_bases'] = {};
+    if (!chat_metadata['bb_vn_ignored_chars']) chat_metadata['bb_vn_ignored_chars'] = [];
+
     if (!chat || !chat.length) {
         renderSocialHud();
         injectCombinedSocialPrompt();
@@ -200,9 +168,7 @@ function recalculateAllStats(isNewMessage = false) {
     let needsSave = false;
 
     chat.forEach((msg, idx) => {
-        if (scanAndCleanMessage(msg, idx)) {
-            needsSave = true;
-        }
+        if (scanAndCleanMessage(msg, idx)) needsSave = true;
 
         const swipeId = msg.swipe_id || 0;
         let activeUpdates = msg.extra?.bb_social_swipes?.[swipeId];
@@ -221,15 +187,26 @@ function recalculateAllStats(isNewMessage = false) {
         if (activeUpdates && Array.isArray(activeUpdates)) {
             activeUpdates.forEach(update => {
                 const charName = update.name;
+                if (!charName) return;
+
+                if (chat_metadata['bb_vn_ignored_chars'].includes(charName)) return;
+
                 const delta = parseInt(update.delta) || 0;
-                
                 let base = 0;
+                
                 if (!currentCalculatedStats[charName]) {
-                    base = update.base_affinity !== undefined ? parseInt(update.base_affinity) : 0;
-                    if (isNaN(base)) base = 0;
+                    // ФИКС РЕДАКТОРА (Абсолютный приоритет глобальной базы)
+                    if (chat_metadata['bb_vn_char_bases'][charName] !== undefined) {
+                        base = parseInt(chat_metadata['bb_vn_char_bases'][charName]);
+                    } else {
+                        base = update.base_affinity !== undefined ? parseInt(update.base_affinity) : 0;
+                        if (isNaN(base)) base = 0;
+                        chat_metadata['bb_vn_char_bases'][charName] = base;
+                    }
+                    
                     currentCalculatedStats[charName] = { affinity: base, history: [], status: update.status || "" };
                     
-                    if (isNewMessage && idx === chat.length - 1) {
+                    if (isNewMessage && idx === chat.length - 1 && update.base_affinity !== undefined) {
                         addGlobalLog('init', `Встреча: <strong>${escapeHtml(charName)}</strong>. Базовое отношение: ${base}`);
                     }
                 }
@@ -238,9 +215,7 @@ function recalculateAllStats(isNewMessage = false) {
                 if (currentCalculatedStats[charName].affinity > 100) currentCalculatedStats[charName].affinity = 100;
                 if (currentCalculatedStats[charName].affinity < -100) currentCalculatedStats[charName].affinity = -100;
                 
-                if (update.status) {
-                    currentCalculatedStats[charName].status = update.status;
-                }
+                if (update.status) currentCalculatedStats[charName].status = update.status;
 
                 currentCalculatedStats[charName].history.push({ delta, reason: update.reason || "" });
                 
@@ -273,6 +248,7 @@ function renderSocialHud() {
                 const affinity = currentCalculatedStats[charName].affinity;
                 const tier = getTierInfo(affinity);
                 const displayStatus = currentCalculatedStats[charName].status || tier.label;
+                const baseAffinity = chat_metadata['bb_vn_char_bases']?.[charName] ?? 0;
                 
                 let barStyle = '';
                 if (affinity >= 0) {
@@ -298,7 +274,10 @@ function renderSocialHud() {
                     <div class="bb-char-card" data-char="${escapeHtml(charName)}">
                         <div class="bb-char-header">
                             <span class="bb-char-name">${charName}</span>
-                            <span class="bb-char-tier ${tier.class}" title="${escapeHtml(displayStatus)}">${escapeHtml(displayStatus)}</span>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span class="bb-char-tier ${tier.class}" title="${escapeHtml(displayStatus)}">${escapeHtml(displayStatus)}</span>
+                                <i class="fa-solid fa-gear bb-char-edit-btn" style="color:#94a3b8; cursor:pointer;" data-char="${escapeHtml(charName)}" title="Настройки персонажа"></i>
+                            </div>
                         </div>
                         <div class="bb-progress-bg">
                             <div class="bb-progress-center-line"></div>
@@ -308,6 +287,16 @@ function renderSocialHud() {
                             <span>Отношение: ${affinity}</span>
                             <span>${affinity >= 0 ? 'Макс: 100' : 'Мин: -100'}</span>
                         </div>
+                        
+                        <div class="bb-char-editor" style="display:none; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 6px; padding: 10px; margin-top: 10px; cursor: default;">
+                            <div style="font-size:10px; color:#94a3b8; margin-bottom:5px; font-weight:bold;">БАЗОВОЕ ОТНОШЕНИЕ:</div>
+                            <input type="number" class="text_pole bb-edit-base-input" value="${baseAffinity}" style="width:100%; margin-bottom:8px; box-sizing:border-box;">
+                            <div style="display:flex; gap:5px;">
+                                <button class="menu_button bb-btn-save-char" data-char="${escapeHtml(charName)}" style="flex:1;"><i class="fa-solid fa-check"></i> Сохранить</button>
+                                <button class="menu_button bb-btn-hide-char" data-char="${escapeHtml(charName)}" style="flex:1; background:rgba(239,68,68,0.2); color:#ef4444; border-color:#ef4444;"><i class="fa-solid fa-trash"></i> Скрыть</button>
+                            </div>
+                        </div>
+
                         <div class="bb-char-log">
                             <div style="font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">Журнал:</div>
                             ${historyHtml}
@@ -317,8 +306,40 @@ function renderSocialHud() {
             });
             charsBox.innerHTML = html;
 
-            $('.bb-char-card').off('click').on('click', function() {
-                $(this).toggleClass('expanded');
+            $('.bb-char-card').off('click').on('click', function(e) {
+                if ($(e.target).closest('.bb-char-editor, .bb-char-edit-btn').length === 0) {
+                    $(this).toggleClass('expanded');
+                }
+            });
+
+            $('.bb-char-edit-btn').on('click', function(e) {
+                $(this).closest('.bb-char-card').find('.bb-char-editor').slideToggle(200);
+            });
+
+            $('.bb-btn-save-char').on('click', function() {
+                const charName = $(this).attr('data-char');
+                // @ts-ignore
+                const newBase = parseInt($(this).closest('.bb-char-editor').find('.bb-edit-base-input').val());
+                if (!isNaN(newBase)) {
+                    if (!chat_metadata['bb_vn_char_bases']) chat_metadata['bb_vn_char_bases'] = {};
+                    chat_metadata['bb_vn_char_bases'][charName] = newBase;
+                    saveChatDebounced();
+                    recalculateAllStats();
+                    // @ts-ignore
+                    toastr.success("Настройки сохранены!");
+                }
+            });
+
+            $('.bb-btn-hide-char').on('click', function() {
+                const charName = $(this).attr('data-char');
+                if (!chat_metadata['bb_vn_ignored_chars']) chat_metadata['bb_vn_ignored_chars'] = [];
+                if (!chat_metadata['bb_vn_ignored_chars'].includes(charName)) {
+                    chat_metadata['bb_vn_ignored_chars'].push(charName);
+                }
+                saveChatDebounced();
+                recalculateAllStats();
+                // @ts-ignore
+                toastr.info(`${charName} скрыт.`);
             });
         }
     }
@@ -398,7 +419,7 @@ function ensureHudContainer() {
 }
 
 // ==========================================
-// ФАЗА 3: ИНТЕРАКТИВНОЕ КИНО (ПРЕ-ГЕНЕРАЦИЯ)
+// ФАЗА 3: ИНТЕРАКТИВНОЕ КИНО С КЭШИРОВАНИЕМ
 // ==========================================
 
 const OPTIONS_PROMPT = `Analyze the recent chat. Generate exactly 3 highly distinct, engaging actions {{user}} can take right now to respond to the situation.
@@ -464,16 +485,11 @@ async function generateFastPrompt(promptText) {
                 })
             });
             
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(`HTTP ${response.status}`);
-            }
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             
             const data = await response.json();
             const content = data?.choices?.[0]?.message?.content || "";
-            if (!content.trim()) {
-                throw new Error("Прокси вернул пустой текст (Сработал фильтр).");
-            }
+            if (!content.trim()) throw new Error("Прокси вернул пустой текст (Сработал фильтр).");
             return content;
         } catch (e) {
             console.warn(`[BB VN] Ошибка кастомного API (${e.message}), перехват на основной API...`);
@@ -484,13 +500,179 @@ async function generateFastPrompt(promptText) {
     }
 }
 
+// ОТРИСОВКА КНОПОК ИЗ МАССИВА (РАБОТАЕТ ДЛЯ ГЕНЕРАЦИИ И КЭША)
+window['renderVNOptionsFromData'] = function(parsedOptions, autoOpen = false) {
+    let optionsHtml = '';
+    parsedOptions.forEach(opt => {
+        let riskClass = 'risk-med';
+        const r = (opt.risk || '').toLowerCase();
+        if (r.includes('низкий') || r.includes('low')) riskClass = 'risk-low';
+        if (r.includes('высокий') || r.includes('high')) riskClass = 'risk-high';
+
+        optionsHtml += `
+            <div class="bb-vn-option ${riskClass}" data-intent="${escapeHtml(opt.intent)}" data-message="${encodeURIComponent(opt.message || '')}">
+                <div class="bb-vn-op-head">${escapeHtml(opt.intent)}</div>
+                <div class="bb-vn-op-risk">Риск: ${escapeHtml(opt.risk)}</div>
+            </div>
+        `;
+    });
+    
+    optionsHtml += `
+        <div style="flex: 0 0 100%; display:flex; gap:10px; margin-top:5px;">
+            <div class="bb-vn-option risk-med" id="bb-vn-btn-reroll" style="flex:1; text-align: center; border-color: #f59e0b; padding: 10px;">
+                <div class="bb-vn-op-head" style="justify-content:center;"><i class="fa-solid fa-rotate-right"></i>&nbsp; Реролл вариантов</div>
+            </div>
+            <div class="bb-vn-option risk-med" id="bb-vn-btn-cancel" style="flex:1; text-align: center; border-color: #64748b; padding: 10px;">
+                <div class="bb-vn-op-head" style="justify-content:center;"><i class="fa-solid fa-chevron-up"></i>&nbsp; Свернуть</div>
+            </div>
+        </div>
+    `;
+
+    $('#bb-vn-options-container').html(optionsHtml);
+
+    if (autoOpen) {
+        $('#bb-vn-options-container').addClass('active');
+        $('#bb-vn-btn-generate').removeClass('loading').hide();
+    } else {
+        $('#bb-vn-options-container').removeClass('active');
+        $('#bb-vn-btn-generate').removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия (Сохранены)').show();
+    }
+
+    $('.bb-vn-option[data-intent]').off('click').on('click', function() {
+        const message = decodeURIComponent($(this).attr('data-message') || '');
+        const textarea = document.querySelector('#send_textarea');
+        if (textarea && message) {
+            // @ts-ignore
+            textarea.value = message;
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            
+            if (extension_settings[MODULE_NAME].autoSend) {
+                $('#bb-vn-options-container').removeClass('active');
+                $('#bb-vn-btn-generate').show().html('<i class="fa-solid fa-clapperboard"></i> Действия (Visual Novel)');
+                const sendBtn = document.getElementById('send_but');
+                if (sendBtn) sendBtn.click();
+            }
+        }
+    });
+
+    $('#bb-vn-btn-cancel').off('click').on('click', function() {
+        $('#bb-vn-options-container').removeClass('active');
+        $('#bb-vn-btn-generate').show().html('<i class="fa-solid fa-clapperboard"></i> Действия (Сохранены)');
+    });
+
+    $('#bb-vn-btn-reroll').off('click').on('click', async function() {
+        await window['bbVnGenerateOptionsFlow']();
+    });
+};
+
+// ГЛОБАЛЬНАЯ ФУНКЦИЯ ДЛЯ ГЕНЕРАЦИИ
+window['bbVnGenerateOptionsFlow'] = async function() {
+    const btn = $('#bb-vn-btn-generate');
+    if (btn.hasClass('loading')) return;
+
+    btn.show().addClass('loading').html('<i class="fa-solid fa-spinner fa-spin"></i> Сценарий в обработке...');
+    $('#bb-vn-options-container').removeClass('active').empty();
+
+    try {
+        const chat = SillyTavern.getContext().chat;
+        if (!chat || chat.length === 0) throw new Error("Чат пуст");
+        const recentMessages = chat.slice(-4).map(m => `${m.name}: ${m.mes}`).join('\\n\\n');
+
+        // @ts-ignore
+        const persona = SillyTavern.getContext().substituteParams('{{persona}}');
+        const prompt = OPTIONS_PROMPT.replace('{{chat}}', recentMessages).replace('{{persona}}', persona);
+        const result = await generateFastPrompt(prompt);
+
+        let cleanResult = String(result || "").trim();
+        cleanResult = cleanResult.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
+        
+        const start = cleanResult.indexOf('[');
+        const end = cleanResult.lastIndexOf(']');
+        if (start !== -1 && end !== -1) {
+            cleanResult = cleanResult.substring(start, end + 1);
+        } else {
+            cleanResult = '[' + cleanResult.replace(/}\s*{/g, '},{') + ']';
+        }
+        cleanResult = cleanResult.replace(/,\s*([\]}])/g, '$1');
+
+        let parsedOptions;
+        try {
+            parsedOptions = JSON.parse(cleanResult);
+        } catch (err) {
+            parsedOptions = [];
+            const intentMatches = [...cleanResult.matchAll(/"intent"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
+            const riskMatches = [...cleanResult.matchAll(/"risk"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
+            const messageMatches = [...cleanResult.matchAll(/"message"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
+            
+            for (let i = 0; i < intentMatches.length; i++) {
+                parsedOptions.push({
+                    intent: intentMatches[i],
+                    risk: riskMatches[i] || "Средний",
+                    message: messageMatches[i] || ""
+                });
+            }
+            if (parsedOptions.length === 0) throw new Error("Модель вернула сломанный код.");
+        }
+
+        if (parsedOptions && parsedOptions.length > 0) {
+            // СОХРАНЕНИЕ КНОПОК В ПАМЯТЬ СВАЙПА!
+            const lastMsg = chat[chat.length - 1];
+            const swipeId = lastMsg.swipe_id || 0;
+            if (!lastMsg.extra) lastMsg.extra = {};
+            if (!lastMsg.extra.bb_vn_options_swipes) lastMsg.extra.bb_vn_options_swipes = {};
+            lastMsg.extra.bb_vn_options_swipes[swipeId] = parsedOptions;
+            saveChatDebounced();
+
+            window['renderVNOptionsFromData'](parsedOptions, true);
+        } else { throw new Error("Ответ пуст"); }
+
+    } catch (e) {
+        console.error("[BB VN] Ошибка генерации:", e);
+        // @ts-ignore
+        toastr.error("Не удалось сгенерировать варианты");
+        btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия (Visual Novel)').show();
+    }
+};
+
+// ВОССТАНОВЛЕНИЕ КЭША ПРИ СВАЙПЕ
+window['restoreVNOptions'] = function(autoOpen = false) {
+    const chat = SillyTavern.getContext().chat;
+    if (!chat || chat.length === 0) {
+        window['clearVNOptions']();
+        return;
+    }
+    const lastMsg = chat[chat.length - 1];
+    if (lastMsg.is_user) {
+        window['clearVNOptions']();
+        return;
+    }
+    const swipeId = lastMsg.swipe_id || 0;
+    const savedOptions = lastMsg.extra?.bb_vn_options_swipes?.[swipeId];
+
+    if (savedOptions && Array.isArray(savedOptions) && savedOptions.length > 0) {
+        window['renderVNOptionsFromData'](savedOptions, autoOpen);
+    } else {
+        window['clearVNOptions']();
+    }
+};
+
+// ОЧИСТКА ВАРИАНТОВ ПРИ СМЕНЕ КОНТЕКСТА
+window['clearVNOptions'] = function() {
+    $('#bb-vn-options-container').empty().removeClass('active');
+    const ta = document.querySelector('#send_textarea');
+    // @ts-ignore
+    if (!ta || ta.value.trim().length === 0) {
+        $('#bb-vn-btn-generate').show().removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия (Visual Novel)');
+    }
+};
+
 function injectVNActionsUI() {
     if (document.getElementById('bb-vn-action-bar')) return;
 
     const barHtml = `
         <div id="bb-vn-action-bar" style="display: flex;">
             <div id="bb-vn-btn-generate" class="bb-vn-main-btn">
-                <i class="fa-solid fa-clapperboard"></i> Сгенерировать варианты действий
+                <i class="fa-solid fa-clapperboard"></i> Действия (Visual Novel)
             </div>
             <div id="bb-vn-options-container"></div>
         </div>
@@ -515,114 +697,12 @@ function injectVNActionsUI() {
     }
 
     $('#bb-vn-btn-generate').on('click', async function() {
-        const btn = $(this);
-        if (btn.hasClass('loading')) return;
-
-        btn.addClass('loading').html('<i class="fa-solid fa-spinner fa-spin"></i> Подготовка ответов...');
-        $('#bb-vn-options-container').removeClass('active').empty();
-
-        try {
-            const chat = SillyTavern.getContext().chat;
-            if (!chat || chat.length === 0) throw new Error("Чат пуст");
-            const recentMessages = chat.slice(-4).map(m => `${m.name}: ${m.mes}`).join('\\n\\n');
-
-            // @ts-ignore
-            const persona = SillyTavern.getContext().substituteParams('{{persona}}');
-            const prompt = OPTIONS_PROMPT.replace('{{chat}}', recentMessages).replace('{{persona}}', persona);
-            const result = await generateFastPrompt(prompt);
-
-            let cleanResult = String(result || "").trim();
-            
-            cleanResult = cleanResult.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
-            
-            const start = cleanResult.indexOf('[');
-            const end = cleanResult.lastIndexOf(']');
-            
-            if (start !== -1 && end !== -1) {
-                cleanResult = cleanResult.substring(start, end + 1);
-            } else {
-                cleanResult = '[' + cleanResult.replace(/}\s*{/g, '},{') + ']';
-            }
-            
-            cleanResult = cleanResult.replace(/,\s*([\]}])/g, '$1');
-
-            let parsedOptions;
-            try {
-                parsedOptions = JSON.parse(cleanResult);
-            } catch (err) {
-                // Запасной план: Ультимативный Regex (на случай поломанного JSON)
-                parsedOptions = [];
-                const intentMatches = [...cleanResult.matchAll(/"intent"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
-                const riskMatches = [...cleanResult.matchAll(/"risk"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
-                const messageMatches = [...cleanResult.matchAll(/"message"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
-                
-                for (let i = 0; i < intentMatches.length; i++) {
-                    parsedOptions.push({
-                        intent: intentMatches[i],
-                        risk: riskMatches[i] || "Средний",
-                        message: messageMatches[i] || ""
-                    });
-                }
-                if (parsedOptions.length === 0) {
-                    console.error("[BB VN] ИИ вернул нечитаемый ответ:", cleanResult);
-                    throw new Error("Модель вернула сломанный код. Нажмите генерацию еще раз.");
-                }
-            }
-
-            if (parsedOptions && parsedOptions.length > 0) {
-                let optionsHtml = '';
-                parsedOptions.forEach(opt => {
-                    let riskClass = 'risk-med';
-                    const r = (opt.risk || '').toLowerCase();
-                    if (r.includes('низкий') || r.includes('low')) riskClass = 'risk-low';
-                    if (r.includes('высокий') || r.includes('high')) riskClass = 'risk-high';
-
-                    optionsHtml += `
-                        <div class="bb-vn-option ${riskClass}" data-message="${encodeURIComponent(opt.message || '')}">
-                            <div class="bb-vn-op-head">${escapeHtml(opt.intent)}</div>
-                            <div class="bb-vn-op-risk">Риск: ${escapeHtml(opt.risk)}</div>
-                        </div>
-                    `;
-                });
-                
-                optionsHtml += `<div class="bb-vn-option risk-med" id="bb-vn-btn-cancel" style="flex: 0 0 100%; text-align: center; border-color: #64748b;"><div class="bb-vn-op-head" style="justify-content:center;"><i class="fa-solid fa-xmark"></i>&nbsp; Отмена / Закрыть</div></div>`;
-
-                $('#bb-vn-options-container').html(optionsHtml).addClass('active');
-                
-                btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Сгенерировать варианты действий').hide();
-
-                $('.bb-vn-option').not('#bb-vn-btn-cancel').on('click', function() {
-                    const message = decodeURIComponent($(this).attr('data-message') || '');
-                    
-                    /** @type {HTMLTextAreaElement | null} */
-                    const textarea = document.querySelector('#send_textarea');
-                    if (textarea && message) {
-                        textarea.value = message;
-                        textarea.dispatchEvent(new Event('input', { bubbles: true }));
-                        
-                        if (extension_settings[MODULE_NAME].autoSend) {
-                            $('#bb-vn-options-container').removeClass('active').empty();
-                            const sendBtn = document.getElementById('send_but');
-                            if (sendBtn) sendBtn.click();
-                        }
-                    }
-                });
-
-                $('#bb-vn-btn-cancel').on('click', function() {
-                    $('#bb-vn-options-container').removeClass('active').empty();
-                    const ta = document.querySelector('#send_textarea');
-                    // @ts-ignore
-                    if (!ta || ta.value.trim().length === 0) {
-                        $('#bb-vn-btn-generate').show();
-                    }
-                });
-            }
-
-        } catch (e) {
-            console.error("[BB VN] Ошибка генерации опций:", e);
-            // @ts-ignore
-            toastr.error(`Ошибка: ${e.message}`, "BB Visual Novel");
-            btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Сгенерировать варианты действий');
+        const container = $('#bb-vn-options-container');
+        if (container.children('.bb-vn-option[data-intent]').length > 0) {
+            container.addClass('active');
+            $(this).hide();
+        } else {
+            await window['bbVnGenerateOptionsFlow']();
         }
     });
 }
@@ -647,8 +727,13 @@ function wipeAllSocialData() {
         if (msg.extra && msg.extra.bb_social_swipes) {
             delete msg.extra.bb_social_swipes;
         }
+        if (msg.extra && msg.extra.bb_vn_options_swipes) {
+            delete msg.extra.bb_vn_options_swipes;
+        }
     });
     chat_metadata['bb_vn_global_log'] = [];
+    chat_metadata['bb_vn_char_bases'] = {};
+    chat_metadata['bb_vn_ignored_chars'] = [];
     addGlobalLog('system', 'Все отношения сброшены до нуля.');
     saveChatDebounced();
     recalculateAllStats();
@@ -708,6 +793,7 @@ function setupExtensionSettings() {
                 </label>
                 <span style="font-size: 10px; color: #94a3b8; line-height: 1.2; margin-bottom: 5px; display:block;">* Отключит автоматическое внедрение правил. Вам нужно будет вручную вписать <code>{{bb_vn}}</code> в ваш пресет.</span>
 
+                <button id="bb-social-restore-chars-btn" class="menu_button" style="width: 100%; margin-bottom: 5px;"><i class="fa-solid fa-users-viewfinder"></i> Вернуть скрытых персонажей</button>
                 <button id="bb-social-clear-log-btn" class="menu_button" style="width: 100%; margin-bottom: 5px;"><i class="fa-solid fa-eraser"></i> Очистить Журнал событий</button>
                 <button id="bb-social-wipe-btn" class="menu_button" style="width: 100%; background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: #ef4444;"><i class="fa-solid fa-trash-can"></i> Сбросить отношения в этом чате</button>
             </div>
@@ -747,11 +833,10 @@ function setupExtensionSettings() {
          saveSettingsDebounced();
     });
 
-    // Обработчик тумблера МАКРОСОВ
     $('#bb-vn-cfg-usemacro').on('change', function() {
         extension_settings[MODULE_NAME].useMacro = $(this).is(':checked');
         saveSettingsDebounced();
-        injectCombinedSocialPrompt(); // Сразу пересчитываем, пихать ли текст автоматом
+        injectCombinedSocialPrompt();
     });
 
     $('#bb-vn-btn-connect').on('click', async function() {
@@ -804,6 +889,14 @@ function setupExtensionSettings() {
         }
     });
 
+    $('#bb-social-restore-chars-btn').on('click', function() {
+        chat_metadata['bb_vn_ignored_chars'] = [];
+        saveChatDebounced();
+        recalculateAllStats();
+        // @ts-ignore
+        toastr.success("Скрытые персонажи восстановлены!");
+    });
+
     const clearLogBtn = document.getElementById('bb-social-clear-log-btn');
     if (clearLogBtn) clearLogBtn.addEventListener('click', wipeGlobalLog);
 
@@ -817,17 +910,15 @@ jQuery(async () => {
         const { eventSource, event_types } = SillyTavern.getContext();
         
         setupExtensionSettings();
-        
-        // --- 1. ОФИЦИАЛЬНАЯ РЕГИСТРАЦИЯ МАКРОСА (Для пресетов и тоглов) ---
-        // Используем универсальный способ через контекст, чтобы работало везде
+
         const context = SillyTavern.getContext();
         if (context.registerMacro) {
             context.registerMacro('bb_vn', () => {
                 return extension_settings[MODULE_NAME].useMacro ? getCombinedSocialPrompt() : '';
             });
-            console.log('[BB VN] Макрос {{bb_vn}} зарегистрирован через Context API');
         }
 
+        injectCombinedSocialPrompt();
         ensureHudContainer();
         injectVNActionsUI();
         updateHudVisibility();
@@ -842,15 +933,17 @@ jQuery(async () => {
         });
         
         eventSource.on(event_types.CHAT_CHANGED, () => {
+            window['restoreVNOptions'](false);
             injectCombinedSocialPrompt();
             injectVNActionsUI();
             recalculateAllStats(); 
             updateHudVisibility();
         });
 
-        eventSource.on(event_types.MESSAGE_RECEIVED, () => { recalculateAllStats(true); }); 
-        eventSource.on(event_types.MESSAGE_DELETED, () => { recalculateAllStats(); });
-        eventSource.on(event_types.MESSAGE_SWIPED, () => { recalculateAllStats(); });
+        // ПРИ СВАЙПЕ ИЛИ НОВОМ СООБЩЕНИИ ПЫТАЕМСЯ ВОССТАНОВИТЬ КЭШ КНОПОК
+        eventSource.on(event_types.MESSAGE_RECEIVED, () => { window['restoreVNOptions'](false); recalculateAllStats(true); }); 
+        eventSource.on(event_types.MESSAGE_DELETED, () => { window['restoreVNOptions'](false); recalculateAllStats(); });
+        eventSource.on(event_types.MESSAGE_SWIPED, () => { window['restoreVNOptions'](false); recalculateAllStats(); });
         eventSource.on(event_types.MESSAGE_UPDATED, () => { recalculateAllStats(); });
         eventSource.on(event_types.GENERATION_STOPPED, () => { recalculateAllStats(); });
 
@@ -863,7 +956,6 @@ jQuery(async () => {
             }
         });
 
-        // --- 2. ЖЕЛЕЗОБЕТОННЫЙ ПЕРЕХВАТЧИК (Для подстраховки) ---
         eventSource.on(event_types.GENERATE_AFTER_DATA, (generate_data) => {
             if (extension_settings[MODULE_NAME].useMacro && generate_data && Array.isArray(generate_data.messages)) {
                 const promptText = getCombinedSocialPrompt();
