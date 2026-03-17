@@ -12,14 +12,22 @@ if (!extension_settings[MODULE_NAME]) {
 let currentCalculatedStats = {};
 
 // ==========================================
-// ФАЗА 1: СОЦИАЛЬНЫЙ ТРЕКИНГ (DEEP SYNC)
+// ФАЗА 1: СОЦИАЛЬНЫЙ ТРЕКИНГ (DEEP SYNC + УМНЫЕ СТАТЫ)
 // ==========================================
 const SOCIAL_PROMPT = `[SYSTEM INSTRUCTION: VISUAL NOVEL ENGINE]
 You are tracking the relationship affinities between {{user}} and the characters. 
-At the VERY END of your response, you MUST generate a hidden JSON block evaluating how {{user}}'s last action or the current event affected the characters physically present in the scene.
-CRITICAL: If this is the FIRST TIME you are evaluating a character in this JSON, you MUST provide a "base_affinity" (integer from -100 to 100) estimating their current overall relationship with {{user}} based on the established lore and past events (e.g., close friends = 60 to 80, enemies = -50). 
-CRITICAL: You MUST provide a "status" (1-3 words) describing the CURRENT dynamic/nature of their relationship (e.g., "Тайная симпатия", "Соперник", "Лучшая подруга", "Насторожен"). This status MUST evolve naturally based on the plot!
-Only include characters whose affinity logically changed in this exact turn. "delta" must be an integer. "reason" must be a short explanation.
+At the VERY END of your response, you MUST generate a hidden JSON block evaluating how {{user}}'s last action affected the characters.
+
+CRITICAL RULES FOR JSON:
+1. "base_affinity": Only provide this (integer from -100 to 100) if evaluating a character for the VERY FIRST TIME in this chat.
+2. "status": 1-3 words describing their OVERALL LONG-TERM relationship towards {{user}} (e.g., "Тайная симпатия", "Соперник", "Лучший друг"). DO NOT use temporary emotional states (like "в панике", "злится").
+3. "delta": Integer representing the change in affinity. Use this STRICT scale:
+   0 = Neutral interaction, normal chat (no change).
+   1 to 3 = Mild positive (polite chat, small help).
+   4 to 8 = Strong positive (deep bonding, major gift, saving life).
+   -1 to -3 = Mild negative (annoyance, slight disagreement, awkwardness).
+   -4 to -8 = Strong negative (betrayal, serious fight, deep offense).
+4. "reason": Short explanation of the delta.
 
 CRITICAL LANGUAGE RULE: Output the JSON values ENTIRELY IN RUSSIAN.
 
@@ -27,7 +35,7 @@ CRITICAL LANGUAGE RULE: Output the JSON values ENTIRELY IN RUSSIAN.
 \`\`\`json
 {
   "social_updates": [
-    { "name": "Имя Персонажа", "base_affinity": 60, "delta": 5, "status": "Тайная симпатия", "reason": "Краткая причина на русском" }
+    { "name": "Имя Персонажа", "base_affinity": 60, "delta": 2, "status": "Хороший друг", "reason": "Оценил помощь с заданием" }
   ]
 }
 \`\`\`
@@ -66,6 +74,8 @@ function ensureToastContainer() {
 }
 
 function showAffinityToast(name, delta, reason) {
+    if (delta === 0) return; // Не показываем уведомление, если ничего не изменилось
+
     ensureToastContainer();
     const isPositive = delta > 0;
     const sign = isPositive ? '+' : '';
@@ -162,14 +172,12 @@ function recalculateAllStats(isNewMessage = false) {
         const swipeId = msg.swipe_id || 0;
         let activeUpdates = msg.extra?.bb_social_swipes?.[swipeId];
 
-        // === ИСПРАВЛЕНИЕ: ЗАЩИТА ПРИ ОТМЕНЕ СВАЙПА ===
-        // Если в текущем свайпе нет данных (отменили генерацию), ищем данные в других свайпах ЭТОГО ЖЕ сообщения
         if (!activeUpdates || !Array.isArray(activeUpdates)) {
             if (msg.extra && msg.extra.bb_social_swipes) {
                 for (const key in msg.extra.bb_social_swipes) {
                     if (Array.isArray(msg.extra.bb_social_swipes[key])) {
                         activeUpdates = msg.extra.bb_social_swipes[key];
-                        break; // Забираем статы из успешного свайпа!
+                        break; 
                     }
                 }
             }
@@ -447,7 +455,7 @@ function injectVNActionsUI() {
                     `;
                 });
                 
-                optionsHtml += `<div class="bb-vn-option risk-med" id="bb-vn-btn-cancel" style="flex: 0 0 100%; text-align: center; border-color: #64748b;"><div class="bb-vn-op-head" style="justify-content:center;"><i class="fa-solid fa-xmark"></i>&nbsp; Отмена / Написать самостоятельно</div></div>`;
+                optionsHtml += `<div class="bb-vn-option risk-med" id="bb-vn-btn-cancel" style="flex: 0 0 100%; text-align: center; border-color: #64748b;"><div class="bb-vn-op-head" style="justify-content:center;"><i class="fa-solid fa-xmark"></i>&nbsp; Отмена / Написать самому</div></div>`;
 
                 $('#bb-vn-options-container').html(optionsHtml).addClass('active');
                 btn.hide();
@@ -528,6 +536,14 @@ function escapeHtml(unsafe) {
     return String(unsafe).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
+function wipeGlobalLog() {
+    chat_metadata['bb_vn_global_log'] = [];
+    saveChatDebounced();
+    renderSocialHud();
+    // @ts-ignore
+    toastr.success("Журнал событий очищен!");
+}
+
 function wipeAllSocialData() {
     const chat = SillyTavern.getContext().chat;
     if (!chat) return;
@@ -567,6 +583,7 @@ function setupExtensionSettings() {
                 </div>
 
                 <hr style="border-color: rgba(255,255,255,0.1); margin: 10px 0;">
+                <button id="bb-social-clear-log-btn" class="menu_button" style="width: 100%; margin-bottom: 5px;"><i class="fa-solid fa-eraser"></i> Очистить Журнал событий</button>
                 <button id="bb-social-wipe-btn" class="menu_button" style="width: 100%; background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: #ef4444;"><i class="fa-solid fa-trash-can"></i> Сбросить отношения в этом чате</button>
             </div>
         </div>
@@ -584,6 +601,9 @@ function setupExtensionSettings() {
         // @ts-ignore
         if (typeof saveSettingsDebounced === 'function') saveSettingsDebounced();
     });
+
+    const clearLogBtn = document.getElementById('bb-social-clear-log-btn');
+    if (clearLogBtn) clearLogBtn.addEventListener('click', wipeGlobalLog);
 
     const wipeBtn = document.getElementById('bb-social-wipe-btn');
     if (wipeBtn) wipeBtn.addEventListener('click', wipeAllSocialData);
