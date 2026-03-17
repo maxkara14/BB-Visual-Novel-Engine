@@ -1,12 +1,20 @@
 /* global jQuery, SillyTavern, toastr */
 
-import { setExtensionPrompt, chat_metadata, saveChatDebounced, extension_prompt_roles, extension_prompt_types } from '../../../../script.js';
+import { setExtensionPrompt, chat_metadata, saveChatDebounced, saveSettingsDebounced, extension_prompt_roles, extension_prompt_types, generateQuietPrompt } from '../../../../script.js';
 import { extension_settings } from '../../../extensions.js';
 
 const MODULE_NAME = "BB-Visual-Novel";
 
 if (!extension_settings[MODULE_NAME]) {
-    extension_settings[MODULE_NAME] = { autoSend: true, autoGen: false };
+    extension_settings[MODULE_NAME] = { 
+        autoSend: true, 
+        autoGen: false,
+        useCustomApi: false,
+        customApiUrl: 'https://api.groq.com/openai/v1',
+        customApiKey: '',
+        customApiModel: '',
+        useMacro: false // НОВАЯ НАСТРОЙКА: Использование макроса
+    };
 }
 
 let currentCalculatedStats = {};
@@ -31,39 +39,66 @@ CRITICAL RULES FOR JSON:
 
 CRITICAL LANGUAGE RULE: Output the JSON values ENTIRELY IN RUSSIAN.
 
-<format>
+Format EXACTLY like this:
 \`\`\`json
 {
   "social_updates": [
     { "name": "Имя Персонажа", "base_affinity": 60, "delta": 2, "status": "Хороший друг", "reason": "Оценил помощь с заданием" }
   ]
 }
-\`\`\`
-</format>`;
+\`\`\``;
 
-function injectSocialPrompt() {
+// Функция для генерации склеенного промпта
+function getCombinedSocialPrompt() {
+    let combinedStr = SOCIAL_PROMPT;
+    
+    const characters = Object.keys(currentCalculatedStats);
+    if (characters.length > 0) {
+        combinedStr += `\n\n[CURRENT RELATIONSHIP STATUS WITH {{user}}]:\n`;
+        characters.forEach(char => {
+            const statusLabel = currentCalculatedStats[char].status || getTierInfo(currentCalculatedStats[char].affinity).label;
+            combinedStr += `- ${char}: ${currentCalculatedStats[char].affinity}/100 (${statusLabel})\n`;
+        });
+        combinedStr += "CRITICAL: Strictly align the characters' behavior, trust level, and dialogue towards {{user}} with these current affinity levels.";
+    }
+    return combinedStr;
+}
+
+function injectCombinedSocialPrompt() {
     try {
-        setExtensionPrompt('bb_social_injector', SOCIAL_PROMPT, extension_prompt_types.IN_CHAT, 3, false, extension_prompt_roles.SYSTEM);
+        if (extension_settings[MODULE_NAME].useMacro) {
+            // Если юзер использует макрос {{bb_vn}}, отключаем авто-инжект
+            setExtensionPrompt('bb_social_injector', '', extension_prompt_types.IN_CHAT, 3, false, extension_prompt_roles.SYSTEM);
+        } else {
+            // Дефолтная авто-вставка на глубину 3
+            const promptText = getCombinedSocialPrompt();
+            setExtensionPrompt('bb_social_injector', promptText, extension_prompt_types.IN_CHAT, 3, false, extension_prompt_roles.SYSTEM);
+        }
     } catch (e) { console.error("[BB VN] Ошибка инъекции:", e); }
 }
 
-function injectSocialStatePrompt() {
+// --- РЕГИСТРАЦИЯ МАКРОСА ДЛЯ POWER USERS ---
+async function registerBBMacro() {
     try {
-        const characters = Object.keys(currentCalculatedStats);
-        if (characters.length === 0) {
-            setExtensionPrompt('bb_social_state_injector', '', extension_prompt_types.IN_CHAT, 4);
-            return;
+        // Пытаемся динамически импортировать систему макросов Таверны
+        let macroSystem;
+        try {
+            macroSystem = await import('../../../macros/macro-system.js');
+        } catch(e) {
+            macroSystem = await import('../../../../scripts/macros/macro-system.js');
         }
-        
-        let stateStr = "[CURRENT RELATIONSHIP STATUS WITH {{user}}]:\n";
-        characters.forEach(char => {
-            const statusLabel = currentCalculatedStats[char].status || getTierInfo(currentCalculatedStats[char].affinity).label;
-            stateStr += `- ${char}: ${currentCalculatedStats[char].affinity}/100 (${statusLabel})\n`;
-        });
-        stateStr += "CRITICAL: Strictly align the characters' behavior, trust level, and dialogue towards {{user}} with these current affinity levels.";
-        
-        setExtensionPrompt('bb_social_state_injector', stateStr, extension_prompt_types.IN_CHAT, 4, false, extension_prompt_roles.SYSTEM);
-    } catch (e) { console.error("[BB VN] Ошибка инъекции состояния:", e); }
+
+        if (macroSystem && macroSystem.macros && macroSystem.macros.registry) {
+            // @ts-ignore
+            macroSystem.macros.registry.registerMacro('bb_vn', () => {
+                // Макрос возвращает текст только если включена соответствующая настройка
+                return extension_settings[MODULE_NAME].useMacro ? getCombinedSocialPrompt() : '';
+            });
+            console.log('[BB VN] Макрос {{bb_vn}} успешно зарегистрирован.');
+        }
+    } catch (e) {
+        console.warn('[BB VN] Не удалось зарегистрировать макрос (возможно старая версия ST).', e);
+    }
 }
 
 function ensureToastContainer() {
@@ -74,7 +109,7 @@ function ensureToastContainer() {
 }
 
 function showAffinityToast(name, delta, reason) {
-    if (delta === 0) return; // Не показываем уведомление, если ничего не изменилось
+    if (delta === 0) return; 
 
     ensureToastContainer();
     const isPositive = delta > 0;
@@ -158,7 +193,7 @@ function recalculateAllStats(isNewMessage = false) {
     const chat = SillyTavern.getContext().chat;
     if (!chat || !chat.length) {
         renderSocialHud();
-        injectSocialStatePrompt();
+        injectCombinedSocialPrompt();
         return;
     }
 
@@ -219,7 +254,7 @@ function recalculateAllStats(isNewMessage = false) {
     });
 
     if (needsSave) saveChatDebounced();
-    injectSocialStatePrompt();
+    injectCombinedSocialPrompt();
     renderSocialHud();
 }
 
@@ -308,6 +343,16 @@ function renderSocialHud() {
     }
 }
 
+function updateHudVisibility() {
+    const chatId = SillyTavern.getContext().chatId;
+    if (chatId) {
+        $('#bb-social-hud-toggle').show();
+    } else {
+        $('#bb-social-hud-toggle').hide();
+        $('#bb-social-hud').removeClass('open');
+    }
+}
+
 function ensureHudContainer() {
     if (document.getElementById('bb-social-hud')) return;
     const hudHtml = `
@@ -353,34 +398,91 @@ function ensureHudContainer() {
 }
 
 // ==========================================
-// ФАЗА 3: ИНТЕРАКТИВНОЕ КИНО
+// ФАЗА 3: ИНТЕРАКТИВНОЕ КИНО (ПРЕ-ГЕНЕРАЦИЯ)
 // ==========================================
 
-const OPTIONS_PROMPT = `<task>
-Analyze the recent chat. Create 3 highly distinct, engaging actions {{user}} can take right now to respond to the situation.
-Make them feel like Visual Novel choices.
-Return STRICTLY as a JSON object in this format:
-{
-  "options": [
-    {
-      "intent": "МАКСИМУМ 1-3 СЛОВА (например: 'Уйти на крышу', 'Грубо ответить')",
-      "risk": "Низкий/Средний/Высокий"
-    }
-  ]
-}
-</task>
+const OPTIONS_PROMPT = `Analyze the recent chat. Generate exactly 3 highly distinct, engaging actions {{user}} can take right now to respond to the situation.
+For EACH action, write the FULL roleplay message (actions, thoughts, dialogue) from {{user}}'s perspective. Match {{user}}'s persona perfectly. Write in Russian.
+CRITICAL: Return STRICTLY a valid JSON array. DO NOT output any other text or markdown.
+Format exactly like this:
+[
+  {
+    "intent": "Действие один (1-3 слова)",
+    "risk": "Низкий",
+    "message": "Полный текст сообщения от лица {{user}}..."
+  },
+  {
+    "intent": "Действие два (1-3 слова)",
+    "risk": "Средний",
+    "message": "Полный текст сообщения от лица {{user}}..."
+  },
+  {
+    "intent": "Действие три (1-3 слова)",
+    "risk": "Высокий",
+    "message": "Полный текст сообщения от лица {{user}}..."
+  }
+]
+
+[USER PERSONA REFERENCE]:
+{{persona}}
+
 Recent Chat:
 """{{chat}}"""`;
 
-const EXPAND_PROMPT = `<task>
-Act as {{user}}. Write {{user}}'s next roleplay message based EXACTLY on this intent: "{{intent}}".
-The user has chosen an action with a "{{risk}}" risk level. Reflect this in the boldness, emotional intensity, or stakes of the response!
-Write ONLY {{user}}'s actions, thoughts, and dialogue. Do NOT act or speak for ANY other characters.
-Keep the length medium (1-3 paragraphs). Write in Russian. Match {{user}}'s established personality perfectly.
-CRITICAL: DO NOT output any JSON, <info> tags, RADIO_START, SCENE tags, or OS_START widgets. Output ONLY the raw narrative text for {{user}}'s message.
-</task>
-Recent Chat:
-"""{{chat}}"""`;
+async function runMainGen(promptText) {
+    if (typeof generateQuietPrompt === 'function') {
+        return await generateQuietPrompt(promptText);
+    } else if (typeof window['generateQuietPrompt'] === 'function') {
+        return await window['generateQuietPrompt'](promptText);
+    } else {
+        throw new Error("Функция генерации Таверны не найдена. Обновите SillyTavern.");
+    }
+}
+
+async function generateFastPrompt(promptText) {
+    const s = extension_settings[MODULE_NAME];
+    if (s.useCustomApi && s.customApiUrl && s.customApiModel) {
+        try {
+            const baseUrl = s.customApiUrl.replace(/\/$/, '');
+            const endpoint = baseUrl + '/chat/completions';
+            
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${s.customApiKey || ''}`
+                },
+                body: JSON.stringify({
+                    model: s.customApiModel,
+                    messages: [
+                        { role: 'system', content: 'You are an internal JSON generator. You MUST output ONLY valid JSON format. No conversational text.' },
+                        { role: 'user', content: promptText }
+                    ],
+                    temperature: 0.7,
+                    max_tokens: 4000,
+                    stream: false
+                })
+            });
+            
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            const content = data?.choices?.[0]?.message?.content || "";
+            if (!content.trim()) {
+                throw new Error("Прокси вернул пустой текст (Сработал фильтр).");
+            }
+            return content;
+        } catch (e) {
+            console.warn(`[BB VN] Ошибка кастомного API (${e.message}), перехват на основной API...`);
+            return await runMainGen(promptText);
+        }
+    } else {
+        return await runMainGen(promptText);
+    }
+}
 
 function injectVNActionsUI() {
     if (document.getElementById('bb-vn-action-bar')) return;
@@ -396,22 +498,18 @@ function injectVNActionsUI() {
 
     $('#send_form').prepend(barHtml);
 
-    /** @type {HTMLTextAreaElement | null} */
     const ta = document.querySelector('#send_textarea');
     if (ta) {
         ta.addEventListener('input', () => {
-            const bar = document.getElementById('bb-vn-action-bar');
-            if (!bar) return;
+            const btnGen = document.getElementById('bb-vn-btn-generate');
+            const opts = document.getElementById('bb-vn-options-container');
+            if (!btnGen || !opts) return;
+            
+            // @ts-ignore
             if (ta.value.trim().length > 0) {
-                bar.style.opacity = '0';
-                bar.style.maxHeight = '0px';
-                bar.style.padding = '0px 10px';
-                bar.style.pointerEvents = 'none';
-            } else {
-                bar.style.opacity = '1';
-                bar.style.maxHeight = '200px';
-                bar.style.padding = '8px 10px';
-                bar.style.pointerEvents = 'auto';
+                btnGen.style.display = 'none';
+            } else if (!opts.classList.contains('active')) {
+                btnGen.style.display = 'block';
             }
         });
     }
@@ -420,7 +518,7 @@ function injectVNActionsUI() {
         const btn = $(this);
         if (btn.hasClass('loading')) return;
 
-        btn.addClass('loading').html('<i class="fa-solid fa-spinner fa-spin"></i> Анализ ситуации...');
+        btn.addClass('loading').html('<i class="fa-solid fa-spinner fa-spin"></i> Подготовка ответов...');
         $('#bb-vn-options-container').removeClass('active').empty();
 
         try {
@@ -428,107 +526,105 @@ function injectVNActionsUI() {
             if (!chat || chat.length === 0) throw new Error("Чат пуст");
             const recentMessages = chat.slice(-4).map(m => `${m.name}: ${m.mes}`).join('\\n\\n');
 
-            const prompt = OPTIONS_PROMPT.replace('{{chat}}', recentMessages);
             // @ts-ignore
-            const result = await SillyTavern.getContext().generateQuietPrompt(prompt);
+            const persona = SillyTavern.getContext().substituteParams('{{persona}}');
+            const prompt = OPTIONS_PROMPT.replace('{{chat}}', recentMessages).replace('{{persona}}', persona);
+            const result = await generateFastPrompt(prompt);
 
-            let cleanResult = String(result).trim().replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
-            const start = cleanResult.indexOf('{');
-            const end = cleanResult.lastIndexOf('}');
-            if (start === -1 || end === -1) throw new Error("API не вернуло JSON");
+            let cleanResult = String(result || "").trim();
             
-            const parsed = JSON.parse(cleanResult.substring(start, end + 1));
+            cleanResult = cleanResult.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
+            
+            const start = cleanResult.indexOf('[');
+            const end = cleanResult.lastIndexOf(']');
+            
+            if (start !== -1 && end !== -1) {
+                cleanResult = cleanResult.substring(start, end + 1);
+            } else {
+                cleanResult = '[' + cleanResult.replace(/}\s*{/g, '},{') + ']';
+            }
+            
+            cleanResult = cleanResult.replace(/,\s*([\]}])/g, '$1');
 
-            if (parsed.options && parsed.options.length > 0) {
+            let parsedOptions;
+            try {
+                parsedOptions = JSON.parse(cleanResult);
+            } catch (err) {
+                // Запасной план: Ультимативный Regex (на случай поломанного JSON)
+                parsedOptions = [];
+                const intentMatches = [...cleanResult.matchAll(/"intent"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
+                const riskMatches = [...cleanResult.matchAll(/"risk"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
+                const messageMatches = [...cleanResult.matchAll(/"message"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
+                
+                for (let i = 0; i < intentMatches.length; i++) {
+                    parsedOptions.push({
+                        intent: intentMatches[i],
+                        risk: riskMatches[i] || "Средний",
+                        message: messageMatches[i] || ""
+                    });
+                }
+                if (parsedOptions.length === 0) {
+                    console.error("[BB VN] ИИ вернул нечитаемый ответ:", cleanResult);
+                    throw new Error("Модель вернула сломанный код. Нажмите генерацию еще раз.");
+                }
+            }
+
+            if (parsedOptions && parsedOptions.length > 0) {
                 let optionsHtml = '';
-                parsed.options.forEach(opt => {
+                parsedOptions.forEach(opt => {
                     let riskClass = 'risk-med';
                     const r = (opt.risk || '').toLowerCase();
                     if (r.includes('низкий') || r.includes('low')) riskClass = 'risk-low';
                     if (r.includes('высокий') || r.includes('high')) riskClass = 'risk-high';
 
                     optionsHtml += `
-                        <div class="bb-vn-option ${riskClass}" data-intent="${escapeHtml(opt.intent)}" data-risk="${escapeHtml(opt.risk)}">
-                            <div class="bb-vn-op-head">${opt.intent}</div>
-                            <div class="bb-vn-op-risk">Риск: ${opt.risk || 'Неизвестно'}</div>
+                        <div class="bb-vn-option ${riskClass}" data-message="${encodeURIComponent(opt.message || '')}">
+                            <div class="bb-vn-op-head">${escapeHtml(opt.intent)}</div>
+                            <div class="bb-vn-op-risk">Риск: ${escapeHtml(opt.risk)}</div>
                         </div>
                     `;
                 });
                 
-                optionsHtml += `<div class="bb-vn-option risk-med" id="bb-vn-btn-cancel" style="flex: 0 0 100%; text-align: center; border-color: #64748b;"><div class="bb-vn-op-head" style="justify-content:center;"><i class="fa-solid fa-xmark"></i>&nbsp; Отмена / Написать самостоятельно</div></div>`;
+                optionsHtml += `<div class="bb-vn-option risk-med" id="bb-vn-btn-cancel" style="flex: 0 0 100%; text-align: center; border-color: #64748b;"><div class="bb-vn-op-head" style="justify-content:center;"><i class="fa-solid fa-xmark"></i>&nbsp; Отмена / Закрыть</div></div>`;
 
                 $('#bb-vn-options-container').html(optionsHtml).addClass('active');
-                btn.hide();
+                
+                btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Сгенерировать варианты действий').hide();
 
                 $('.bb-vn-option').not('#bb-vn-btn-cancel').on('click', function() {
-                    const intent = $(this).attr('data-intent');
-                    const risk = $(this).attr('data-risk');
-                    executeVNOption(intent, risk);
+                    const message = decodeURIComponent($(this).attr('data-message') || '');
+                    
+                    /** @type {HTMLTextAreaElement | null} */
+                    const textarea = document.querySelector('#send_textarea');
+                    if (textarea && message) {
+                        textarea.value = message;
+                        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                        
+                        if (extension_settings[MODULE_NAME].autoSend) {
+                            $('#bb-vn-options-container').removeClass('active').empty();
+                            const sendBtn = document.getElementById('send_but');
+                            if (sendBtn) sendBtn.click();
+                        }
+                    }
                 });
 
                 $('#bb-vn-btn-cancel').on('click', function() {
                     $('#bb-vn-options-container').removeClass('active').empty();
-                    $('#bb-vn-btn-generate').show().removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Сгенерировать варианты действий');
+                    const ta = document.querySelector('#send_textarea');
+                    // @ts-ignore
+                    if (!ta || ta.value.trim().length === 0) {
+                        $('#bb-vn-btn-generate').show();
+                    }
                 });
             }
 
         } catch (e) {
             console.error("[BB VN] Ошибка генерации опций:", e);
             // @ts-ignore
-            toastr.error("Не удалось сгенерировать варианты");
+            toastr.error(`Ошибка: ${e.message}`, "BB Visual Novel");
             btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Сгенерировать варианты действий');
         }
     });
-}
-
-async function executeVNOption(intent, risk) {
-    const container = $('#bb-vn-options-container');
-    const userName = SillyTavern.getContext().name1 || "Персонаж";
-    container.html(`<div style="color: #c084fc; font-weight: bold; width: 100%; text-align: center; padding: 15px;"><i class="fa-solid fa-pen-nib fa-bounce"></i> ${escapeHtml(userName)} пишет сообщение...</div>`);
-
-    try {
-        const chat = SillyTavern.getContext().chat;
-        const recentMessages = chat.slice(-4).map(m => `${m.name}: ${m.mes}`).join('\\n\\n');
-        
-        // @ts-ignore
-        const persona = SillyTavern.getContext().substituteParams('{{persona}}');
-        
-        let prompt = EXPAND_PROMPT.replace('{{intent}}', intent).replace('{{risk}}', risk).replace('{{chat}}', recentMessages);
-        prompt += `\\n\\n[USER PERSONA REFERENCE]:\\n${persona}`;
-
-        // @ts-ignore
-        let generatedText = await SillyTavern.getContext().generateQuietPrompt(prompt);
-        generatedText = String(generatedText || "").trim();
-        
-        if (!generatedText) {
-            console.warn("[BB VN] ИИ вернул пустой ответ (choices: [])");
-            // @ts-ignore
-            toastr.warning("Сработал фильтр или сбой API. Попробуйте другой вариант.", "BB Visual Novel");
-            container.removeClass('active').empty();
-            $('#bb-vn-btn-generate').show().removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Сгенерировать варианты действий');
-            return;
-        }
-        
-        /** @type {HTMLTextAreaElement | null} */
-        const textarea = document.querySelector('#send_textarea');
-        if (textarea) {
-            textarea.value = generatedText;
-            textarea.dispatchEvent(new Event('input', { bubbles: true }));
-            
-            container.removeClass('active').empty();
-            $('#bb-vn-btn-generate').show().removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Сгенерировать варианты действий');
-
-            if (extension_settings[MODULE_NAME].autoSend) {
-                const sendBtn = document.getElementById('send_but');
-                if (sendBtn) sendBtn.click();
-            }
-        }
-
-    } catch (e) {
-        console.error("[BB VN] Ошибка генерации ответа:", e);
-        container.removeClass('active').empty();
-        $('#bb-vn-btn-generate').show().removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Сгенерировать варианты действий');
-    }
 }
 
 function escapeHtml(unsafe) {
@@ -562,6 +658,9 @@ function wipeAllSocialData() {
 
 function setupExtensionSettings() {
     if (document.getElementById('bb-social-settings-wrapper')) return;
+    
+    const s = extension_settings[MODULE_NAME];
+    
     const settingsHtml = `
         <div id="bb-social-settings-wrapper" class="inline-drawer">
             <div class="inline-drawer-toggle inline-drawer-header">
@@ -569,20 +668,46 @@ function setupExtensionSettings() {
                 <div class="inline-drawer-icon fa-solid fa-chevron-down down"></div>
             </div>
             <div class="inline-drawer-content" style="padding: 10px;">
-                <span style="font-size: 13px; color: #cbd5e1;">Настройки Интерактивного Кино:</span>
+                <span style="font-size: 13px; color: #cbd5e1; font-weight:bold;">Настройки Интерактивного Кино:</span>
                 
                 <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
                     <label class="checkbox_label">
-                        <input type="checkbox" id="bb-vn-cfg-autosend" ${extension_settings[MODULE_NAME].autoSend ? 'checked' : ''}>
-                        <span>Авто-отправка сгенерированного ответа в чат</span>
+                        <input type="checkbox" id="bb-vn-cfg-autosend" ${s.autoSend ? 'checked' : ''}>
+                        <span>Авто-отправка при выборе (откл для предпросмотра)</span>
                     </label>
                     <label class="checkbox_label">
-                        <input type="checkbox" id="bb-vn-cfg-autogen" ${extension_settings[MODULE_NAME].autoGen ? 'checked' : ''}>
+                        <input type="checkbox" id="bb-vn-cfg-autogen" ${s.autoGen ? 'checked' : ''}>
                         <span>Авто-показ 3 вариантов действий при ответе ИИ</span>
                     </label>
                 </div>
 
                 <hr style="border-color: rgba(255,255,255,0.1); margin: 10px 0;">
+                
+                <span style="font-size: 13px; color: #cbd5e1; font-weight:bold;">⚡ Custom API (Для быстрой генерации ответов):</span>
+                <label class="checkbox_label" style="margin-top: 5px;">
+                    <input type="checkbox" id="bb-vn-cfg-usecustom" ${s.useCustomApi ? 'checked' : ''}>
+                    <span>Использовать свой API-ключ</span>
+                </label>
+                
+                <div id="bb-vn-custom-api-block" style="display: ${s.useCustomApi ? 'flex' : 'none'}; flex-direction: column; gap: 8px; margin-top: 8px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
+                    <input type="text" id="bb-vn-cfg-url" class="text_pole" placeholder="URL: http://example:1234/v1" value="${s.customApiUrl || ''}">
+                    <input type="password" id="bb-vn-cfg-key" class="text_pole" placeholder="API Ключ" value="${s.customApiKey || ''}">
+                    <button id="bb-vn-btn-connect" class="menu_button"><i class="fa-solid fa-plug"></i> Подключиться / Обновить</button>
+                    <select id="bb-vn-cfg-model" class="text_pole" ${!s.customApiModel ? 'disabled' : ''}>
+                        <option value="${s.customApiModel || ''}">${s.customApiModel || 'Модели не загружены'}</option>
+                    </select>
+                    <span style="font-size: 10px; color: #94a3b8; line-height: 1.2;">* Работает по стандарту OpenAI. Идеально для Flash-моделей.</span>
+                </div>
+
+                <hr style="border-color: rgba(255,255,255,0.1); margin: 10px 0;">
+
+                <span style="font-size: 13px; color: #cbd5e1; font-weight:bold;">⚙️ Для пресетов:</span>
+                <label class="checkbox_label" style="margin-top: 5px;">
+                    <input type="checkbox" id="bb-vn-cfg-usemacro" ${s.useMacro ? 'checked' : ''}>
+                    <span>Использовать макрос <code>{{bb_vn}}</code> вместо авто-вставки</span>
+                </label>
+                <span style="font-size: 10px; color: #94a3b8; line-height: 1.2; margin-bottom: 5px; display:block;">* Отключит автоматическое внедрение правил. Вам нужно будет вручную вписать <code>{{bb_vn}}</code> в ваш пресет.</span>
+
                 <button id="bb-social-clear-log-btn" class="menu_button" style="width: 100%; margin-bottom: 5px;"><i class="fa-solid fa-eraser"></i> Очистить Журнал событий</button>
                 <button id="bb-social-wipe-btn" class="menu_button" style="width: 100%; background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: #ef4444;"><i class="fa-solid fa-trash-can"></i> Сбросить отношения в этом чате</button>
             </div>
@@ -593,13 +718,90 @@ function setupExtensionSettings() {
 
     $('#bb-vn-cfg-autosend').on('change', function() {
         extension_settings[MODULE_NAME].autoSend = $(this).is(':checked');
-        // @ts-ignore
-        if (typeof saveSettingsDebounced === 'function') saveSettingsDebounced();
+        saveSettingsDebounced();
     });
     $('#bb-vn-cfg-autogen').on('change', function() {
         extension_settings[MODULE_NAME].autoGen = $(this).is(':checked');
+        saveSettingsDebounced();
+    });
+
+    $('#bb-vn-cfg-usecustom').on('change', function() {
+        const isChecked = $(this).is(':checked');
+        extension_settings[MODULE_NAME].useCustomApi = isChecked;
+        if (isChecked) {
+            $('#bb-vn-custom-api-block').slideDown(200);
+        } else {
+            $('#bb-vn-custom-api-block').slideUp(200);
+        }
+        saveSettingsDebounced();
+    });
+
+    $('#bb-vn-cfg-url, #bb-vn-cfg-key').on('change input', function() {
+        extension_settings[MODULE_NAME].customApiUrl = $('#bb-vn-cfg-url').val();
+        extension_settings[MODULE_NAME].customApiKey = $('#bb-vn-cfg-key').val();
+        saveSettingsDebounced();
+    });
+    
+    $(document).on('change', '#bb-vn-cfg-model', function() {
+         extension_settings[MODULE_NAME].customApiModel = $(this).val();
+         saveSettingsDebounced();
+    });
+
+    // Обработчик тумблера МАКРОСОВ
+    $('#bb-vn-cfg-usemacro').on('change', function() {
+        extension_settings[MODULE_NAME].useMacro = $(this).is(':checked');
+        saveSettingsDebounced();
+        injectCombinedSocialPrompt(); // Сразу пересчитываем, пихать ли текст автоматом
+    });
+
+    $('#bb-vn-btn-connect').on('click', async function() {
+        const btn = $(this);
         // @ts-ignore
-        if (typeof saveSettingsDebounced === 'function') saveSettingsDebounced();
+        const url = $('#bb-vn-cfg-url').val().replace(/\/$/, '');
+        const key = $('#bb-vn-cfg-key').val();
+
+        btn.html('<i class="fa-solid fa-spinner fa-spin"></i> Подключение...');
+
+        try {
+            const modelsUrl = url + '/models';
+            const response = await fetch(modelsUrl, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${key}` }
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Ошибка ${response.status}: ${errText}`);
+            }
+            const data = await response.json();
+            
+            if (data && data.data && Array.isArray(data.data)) {
+                const select = $('#bb-vn-cfg-model');
+                select.empty();
+                data.data.forEach(m => {
+                    select.append(`<option value="${m.id}">${m.id}</option>`);
+                });
+                select.prop('disabled', false);
+                
+                if (extension_settings[MODULE_NAME].customApiModel && select.find(`option[value="${extension_settings[MODULE_NAME].customApiModel}"]`).length) {
+                    select.val(extension_settings[MODULE_NAME].customApiModel);
+                } else {
+                    extension_settings[MODULE_NAME].customApiModel = select.val();
+                }
+                
+                // @ts-ignore
+                toastr.success("Модели успешно загружены!", "BB Visual Novel");
+                saveSettingsDebounced();
+            } else {
+                throw new Error("API не вернул список моделей.");
+            }
+        } catch (e) {
+            console.error("[BB VN] Ошибка подключения к API:", e);
+            // @ts-ignore
+            toastr.error(`Не удалось подключиться: ${e.message}`, "BB Visual Novel");
+        } finally {
+            btn.html('<i class="fa-solid fa-plug"></i> Подключиться / Обновить');
+        }
     });
 
     const clearLogBtn = document.getElementById('bb-social-clear-log-btn');
@@ -615,24 +817,35 @@ jQuery(async () => {
         const { eventSource, event_types } = SillyTavern.getContext();
         
         setupExtensionSettings();
-        injectSocialPrompt();
-        injectSocialStatePrompt();
+        
+        // --- 1. ОФИЦИАЛЬНАЯ РЕГИСТРАЦИЯ МАКРОСА (Для пресетов и тоглов) ---
+        // Используем универсальный способ через контекст, чтобы работало везде
+        const context = SillyTavern.getContext();
+        if (context.registerMacro) {
+            context.registerMacro('bb_vn', () => {
+                return extension_settings[MODULE_NAME].useMacro ? getCombinedSocialPrompt() : '';
+            });
+            console.log('[BB VN] Макрос {{bb_vn}} зарегистрирован через Context API');
+        }
+
         ensureHudContainer();
         injectVNActionsUI();
+        updateHudVisibility();
 
         eventSource.on(event_types.APP_READY, () => {
             setupExtensionSettings();
-            injectSocialPrompt();
-            injectSocialStatePrompt();
+            injectCombinedSocialPrompt();
             ensureHudContainer();
             injectVNActionsUI();
             recalculateAllStats(); 
+            updateHudVisibility();
         });
         
         eventSource.on(event_types.CHAT_CHANGED, () => {
-            injectSocialPrompt();
+            injectCombinedSocialPrompt();
             injectVNActionsUI();
             recalculateAllStats(); 
+            updateHudVisibility();
         });
 
         eventSource.on(event_types.MESSAGE_RECEIVED, () => { recalculateAllStats(true); }); 
@@ -647,6 +860,18 @@ jQuery(async () => {
                     const btn = $('#bb-vn-btn-generate');
                     if (btn.is(':visible') && !btn.hasClass('loading')) btn.click();
                 }, 1500);
+            }
+        });
+
+        // --- 2. ЖЕЛЕЗОБЕТОННЫЙ ПЕРЕХВАТЧИК (Для подстраховки) ---
+        eventSource.on(event_types.GENERATE_AFTER_DATA, (generate_data) => {
+            if (extension_settings[MODULE_NAME].useMacro && generate_data && Array.isArray(generate_data.messages)) {
+                const promptText = getCombinedSocialPrompt();
+                generate_data.messages.forEach(msg => {
+                    if (msg && msg.content && typeof msg.content === 'string' && msg.content.includes('{{bb_vn}}')) {
+                        msg.content = msg.content.replace(/\{\{bb_vn\}\}/g, promptText);
+                    }
+                });
             }
         });
 
