@@ -27,8 +27,8 @@ You are tracking the relationship affinities between {{user}} and the characters
 At the VERY END of your response, you MUST generate a hidden JSON block evaluating how {{user}}'s last action affected the characters.
 
 CRITICAL RULES FOR JSON:
-1. "base_affinity": Only provide this (integer from -100 to 100) if evaluating a character for the VERY FIRST TIME in this chat.
-2. "status": 1-3 words describing their OVERALL LONG-TERM relationship towards {{user}} (e.g., "Тайная симпатия", "Соперник", "Лучший друг"). DO NOT use temporary emotional states (like "в панике", "злится").
+1. "base_affinity": Provide this field (integer from -100 to 100) EXCLUSIVELY for newly introduced characters. Skip this field for already known characters.
+2. "status": 1-3 words describing the stable, LONG-TERM relationship towards {{user}} (e.g., "Тайная симпатия", "Соперник", "Лучший друг"). Focus strictly on permanent relationship dynamics and ignore temporary passing moods.
 3. "delta": Integer representing the change in affinity. Use this STRICT scale:
    0 = Neutral interaction, normal chat (no change).
    1 to 3 = Mild positive (polite chat, small help).
