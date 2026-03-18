@@ -194,10 +194,29 @@
 .bb-vn-option.risk-med:hover { box-shadow: 0 5px 15px rgba(96, 165, 250, 0.3); }
 .bb-vn-option.risk-med .bb-vn-op-risk { background: rgba(96, 165, 250, 0.2); color: #60a5fa; }
 
-/* ФИКС МОБИЛЬНЫХ КНОПОК: На узких экранах кнопки строятся в столбик */
+/* ФИКС МОБИЛЬНЫХ КНОПОК И ОТСТУПОВ */
 @media (max-width: 600px) {
+    /* Делаем основные кнопки более компактными на телефоне */
     .bb-vn-option {
-        flex: 0 0 100%;
-        min-width: 100%;
+        flex: 0 0 100% !important;
+        min-width: 100% !important;
+        padding: 8px 10px !important; /* Уменьшили высоту кнопок */
+    }
+    .bb-vn-op-head {
+        font-size: 13px; /* Сделали шрифт чуть аккуратнее */
+    }
+    .bb-vn-op-risk {
+        font-size: 9px; /* Уменьшили ярлычок риска */
+        padding: 2px 4px;
+    }
+    
+    /* Заставляем обертку для кнопок "Реролл/Свернуть" переносить их на новые строки, 
+       чтобы они встали аккуратным столбиком и не вылезали за экран */
+    #bb-vn-options-container > div {
+        flex-wrap: wrap;
+        gap: 6px !important; 
+    }
+    #bb-vn-btn-reroll, #bb-vn-btn-cancel {
+        padding: 8px !important; /* Делаем служебные кнопки тоньше */
     }
 }
