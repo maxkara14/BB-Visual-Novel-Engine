@@ -27,7 +27,7 @@ You are tracking the relationship affinities between {{user}} and the characters
 At the VERY END of your response, you MUST generate a hidden JSON block evaluating how {{user}}'s last action affected the characters.
 
 CRITICAL RULES FOR JSON:
-1. "base_affinity": Provide this field (integer from -100 to 100) EXCLUSIVELY for newly introduced characters. Skip this field for already known characters.
+1. "base_affinity": Provide this field (integer from -100 to 100) ONLY for characters NOT listed in the [CURRENT RELATIONSHIP STATUS] below. If it's a newly tracked character (even if they already know {{user}} from the lore), estimate their starting relationship (e.g., 50-80 for an old friend, -50 for an established enemy). Omit this field for characters already in the tracker.
 2. "status": 1-3 words describing the stable, LONG-TERM relationship towards {{user}} (e.g., "Тайная симпатия", "Соперник", "Лучший друг"). Focus strictly on permanent relationship dynamics and ignore temporary passing moods.
 3. "delta": Integer representing the change in affinity. Use this STRICT scale:
    0 = Neutral interaction, normal chat (no change).
@@ -42,7 +42,7 @@ CRITICAL LANGUAGE RULE: Output the JSON values ENTIRELY IN RUSSIAN.
 Format EXACTLY like this:
 \`\`\`json
 {
-  "social_updates": [
+  "social_updates":[
     { "name": "Имя Персонажа", "base_affinity": 60, "delta": 2, "status": "Хороший друг", "reason": "Оценил помощь с заданием" }
   ]
 }
