@@ -791,7 +791,7 @@ function setupExtensionSettings() {
                     <input type="checkbox" id="bb-vn-cfg-usemacro" ${s.useMacro ? 'checked' : ''}>
                     <span>Использовать макрос <code>{{bb_vn}}</code> вместо авто-вставки</span>
                 </label>
-                <span style="font-size: 10px; color: #94a3b8; line-height: 1.2; margin-bottom: 5px; display:block;">* Отключит автоматическое внедрение инструкций для системы отношений. Вам нужно будет вручную вписать <code>{{bb_vn}}</code> в ваш пресет.</span>
+                <span style="font-size: 10px; color: #94a3b8; line-height: 1.2; margin-bottom: 5px; display:block;">* Отключит автоматическое внедрение инструкций системы отношений в ваши пресеты. Вам нужно будет вручную вписать <code>{{bb_vn}}</code> в ваш пресет.</span>
 <button id="bb-social-restore-chars-btn" class="menu_button" style="width: 100%; margin-bottom: 5px;"><i class="fa-solid fa-users-viewfinder"></i>&nbsp; Вернуть скрытых персонажей</button>
 <button id="bb-social-clear-log-btn" class="menu_button" style="width: 100%; margin-bottom: 5px;"><i class="fa-solid fa-eraser"></i>&nbsp; Очистить Журнал событий</button>
 <button id="bb-social-wipe-btn" class="menu_button" style="width: 100%; background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: #ef4444;"><i class="fa-solid fa-trash-can"></i>&nbsp; Сбросить отношения в этом чате</button>
