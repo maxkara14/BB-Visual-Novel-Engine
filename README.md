@@ -27,11 +27,7 @@
 
 ---
 
-<img width="479" height="887" alt="Screenshot_4" src="https://github.com/user-attachments/assets/c874ffa8-6b71-4079-b66e-cdac2a89cf37" />
-
----
-
-<img width="479" height="888" alt="Screenshot_3" src="https://github.com/user-attachments/assets/633748fb-75d3-40ec-9e65-11ab140a048a" />
+<img width="790" height="860" alt="Screenshot_3 копия" src="https://github.com/user-attachments/assets/1854225f-5536-4f72-a25d-672d8b2b95fa" />
 
 ---
 
