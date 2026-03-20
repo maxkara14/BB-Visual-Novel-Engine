@@ -102,23 +102,39 @@
     transition: transform 0.2s, border-color 0.2s;
 }
 .bb-char-card:hover { border-color: rgba(255,255,255,0.15); background: rgba(20, 20, 25, 0.8); }
-.bb-char-header { display: flex; justify-content: space-between; align-items: center; }
-.bb-char-name { font-weight: 800; color: #e2e8f0; font-size: 15px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* Новая шапка: Имя и шестеренка на одной линии, статус - ниже */
+.bb-char-header { display: flex; flex-direction: column; gap: 8px; }
+.bb-char-title-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.bb-char-name { font-weight: 800; color: #e2e8f0; font-size: 15px; flex: 1; word-wrap: break-word; line-height: 1.2; }
+
+/* Блок вектора отношения */
+.bb-char-subtitle { 
+    display: flex; 
+    flex-direction: column; /* Выстраиваем элементы сверху вниз */
+    align-items: flex-start; /* Прижимаем всё к левому краю */
+    gap: 6px; 
+}
+.bb-char-direction { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px; }
+
+/* Резиновый статус */
 .bb-char-tier {
     font-size: 10px; padding: 4px 8px; border-radius: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;
-    max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;
+    white-space: normal; text-align: center; word-wrap: break-word;
 }
 .tier-enemy { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
 .tier-neutral { background: rgba(161, 161, 170, 0.2); color: #a1a1aa; border: 1px solid rgba(161, 161, 170, 0.3); }
 .tier-friend { background: rgba(74, 222, 128, 0.2); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.3); }
 .tier-close { background: rgba(192, 132, 252, 0.2); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.3); }
 
-/* === ДВУСТОРОННЯЯ ШКАЛА === */
-.bb-progress-bg { width: 100%; height: 6px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; position: relative; }
-.bb-progress-center-line { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; background: rgba(255, 255, 255, 0.5); z-index: 2; border-radius: 1px; }
-.bb-progress-fill { position: absolute; top: 0; height: 100%; border-radius: 3px; transition: all 0.5s ease; }
-.bb-char-stats { display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; font-weight: bold; }
+/* === ПРОКАЧАННАЯ ШКАЛА ПРОГРЕССА === */
+.bb-progress-wrapper { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.bb-progress-labels { display: flex; justify-content: space-between; font-size: 9px; color: #64748b; font-weight: bold; font-family: monospace; padding: 0 2px; }
+.bb-progress-bg { width: 100%; height: 8px; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 4px; position: relative; overflow: hidden; }
+.bb-progress-center-line { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: rgba(255, 255, 255, 0.2); z-index: 2; }
+.bb-progress-fill { position: absolute; top: 0; height: 100%; border-radius: 3px; transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+.bb-char-stats { text-align: center; font-size: 11px; color: #94a3b8; font-weight: bold; margin-top: 2px; }
+
 .bb-empty-hud { text-align: center; color: #64748b; font-size: 13px; font-style: italic; margin-top: 50px; }
 
 .bb-char-log {
@@ -130,15 +146,6 @@
 .bb-log-entry { display: flex; gap: 8px; font-size: 11px; line-height: 1.3; }
 .bb-log-delta { font-weight: 900; width: 25px; flex-shrink: 0; text-align: right; }
 .bb-log-reason { color: #cbd5e1; font-style: italic; }
-
-/* ГЛОБАЛЬНЫЙ ЖУРНАЛ (TAB 2) */
-.bb-glog-item { background: rgba(0,0,0,0.3); border-left: 3px solid #64748b; padding: 10px; border-radius: 4px; font-size: 12px; color: #e2e8f0; display: flex; flex-direction: column; gap: 4px; }
-.bb-glog-item.init { border-left-color: #c084fc; background: rgba(192, 132, 252, 0.05); }
-.bb-glog-item.plus { border-left-color: #4ade80; background: rgba(74, 222, 128, 0.05); }
-.bb-glog-item.minus { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.05); }
-.bb-glog-item.system { border-left-color: #f59e0b; color: #f59e0b; font-style: italic; }
-.bb-glog-time { font-size: 10px; color: #94a3b8; font-family: monospace; }
-.bb-glog-text strong { color: #fff; }
 
 /* =========================================
    ИНТЕРАКТИВНОЕ КИНО (ПАНЕЛЬ НАД ЧАТОМ)
@@ -220,3 +227,56 @@
         padding: 8px !important; /* Делаем служебные кнопки тоньше */
     }
 }
+
+/* =========================================
+   ГЛОБАЛЬНЫЙ ЖУРНАЛ (ТАБ 2 - LOG)
+========================================= */
+.bb-glog-item {
+    display: flex; align-items: flex-start; gap: 10px; 
+    padding: 10px; margin-bottom: 8px; border-radius: 6px;
+    background: rgba(0, 0, 0, 0.4); border-left: 3px solid #64748b;
+    font-size: 13px; line-height: 1.4;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* Раскраска фонов и рамок */
+.bb-glog-item.plus { border-left-color: #4ade80; background: rgba(74, 222, 128, 0.05); }
+.bb-glog-item.minus { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.05); }
+.bb-glog-item.init { border-left-color: #c084fc; background: rgba(192, 132, 252, 0.05); }
+.bb-glog-item.system { border-left-color: #f59e0b; background: rgba(245, 158, 11, 0.05); }
+
+.bb-glog-time { font-size: 10px; color: #64748b; font-family: monospace; margin-top: 2px; flex-shrink: 0; }
+.bb-glog-text { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+
+/* Внутренняя структура (Имя + Цифра) */
+.bb-glog-main { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+
+/* Имя теперь с уменьшенным интервалом, чтобы столбик был аккуратным */
+.bb-glog-char { 
+    font-weight: 900; font-size: 14px; text-transform: uppercase; 
+    letter-spacing: 0.5px; line-height: 1.1; 
+}
+
+/* Подсветка имени в зависимости от события */
+.plus .bb-glog-char { color: #4ade80; text-shadow: 0 0 8px rgba(74, 222, 128, 0.3); }
+.minus .bb-glog-char { color: #ef4444; text-shadow: 0 0 8px rgba(239, 68, 68, 0.3); }
+.init .bb-glog-char { color: #c084fc; text-shadow: 0 0 8px rgba(192, 132, 252, 0.3); }
+.system .bb-glog-text { color: #f59e0b; font-weight: bold; }
+
+.bb-glog-delta { 
+    font-weight: 900; font-size: 14px; 
+    white-space: nowrap; /* Жестко запрещаем перенос строки! */
+    flex-shrink: 0; /* Запрещаем сплющивать этот блок */
+}
+.plus .bb-glog-delta { color: #4ade80; }
+.minus .bb-glog-delta { color: #ef4444; }
+
+/* Причина изменения статуса */
+.bb-glog-reason { 
+    font-size: 12px; font-style: italic; 
+    border-top: 1px dashed rgba(255, 255, 255, 0.1); 
+    padding-top: 5px; 
+}
+.plus .bb-glog-reason { color: #86efac; } /* Нежно-зеленый */
+.minus .bb-glog-reason { color: #fca5a5; } /* Нежно-красный */
+.init .bb-glog-reason { color: #d8b4fe; } /* Нежно-фиолетовый */
