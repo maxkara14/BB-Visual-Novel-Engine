@@ -580,7 +580,20 @@ window['bbVnGenerateOptionsFlow'] = async function() {
 
         // @ts-ignore
         const persona = SillyTavern.getContext().substituteParams('{{persona}}');
-        const prompt = OPTIONS_PROMPT.replace('{{chat}}', recentMessages).replace('{{persona}}', persona);
+        let prompt = OPTIONS_PROMPT.replace('{{chat}}', recentMessages).replace('{{persona}}', persona);
+
+// --- ПОДКЛЮЧАЕМ РЕЖИССЁРА (ЕСЛИ ОН ЕСТЬ) ---
+        if (typeof window['bbGetSceneDirectorPrompt'] === 'function') {
+            const sceneVibe = window['bbGetSceneDirectorPrompt']();
+            if (sceneVibe) {
+                // ВЫВОДИМ В КОНСОЛЬ БРАУЗЕРА:
+                console.log("[BB VNE] 🎬 Успешно подхватили стиль Режиссёра:\n", sceneVibe);
+                
+                prompt = sceneVibe + "\n\n" + prompt;
+            }
+        }
+        // ------------------------------------------
+
         const result = await generateFastPrompt(prompt);
 
         let cleanResult = String(result || "").trim();
