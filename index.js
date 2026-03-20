@@ -23,19 +23,19 @@ let currentCalculatedStats = {};
 // ФАЗА 1: СОЦИАЛЬНЫЙ ТРЕКИНГ (DEEP SYNC + УМНЫЕ СТАТЫ)
 // ==========================================
 const SOCIAL_PROMPT = `[SYSTEM INSTRUCTION: VISUAL NOVEL ENGINE]
-You are tracking the relationship affinities between {{user}} and the characters. 
-At the VERY END of your response, you MUST generate a hidden JSON block evaluating how {{user}}'s last action affected the characters.
+You are tracking how the characters feel about {{user}}. 
+At the VERY END of your response, you MUST generate a hidden JSON block evaluating how {{user}}'s last action affected each character's attitude, trust, and affection towards {{user}}.
 
 CRITICAL RULES FOR JSON:
-1. "base_affinity": Provide this field (integer from -100 to 100) ONLY for characters NOT listed in the [CURRENT RELATIONSHIP STATUS] below. If it's a newly tracked character (even if they already know {{user}} from the lore), estimate their starting relationship (e.g., 50-80 for an old friend, -50 for an established enemy). Omit this field for characters already in the tracker.
-2. "status": 1-3 words describing the stable, LONG-TERM relationship towards {{user}} (e.g., "Тайная симпатия", "Соперник", "Лучший друг"). Focus strictly on permanent relationship dynamics and ignore temporary passing moods.
-3. "delta": Integer representing the change in affinity. Use this STRICT scale:
-   0 = Neutral interaction, normal chat (no change).
-   1 to 3 = Mild positive (polite chat, small help).
+1. "base_affinity": Provide this field (integer from -100 to 100) ALWAYS and ONLY for characters NOT listed in the [CURRENT RELATIONSHIP STATUS] below. Even if the character already knows {{user}} well from the story or lore, you MUST estimate and provide their starting relationship score upon their first appearance in the tracker. Omit this field for characters already in the tracker.
+2. "status": 1-3 words describing the character's current, stable view of {{user}} (e.g., "Тайная симпатия", "Соперник", "Лучший друг"). Focus strictly on how THEY see {{user}} long-term, ignoring passing moods.
+3. "delta": Integer representing the shift in the character's feelings towards {{user}}. Use this STRICT scale:
+   0 = Neutral interaction (no change in opinion).
+   1 to 3 = Mild positive (character appreciates politeness, small help).
    4 to 8 = Strong positive (deep bonding, major gift, saving life).
-   -1 to -3 = Mild negative (annoyance, slight disagreement, awkwardness).
-   -4 to -8 = Strong negative (betrayal, serious fight, deep offense).
-4. "reason": Short explanation of the delta.
+   -1 to -3 = Mild negative (character is annoyed, slight disagreement).
+   -4 to -8 = Strong negative (character feels betrayed, serious fight, deep offense).
+4. "reason": Short explanation of WHY the character's opinion changed (the delta).
 
 CRITICAL LANGUAGE RULE: Output the JSON values ENTIRELY IN RUSSIAN.
 
@@ -206,8 +206,17 @@ function recalculateAllStats(isNewMessage = false) {
                     
                     currentCalculatedStats[charName] = { affinity: base, history: [], status: update.status || "" };
                     
+                    // === ОБНОВЛЕННЫЙ ЛОГ ДЛЯ ИНИЦИАЛИЗАЦИИ ===
                     if (isNewMessage && idx === chat.length - 1 && update.base_affinity !== undefined) {
-                        addGlobalLog('init', `Встреча: <strong>${escapeHtml(charName)}</strong>. Базовое отношение: ${base}`);
+                        // Меняем пробелы на перенос строки
+                        const formattedName = escapeHtml(charName).replace(/ /g, '<br>');
+                        addGlobalLog('init', `
+                            <div class="bb-glog-main">
+                                <span class="bb-glog-char">${formattedName}</span>
+                                <span class="bb-glog-delta">Старт: ${base}</span>
+                            </div>
+                            <div class="bb-glog-reason">Первая встреча в трекере</div>
+                        `);
                     }
                 }
                 
@@ -219,10 +228,19 @@ function recalculateAllStats(isNewMessage = false) {
 
                 currentCalculatedStats[charName].history.push({ delta, reason: update.reason || "" });
                 
+                // === ОБНОВЛЕННЫЙ ЛОГ ДЛЯ ИЗМЕНЕНИЯ ОТНОШЕНИЙ ===
                 if (isNewMessage && idx === chat.length - 1 && delta !== 0) {
                     showAffinityToast(charName, delta, update.reason || "");
                     const sign = delta > 0 ? '+' : '';
-                    addGlobalLog(delta > 0 ? 'plus' : 'minus', `<strong>${escapeHtml(charName)}</strong>: ${sign}${delta} <i>(${escapeHtml(update.reason)})</i>`);
+                    // Меняем пробелы на перенос строки
+                    const formattedName = escapeHtml(charName).replace(/ /g, '<br>');
+                    addGlobalLog(delta > 0 ? 'plus' : 'minus', `
+                        <div class="bb-glog-main">
+                            <span class="bb-glog-char">${formattedName}</span>
+                            <span class="bb-glog-delta">${sign}${delta}</span>
+                        </div>
+                        <div class="bb-glog-reason">"${escapeHtml(update.reason)}"</div>
+                    `);
                 }
             });
         }
@@ -250,13 +268,14 @@ function renderSocialHud() {
                 const displayStatus = currentCalculatedStats[charName].status || tier.label;
                 const baseAffinity = chat_metadata['bb_vn_char_bases']?.[charName] ?? 0;
                 
+                // Добавили легкое свечение (box-shadow) для заполненной шкалы
                 let barStyle = '';
                 if (affinity >= 0) {
                     const w = Math.min(100, affinity);
-                    barStyle = `left: 50%; width: ${w / 2}%; background-color: ${tier.color};`;
+                    barStyle = `left: 50%; width: ${w / 2}%; background-color: ${tier.color}; box-shadow: 0 0 8px ${tier.color};`;
                 } else {
                     const w = Math.min(100, Math.abs(affinity));
-                    barStyle = `right: 50%; width: ${w / 2}%; background-color: ${tier.color};`;
+                    barStyle = `right: 50%; width: ${w / 2}%; background-color: ${tier.color}; box-shadow: 0 0 8px ${tier.color};`;
                 }
 
                 let historyHtml = '';
@@ -273,27 +292,37 @@ function renderSocialHud() {
                 html += `
                     <div class="bb-char-card" data-char="${escapeHtml(charName)}">
                         <div class="bb-char-header">
-                            <span class="bb-char-name">${charName}</span>
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <span class="bb-char-tier ${tier.class}" title="${escapeHtml(displayStatus)}">${escapeHtml(displayStatus)}</span>
+                            <div class="bb-char-title-row">
+                                <span class="bb-char-name">${escapeHtml(charName)}</span>
                                 <i class="fa-solid fa-gear bb-char-edit-btn" style="color:#94a3b8; cursor:pointer;" data-char="${escapeHtml(charName)}" title="Настройки персонажа"></i>
                             </div>
+                            <div class="bb-char-subtitle">
+                                <span class="bb-char-direction"><i class="fa-solid fa-reply fa-rotate-180"></i> отношение к вам:</span>
+                                <span class="bb-char-tier ${tier.class}" title="${escapeHtml(displayStatus)}">${escapeHtml(displayStatus)}</span>
+                            </div>
                         </div>
-                        <div class="bb-progress-bg">
-                            <div class="bb-progress-center-line"></div>
-                            <div class="bb-progress-fill" style="${barStyle}"></div>
-                        </div>
-                        <div class="bb-char-stats">
-                            <span>Отношение: ${affinity}</span>
-                            <span>${affinity >= 0 ? 'Макс: 100' : 'Мин: -100'}</span>
+                        
+                        <div class="bb-progress-wrapper">
+                            <div class="bb-progress-labels">
+                                <span>-100</span>
+                                <span>0</span>
+                                <span>+100</span>
+                            </div>
+                            <div class="bb-progress-bg">
+                                <div class="bb-progress-center-line"></div>
+                                <div class="bb-progress-fill" style="${barStyle}"></div>
+                            </div>
+                            <div class="bb-char-stats">
+                                Текущий показатель: <strong style="color:${tier.color}; font-size:13px;">${affinity}</strong>
+                            </div>
                         </div>
                         
                         <div class="bb-char-editor" style="display:none; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 6px; padding: 10px; margin-top: 10px; cursor: default;">
                             <div style="font-size:10px; color:#94a3b8; margin-bottom:5px; font-weight:bold;">БАЗОВОЕ ОТНОШЕНИЕ:</div>
                             <input type="number" class="text_pole bb-edit-base-input" value="${baseAffinity}" style="width:100%; margin-bottom:8px; box-sizing:border-box;">
                             <div style="display:flex; gap:5px;">
-                                <button class="menu_button bb-btn-save-char" data-char="${escapeHtml(charName)}" style="flex:1;"><i class="fa-solid fa-check"></i> Сохранить</button>
-                                <button class="menu_button bb-btn-hide-char" data-char="${escapeHtml(charName)}" style="flex:1; background:rgba(239,68,68,0.2); color:#ef4444; border-color:#ef4444;"><i class="fa-solid fa-trash"></i> Скрыть</button>
+                                <button class="menu_button bb-btn-save-char" data-char="${escapeHtml(charName)}" style="flex:1;"><i class="fa-solid fa-check"></i>&ensp;Сохранить</button>
+                                <button class="menu_button bb-btn-hide-char" data-char="${escapeHtml(charName)}" style="flex:1; background:rgba(239,68,68,0.2); color:#ef4444; border-color:#ef4444;"><i class="fa-solid fa-trash"></i>&ensp;Скрыть</button>
                             </div>
                         </div>
 
