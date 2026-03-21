@@ -28,7 +28,7 @@ At the VERY END of your response, you MUST generate a hidden JSON block evaluati
 
 CRITICAL RULES FOR JSON:
 1. "base_affinity": Provide this field (integer from -100 to 100) ALWAYS and ONLY for characters NOT listed in the [CURRENT RELATIONSHIP STATUS] below. Even if the character already knows {{user}} well from the story or lore, you MUST estimate and provide their starting relationship score upon their first appearance in the tracker. Omit this field for characters already in the tracker.
-2. "status": A 1-3 word RELATIONSHIP LABEL defining the specific bond between the character and {{user}}. The AI MUST answer the character's internal question: "Who is {{user}} to me?". Use strictly social or romantic connection terms (e.g., "Надежный товарищ", "Тайная симпатия", "Главный соперник").
+2. "status": A 1-3 word noun phrase defining {{user}}'s current role from the character's perspective. The AI MUST mentally complete this exact sentence from the character's POV: "When I look at {{user}}, I see my [STATUS]". Output ONLY the [STATUS]. Examples of what {{user}} is to the character: "Непослушная дочь", "Надежный союзник", "Холодная сестра".
 3. "delta": Integer representing the shift in the character's feelings towards {{user}}. Use this STRICT scale:
    0 = Neutral interaction (no change in opinion).
    1 to 3 = Mild positive (character appreciates politeness, small help).
