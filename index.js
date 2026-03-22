@@ -58,7 +58,7 @@ Format EXACTLY like this (include "base_affinity" ONLY for new characters!):
 }
 \`\`\``;
 
-function getCombinedSocialPrompt() {
+function getCombinedSocial() {
     let combinedStr = SOCIAL_PROMPT;
     const characters = Object.keys(currentCalculatedStats);
     if (characters.length > 0) {
@@ -77,7 +77,7 @@ function injectCombinedSocialPrompt() {
         if (extension_settings[MODULE_NAME].useMacro) {
             setExtensionPrompt('bb_social_injector', '', extension_prompt_types.IN_CHAT, 3, false, extension_prompt_roles.SYSTEM);
         } else {
-            const promptText = getCombinedSocialPrompt();
+            const promptText = getCombinedSocial();
             setExtensionPrompt('bb_social_injector', promptText, extension_prompt_types.IN_CHAT, 3, false, extension_prompt_roles.SYSTEM);
         }
     } catch (e) { console.error("[BB VN] Ошибка инъекции:", e); }
@@ -462,6 +462,9 @@ function ensureHudContainer() {
 // ==========================================
 
 const OPTIONS_PROMPT = `Analyze the recent chat. Generate exactly 3 highly distinct, engaging actions {{user}} can take right now to DRIVE THE STORY FORWARD.
+
+CRITICAL: Your generated messages MUST logically continue from the VERY LAST sentence of the [IMMEDIATE TRIGGER]. Do not ignore the character's final question, movement, or action. React directly to it!
+
 For EACH action, write a DETAILED roleplay message (actions, internal thoughts, dialogue, sensory details) from {{user}}'s perspective. DO NOT just react passively; make {{user}} take initiative to progress the plot or shift the dynamic. Match {{user}}'s persona perfectly. Write in Russian.
 
 CRITICAL RULES FOR RISK LEVELS:
@@ -496,8 +499,11 @@ Format exactly like this:
 [USER PERSONA REFERENCE]:
 {{persona}}
 
-Recent Chat:
-"""{{chat}}"""`;
+[RECENT CONTEXT (For background)]:
+"""{{chat}}"""
+
+[IMMEDIATE TRIGGER (You MUST directly respond to the exact ending of this message)]:
+"""{{lastMessage}}"""`;
 
 async function runMainGen(promptText) {
     if (typeof generateQuietPrompt === 'function') {
@@ -623,13 +629,19 @@ window['bbVnGenerateOptionsFlow'] = async function() {
     $('#bb-vn-options-container').removeClass('active').empty();
 
     try {
-        const chat = SillyTavern.getContext().chat;
+       const chat = SillyTavern.getContext().chat;
         if (!chat || chat.length === 0) throw new Error("Чат пуст");
+        
         const recentMessages = chat.slice(-4).map(m => `${m.name}: ${m.mes}`).join('\\n\\n');
+        const lastMessageText = chat[chat.length - 1] ? chat[chat.length - 1].mes : ""; // Достаем самое свежее сообщение
 
         // @ts-ignore
         const persona = SillyTavern.getContext().substituteParams('{{persona}}');
-        let prompt = OPTIONS_PROMPT.replace('{{chat}}', recentMessages).replace('{{persona}}', persona);
+        
+        let prompt = OPTIONS_PROMPT
+            .replace('{{chat}}', recentMessages)
+            .replace('{{persona}}', persona)
+            .replace('{{lastMessage}}', lastMessageText); // Вшиваем триггер в промпт
 
 // --- ПОДКЛЮЧАЕМ РЕЖИССЁРА (ЕСЛИ ОН ЕСТЬ) ---
         if (typeof window['bbGetSceneDirectorPrompt'] === 'function') {
@@ -975,7 +987,7 @@ jQuery(async () => {
         const context = SillyTavern.getContext();
         if (context.registerMacro) {
             context.registerMacro('bb_vn', () => {
-                return extension_settings[MODULE_NAME].useMacro ? getCombinedSocialPrompt() : '';
+                return extension_settings[MODULE_NAME].useMacro ? getCombinedSocial() : '';
             });
         }
 
@@ -1019,7 +1031,7 @@ jQuery(async () => {
 
         eventSource.on(event_types.GENERATE_AFTER_DATA, (generate_data) => {
             if (extension_settings[MODULE_NAME].useMacro && generate_data && Array.isArray(generate_data.messages)) {
-                const promptText = getCombinedSocialPrompt();
+                const promptText = getCombinedSocial();
                 generate_data.messages.forEach(msg => {
                     if (msg && msg.content && typeof msg.content === 'string' && msg.content.includes('{{bb_vn}}')) {
                         msg.content = msg.content.replace(/\{\{bb_vn\}\}/g, promptText);
