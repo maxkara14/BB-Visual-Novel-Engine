@@ -27,7 +27,12 @@ You are tracking how the characters feel about {{user}}.
 At the VERY END of your response, you MUST generate a hidden JSON block evaluating how {{user}}'s last action affected each character's attitude, trust, and affection towards {{user}}.
 
 CRITICAL RULES FOR JSON:
-1. "base_affinity": MANDATORY IF AND ONLY IF the character is missing from the [CURRENT RELATIONSHIP STATUS] list below. Check the list! If the character is NOT there (even if they are a known lore character), you MUST generate a starting score (-100 to 100). Do NOT output this field if the character is already on the list.
+1. "base_affinity": INITIAL STARTING SCORE (-100 to 100). You MUST use this mechanical check:
+Look at the [CURRENT RELATIONSHIP STATUS] block below.
+- Is the block EMPTY or missing? -> YOU MUST OUTPUT "base_affinity".
+- Is the character's name missing from that block? -> YOU MUST OUTPUT "base_affinity".
+- Is the character already listed in that block? -> DO NOT output "base_affinity".
+NO EXCEPTIONS. Even if it's the very first message or a known lore character, if they aren't physically printed in the list below, you MUST provide this score.
 2. "status": A 1-3 word label defining WHO {{user}} IS to the character. CRITICAL RULE: DO NOT describe the character's own role! You MUST describe {{user}}!
 - WRONG (describing the character): "Старший брат", "Заботливая мать", "Учитель".
 - CORRECT (describing {{user}}): "Младшая сестра", "Проблемная ученица", "Надежный напарник".
