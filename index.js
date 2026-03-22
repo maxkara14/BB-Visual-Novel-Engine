@@ -27,7 +27,7 @@ You are tracking how the characters feel about {{user}}.
 At the VERY END of your response, you MUST generate a hidden JSON block evaluating how {{user}}'s last action affected each character's attitude, trust, and affection towards {{user}}.
 
 CRITICAL RULES FOR JSON:
-1. "base_affinity": Provide this field (integer from -100 to 100) ALWAYS and ONLY for characters NOT listed in the [CURRENT RELATIONSHIP STATUS] below. Even if the character already knows {{user}} well from the story or lore, you MUST estimate and provide their starting relationship score upon their first appearance in the tracker. Omit this field for characters already in the tracker.
+1. "base_affinity": MANDATORY IF AND ONLY IF the character is missing from the [CURRENT RELATIONSHIP STATUS] list below. Check the list! If the character is NOT there (even if they are a known lore character), you MUST generate a starting score (-100 to 100). Do NOT output this field if the character is already on the list.
 2. "status": A 1-3 word label defining WHO {{user}} IS to the character. CRITICAL RULE: DO NOT describe the character's own role! You MUST describe {{user}}!
 - WRONG (describing the character): "Старший брат", "Заботливая мать", "Учитель".
 - CORRECT (describing {{user}}): "Младшая сестра", "Проблемная ученица", "Надежный напарник".
@@ -35,18 +35,20 @@ Answer the character's internal question: "Who is {{user}} to me?"
 3. "delta": Integer representing the shift in the character's feelings towards {{user}}. Use this STRICT scale:
    0 = Neutral interaction (no change in opinion).
    1 to 3 = Mild positive (character appreciates politeness, small help).
-   4 to 8 = Strong positive (deep bonding, major gift, saving life).
+   4 to 8 = Strong positive (deep bonding, major gift).
+   9 to 30 = Extreme positive (heroic sacrifice, saving a life, profound revelation).
    -1 to -3 = Mild negative (character is annoyed, slight disagreement).
-   -4 to -8 = Strong negative (character feels betrayed, serious fight, deep offense).
+   -4 to -8 = Strong negative (serious fight, deep offense).
+   -9 to -30 = Extreme negative (murder, ultimate betrayal, unforgivable atrocities).
 4. "reason": Short explanation of WHY the character's opinion changed (the delta).
 
 CRITICAL LANGUAGE RULE: Output the JSON values ENTIRELY IN RUSSIAN.
 
-Format EXACTLY like this:
+Format EXACTLY like this (include "base_affinity" ONLY for new characters!):
 \`\`\`json
 {
   "social_updates":[
-    { "name": "Имя Персонажа", "base_affinity": 60, "delta": 2, "status": "Хороший друг", "reason": "Оценил помощь с заданием" }
+    { "name": "Имя Персонажа", "base_affinity": 60, "delta": -15, "status": "Предатель", "reason": "Убил невинного человека на моих глазах" }
   ]
 }
 \`\`\``;
