@@ -454,25 +454,35 @@ function ensureHudContainer() {
 // ФАЗА 3: ИНТЕРАКТИВНОЕ КИНО С КЭШИРОВАНИЕМ
 // ==========================================
 
-const OPTIONS_PROMPT = `Analyze the recent chat. Generate exactly 3 highly distinct, engaging actions {{user}} can take right now to respond to the situation.
-For EACH action, write the FULL roleplay message (actions, thoughts, dialogue) from {{user}}'s perspective. Match {{user}}'s persona perfectly. Write in Russian.
-CRITICAL: Return STRICTLY a valid JSON array. DO NOT output any other text or markdown.
+const OPTIONS_PROMPT = `Analyze the recent chat. Generate exactly 3 highly distinct, engaging actions {{user}} can take right now to DRIVE THE STORY FORWARD.
+For EACH action, write a DETAILED roleplay message (actions, internal thoughts, dialogue, sensory details) from {{user}}'s perspective. DO NOT just react passively; make {{user}} take initiative to progress the plot or shift the dynamic. Match {{user}}'s persona perfectly. Write in Russian.
+
+CRITICAL RULES FOR RISK LEVELS:
+1. "Низкий" (Low Risk): Safe, polite, cautious, or expected. Maintains the status quo, agrees with the character, avoids conflict, or follows instructions.
+2. "Средний" (Medium Risk): Probing, playful, or shifting the dynamic. Asking uncomfortable questions, light teasing, changing the subject, or suggesting a new course of action.
+3. "Высокий" (High Risk): Bold, provocative, ambiguous, or dangerous. Confrontation, sudden emotional confessions, highly inappropriate actions, breaking boundaries, or taking a massive gamble that will drastically alter the scene.
+
+CRITICAL JSON AND FORMATTING RULES:
+1. Return STRICTLY a valid JSON array. DO NOT output any conversational text outside the JSON.
+2. INSIDE the "message" field, you MUST use standard roleplay formatting: asterisks for *actions/thoughts* and quotes for dialogue.
+3. You MUST escape all internal double quotes inside the "message" string (e.g., \\"Hello\\") to ensure the JSON remains valid.
+
 Format exactly like this:
 [
   {
     "intent": "Действие один (1-3 слова)",
     "risk": "Низкий",
-    "message": "Полный текст сообщения от лица {{user}}..."
+    "message": "*Осторожно осматриваюсь.* \\"Ты уверена, что нам стоит это делать?\\" *Задумчиво хмурюсь, ожидая ответа.*"
   },
   {
     "intent": "Действие два (1-3 слова)",
     "risk": "Средний",
-    "message": "Полный текст сообщения от лица {{user}}..."
+    "message": "Подробный текст с *действиями* и \\"диалогами\\"..."
   },
   {
     "intent": "Действие три (1-3 слова)",
     "risk": "Высокий",
-    "message": "Полный текст сообщения от лица {{user}}..."
+    "message": "Смелый текст с *действиями* и \\"диалогами\\"..."
   }
 ]
 
