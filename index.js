@@ -295,6 +295,22 @@ function getUnforgettableRoleStatus(memories = []) {
     const total = memories.reduce((sum, memory) => sum + (parseInt(memory.delta) || 0), 0);
     const hasPositive = memories.some(memory => (parseInt(memory.delta) || 0) > 0);
     const hasNegative = memories.some(memory => (parseInt(memory.delta) || 0) < 0);
+    const memoryText = memories.map(memory => String(memory.text || '').toLowerCase()).join(' | ');
+
+    const keywordStatusMap = [
+        { pattern: /(спас|защит|выручил|прикрыл|уберег)/i, label: 'Спасший меня' },
+        { pattern: /(тайн|секрет|доверил|доверяю|открылся)/i, label: 'Хранитель тайны' },
+        { pattern: /(поцел|объят|нежн|люб|сердц|забот)/i, label: 'Тронувший сердце' },
+        { pattern: /(опираюсь|поддержал|рядом|не бросил|помог)/i, label: 'Тот, на кого опираюсь' },
+        { pattern: /(предал|обман|солгал|измен|подстав)/i, label: 'Предавший доверие' },
+        { pattern: /(униз|оскорб|отверг|презр|стыд)/i, label: 'Задевший гордость' },
+        { pattern: /(рана|шрам|сломал|разрушил|ударил)/i, label: 'Оставивший шрам' },
+        { pattern: /(ревност|одержим|опасн|искуш)/i, label: 'Опасно близкий' },
+    ];
+
+    for (const candidate of keywordStatusMap) {
+        if (candidate.pattern.test(memoryText)) return candidate.label;
+    }
 
     if (hasPositive && hasNegative) return 'Болезненно важный';
     if (total >= 18) return 'Тот, кто изменил меня';
