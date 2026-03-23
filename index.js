@@ -239,6 +239,32 @@ function maybeAddStoryMoment(moment) {
     if (currentStoryMoments.length > 30) currentStoryMoments.shift();
 }
 
+function tryBindPendingChoiceContextToMessage(msg) {
+    const pendingChoiceContext = chat_metadata['bb_vn_pending_choice_context'];
+    if (!pendingChoiceContext || !msg || !msg.is_user) return false;
+    if (msg.extra?.bb_vn_choice_context) return false;
+
+    const preview = String(pendingChoiceContext.messagePreview || '').trim();
+    const messageText = String(msg.mes || '').trim();
+    if (!preview || !messageText) return false;
+
+    const previewSlice = preview.slice(0, 80);
+    const matchesPreview = messageText.startsWith(previewSlice) || previewSlice.startsWith(messageText.slice(0, 40));
+    if (!matchesPreview) return false;
+
+    if (!msg.extra) msg.extra = {};
+    msg.extra.bb_vn_choice_context = {
+        intent: pendingChoiceContext.intent || '',
+        tone: pendingChoiceContext.tone || '',
+        forecast: pendingChoiceContext.forecast || '',
+        targets: Array.isArray(pendingChoiceContext.targets) ? pendingChoiceContext.targets : [],
+        at: pendingChoiceContext.at || Date.now(),
+    };
+
+    delete chat_metadata['bb_vn_pending_choice_context'];
+    return true;
+}
+
 function getTierInfo(affinity) {
     if (affinity <= -50) return { label: 'Враг', class: 'tier-enemy', color: '#ef4444' };
     if (affinity < -10) return { label: 'Неприязнь', class: 'tier-enemy', color: '#f87171' };
@@ -290,6 +316,7 @@ function recalculateAllStats(isNewMessage = false) {
     currentCalculatedStats = {};
     currentStoryMoments = [];
     const chat = SillyTavern.getContext().chat;
+    let latestChoiceContext = null;
     
     if (!chat_metadata['bb_vn_char_bases']) chat_metadata['bb_vn_char_bases'] = {};
     if (!chat_metadata['bb_vn_ignored_chars']) chat_metadata['bb_vn_ignored_chars'] = [];
@@ -303,6 +330,22 @@ function recalculateAllStats(isNewMessage = false) {
     let needsSave = false;
 
     chat.forEach((msg, idx) => {
+        if (tryBindPendingChoiceContextToMessage(msg)) needsSave = true;
+
+        if (msg?.is_user && msg.extra?.bb_vn_choice_context) {
+            latestChoiceContext = msg.extra.bb_vn_choice_context;
+            const choiceTargets = Array.isArray(latestChoiceContext.targets) && latestChoiceContext.targets.length > 0
+                ? latestChoiceContext.targets.join(', ')
+                : 'сцена в целом';
+
+            maybeAddStoryMoment({
+                type: 'choice-vector',
+                char: choiceTargets,
+                title: 'Выбран эмоциональный ход',
+                text: `${latestChoiceContext.intent || 'Без названия'} · ${latestChoiceContext.tone || 'нейтрально'} · ${latestChoiceContext.forecast || 'без прогноза'}.`,
+            });
+        }
+
         if (scanAndCleanMessage(msg, idx)) needsSave = true;
 
         const swipeId = msg.swipe_id || 0;
@@ -414,6 +457,14 @@ function recalculateAllStats(isNewMessage = false) {
             });
         }
     });
+
+    if (latestChoiceContext) {
+        chat_metadata['bb_vn_choice_context'] = latestChoiceContext;
+    } else if (chat_metadata['bb_vn_pending_choice_context']) {
+        chat_metadata['bb_vn_choice_context'] = chat_metadata['bb_vn_pending_choice_context'];
+    } else {
+        delete chat_metadata['bb_vn_choice_context'];
+    }
 
     if (needsSave) saveChatDebounced();
     injectCombinedSocialPrompt();
@@ -822,13 +873,16 @@ window['renderVNOptionsFromData'] = function(/** @type {VNOption[]} */ parsedOpt
         try {
             parsedTargets = JSON.parse(targetsRaw);
         } catch (e) {}
-        chat_metadata['bb_vn_choice_context'] = {
+        const choiceContext = {
             intent: $(this).attr('data-intent') || '',
             tone: $(this).attr('data-tone') || '',
             forecast: $(this).attr('data-forecast') || '',
             targets: Array.isArray(parsedTargets) ? parsedTargets : [],
             at: Date.now(),
+            messagePreview: message.slice(0, 140),
         };
+        chat_metadata['bb_vn_choice_context'] = choiceContext;
+        chat_metadata['bb_vn_pending_choice_context'] = choiceContext;
         saveChatDebounced();
         injectCombinedSocialPrompt();
         const textarea = document.querySelector('#send_textarea');
@@ -912,12 +966,23 @@ window['bbVnGenerateOptionsFlow'] = async function() {
         } catch (err) {
             parsedOptions = [];
             const intentMatches = [...cleanResult.matchAll(/"intent"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
+            const toneMatches = [...cleanResult.matchAll(/"tone"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
+            const forecastMatches = [...cleanResult.matchAll(/"forecast"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
             const riskMatches = [...cleanResult.matchAll(/"risk"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
             const messageMatches = [...cleanResult.matchAll(/"message"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
+            const targetsMatches = [...cleanResult.matchAll(/"targets"\s*:\s*\[([^\]]*)\]/gi)].map(m =>
+                m[1]
+                    .split(',')
+                    .map(item => item.replace(/["']/g, '').trim())
+                    .filter(Boolean)
+            );
             
             for (let i = 0; i < intentMatches.length; i++) {
                 parsedOptions.push({
                     intent: intentMatches[i],
+                    tone: toneMatches[i] || "",
+                    forecast: forecastMatches[i] || "",
+                    targets: targetsMatches[i] || [],
                     risk: riskMatches[i] || "Средний",
                     message: messageMatches[i] || ""
                 });
@@ -1047,6 +1112,7 @@ function wipeAllSocialData() {
     chat_metadata['bb_vn_char_bases'] = {};
     chat_metadata['bb_vn_ignored_chars'] = [];
     delete chat_metadata['bb_vn_choice_context'];
+    delete chat_metadata['bb_vn_pending_choice_context'];
     addGlobalLog('system', 'Все отношения сброшены до нуля.');
     saveChatDebounced();
     recalculateAllStats();
