@@ -167,7 +167,7 @@
 
 ### HUD-уведомления
 
-<img width="941" height="523" alt="варианты действий" src="https://github.com/user-attachments/assets/2620af57-0c9e-4644-84d2-519d09b35c29" />
+<img width="390" height="599" alt="уведомления" src="https://github.com/user-attachments/assets/96efa199-9e9d-4f44-900d-fb1dfadb60d5" />
 
 ---
 
