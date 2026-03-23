@@ -1,4 +1,4 @@
-<img width="390" height="871" alt="Связи" src="https://github.com/user-attachments/assets/5f090d02-8964-4561-a555-d45dd74b3eb0" />## BB Visual Novel Engine
+## BB Visual Novel Engine
 
 `BB Visual Novel Engine` — это расширение для **SillyTavern**, которое превращает обычный чат в более управляемую и “сценически” оформленную визуальную новеллу.
 
