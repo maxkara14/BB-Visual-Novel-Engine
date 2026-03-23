@@ -211,15 +211,18 @@
 .bb-vn-target.muted { color: #94a3b8; }
 .bb-vn-forecast-hover {
     position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%) translateY(-4px);
-    width: min(240px, calc(100vw - 40px));
+    width: clamp(220px, 32vw, 320px); max-width: calc(100vw - 40px);
     background: rgba(10, 10, 14, 0.97); border: 1px solid rgba(192, 132, 252, 0.35); border-radius: 10px;
     box-shadow: 0 12px 24px rgba(0,0,0,0.35); padding: 10px 12px;
     opacity: 0; pointer-events: none; transition: opacity 0.18s ease, transform 0.18s ease;
-    z-index: 12;
+    z-index: 12; white-space: normal;
 }
 .bb-vn-option:hover .bb-vn-forecast-hover { opacity: 1; transform: translateX(-50%) translateY(0); }
-.bb-vn-forecast-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #c084fc; margin-bottom: 4px; }
-.bb-vn-forecast-text { font-size: 12px; line-height: 1.35; color: #e2e8f0; }
+.bb-vn-forecast-title { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #c084fc; margin-bottom: 4px; }
+.bb-vn-forecast-text {
+    display: block; font-size: 12px; line-height: 1.4; color: #e2e8f0;
+    white-space: normal; word-break: break-word; overflow-wrap: anywhere; text-wrap: pretty;
+}
 
 .bb-vn-option.risk-low { border-bottom: 3px solid #4ade80; }
 .bb-vn-option.risk-low:hover { box-shadow: 0 5px 15px rgba(74, 222, 128, 0.3); }

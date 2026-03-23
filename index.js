@@ -426,12 +426,6 @@ function recalculateAllStats(isNewMessage = false) {
                         `);
                     }
 
-                    maybeAddStoryMoment({
-                        type: 'intro',
-                        char: charName,
-                        title: 'Новый персонаж в фокусе',
-                        text: `${charName}: первая фиксация в трекере отношений.`,
-                    });
                 }
 
                 const previousAffinity = currentCalculatedStats[charName].affinity;
