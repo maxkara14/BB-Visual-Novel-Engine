@@ -203,6 +203,13 @@ function normalizeOptionData(option = {}) {
     };
 }
 
+function normalizeStatusLabel(value = "") {
+    return String(value || '')
+        .replace(/_/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 function getToneClass(tone = "") {
     const value = String(tone).toLowerCase();
     if (value.includes('неж') || value.includes('тепл') || value.includes('ласк')) return 'tone-gentle';
@@ -232,18 +239,18 @@ function getMemoryTone(delta) {
 function getShiftDescriptor(delta) {
     const absDelta = Math.abs(delta);
     if (delta > 0) {
-        if (absDelta >= 9) return { short: 'Судьбоносно', full: 'Судьбоносное сближение', color: '#c084fc', logType: 'plus' };
-        if (absDelta >= 4) return { short: 'Сильнее', full: 'Сильное сближение', color: '#4ade80', logType: 'plus' };
-        if (absDelta >= 2) return { short: 'Теплее', full: 'Тёплый отклик', color: '#86efac', logType: 'plus' };
-        return { short: 'Потепление', full: 'Лёгкое потепление', color: '#bbf7d0', logType: 'plus' };
+        if (absDelta >= 9) return { short: 'Сильная связь', full: 'Сильное сближение', color: '#c084fc', logType: 'plus' };
+        if (absDelta >= 4) return { short: 'Сближение', full: 'Сильное сближение', color: '#4ade80', logType: 'plus' };
+        if (absDelta >= 2) return { short: 'Симпатия', full: 'Положительное изменение', color: '#86efac', logType: 'plus' };
+        return { short: 'Лёгкий плюс', full: 'Лёгкое улучшение', color: '#bbf7d0', logType: 'plus' };
     }
     if (delta < 0) {
-        if (absDelta >= 9) return { short: 'Перелом', full: 'Глубокая трещина', color: '#fca5a5', logType: 'minus' };
-        if (absDelta >= 4) return { short: 'Холоднее', full: 'Сильное охлаждение', color: '#f87171', logType: 'minus' };
-        if (absDelta >= 2) return { short: 'Напряжённо', full: 'Нарастающее напряжение', color: '#fda4af', logType: 'minus' };
-        return { short: 'Неловко', full: 'Лёгкое охлаждение', color: '#fecdd3', logType: 'minus' };
+        if (absDelta >= 9) return { short: 'Разрыв', full: 'Глубокая трещина', color: '#fca5a5', logType: 'minus' };
+        if (absDelta >= 4) return { short: 'Конфликт', full: 'Сильное ухудшение', color: '#f87171', logType: 'minus' };
+        if (absDelta >= 2) return { short: 'Напряжение', full: 'Нарастающее напряжение', color: '#fda4af', logType: 'minus' };
+        return { short: 'Лёгкий минус', full: 'Лёгкое ухудшение', color: '#fecdd3', logType: 'minus' };
     }
-    return { short: 'Ровно', full: 'Без ощутимых изменений', color: '#94a3b8', logType: 'system' };
+    return { short: 'Без изменений', full: 'Без ощутимых изменений', color: '#94a3b8', logType: 'system' };
 }
 
 function getAffinityNarrative(affinity) {
@@ -494,7 +501,7 @@ function recalculateAllStats(isNewMessage = false) {
                     currentCalculatedStats[charName] = {
                         affinity: base,
                         history: [],
-                        status: update.status || "",
+                        status: normalizeStatusLabel(update.status || ""),
                         memories: { soft: [], deep: [] }
                     };
                     
@@ -519,7 +526,7 @@ function recalculateAllStats(isNewMessage = false) {
                 if (currentCalculatedStats[charName].affinity > 100) currentCalculatedStats[charName].affinity = 100;
                 if (currentCalculatedStats[charName].affinity < -100) currentCalculatedStats[charName].affinity = -100;
                 
-                if (update.status) currentCalculatedStats[charName].status = update.status;
+                if (update.status) currentCalculatedStats[charName].status = normalizeStatusLabel(update.status);
 
                 currentCalculatedStats[charName].history.push({ delta, reason: update.reason || "" });
                 appendCharacterMemory(currentCalculatedStats[charName], delta, update.reason || "");
@@ -540,7 +547,7 @@ function recalculateAllStats(isNewMessage = false) {
                         type: 'status-shift',
                         char: charName,
                         title: 'Новый образ в его глазах',
-                        text: `${charName}: теперь вы для него — «${update.status}».`,
+                        text: `${charName}: теперь вы для него — «${normalizeStatusLabel(update.status)}».`,
                     });
                 }
 
@@ -679,7 +686,7 @@ function renderSocialHud() {
                                         <span class="bb-char-score" style="color:${tier.color};">${affinity > 0 ? '+' : ''}${affinity}</span>
                                     </div>
                                     <div class="bb-char-subtitle">
-                                        <span class="bb-char-direction"><i class="fa-solid fa-bookmark"></i> ваша роль в этой истории</span>
+                                        <span class="bb-char-direction"><i class="fa-solid fa-bookmark"></i> как персонаж вас видит</span>
                                         <div class="bb-char-signals">
                                             <span class="bb-char-tier ${tier.class}" title="${escapeHtml(displayStatus)}">${escapeHtml(displayStatus)}</span>
                                             ${memories.deep.length > 0 ? `<span class="bb-unforgettable-impact">${escapeHtml(unforgettableImpact.label)}</span>` : ''}
@@ -700,7 +707,7 @@ function renderSocialHud() {
                             <div class="bb-progress-wrapper">
                                 <div class="bb-progress-labels">
                                     <span>Отчуждение</span>
-                                    <span>Лиминал</span>
+                                    <span>Нейтрально</span>
                                     <span>Сближение</span>
                                 </div>
                                 <div class="bb-progress-bg">

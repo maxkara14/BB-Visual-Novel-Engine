@@ -102,8 +102,8 @@
 .bb-hud-live-dot { color: #f0abfc; background: rgba(168, 85, 247, 0.1); }
 .bb-hud-live-dot i { font-size: 8px; animation: bbLivePulse 1.4s ease-in-out infinite; }
 @keyframes bbLivePulse {
-    0%, 100% { transform: scale(0.9); opacity: 0.6; text-shadow: 0 0 0 rgba(240, 171, 252, 0.0); }
-    50% { transform: scale(1.15); opacity: 1; text-shadow: 0 0 10px rgba(240, 171, 252, 0.75); }
+    0%, 100% { opacity: 0.55; filter: drop-shadow(0 0 0 rgba(240, 171, 252, 0)); }
+    50% { opacity: 1; filter: drop-shadow(0 0 6px rgba(240, 171, 252, 0.55)); }
 }
 .bb-hud-title {
     font-size: 28px; font-weight: 900; color: #f8fafc;
