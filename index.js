@@ -48,10 +48,9 @@ Look at the [CURRENT RELATIONSHIP STATUS] block below.
 - Is the character's name missing from that block? -> YOU MUST OUTPUT "base_affinity".
 - Is the character already listed in that block? -> DO NOT output "base_affinity".
 NO EXCEPTIONS. Even if it's the very first message or a known lore character, if they aren't physically printed in the list below, you MUST provide this score.
-2. "status": A 1-3 word label defining WHO {{user}} IS to the character. CRITICAL RULE: DO NOT describe the character's own role! You MUST describe {{user}}!
-- WRONG (describing the character): "Старший брат", "Заботливая мать", "Учитель".
-- CORRECT (describing {{user}}): "Младшая сестра", "Проблемная ученица", "Надежный напарник".
-Answer the character's internal question: "Who is {{user}} to me?"
+2. "status": A 1-3 word label defining WHO {{user}} IS to the character. CRITICAL RULE: DO NOT describe the character's own role.
+Use a short role label that answers: "Who is {{user}} to this character?"
+Think in placeholder terms like: "WHO_USER_IS_TO_THE_CHARACTER".
 3. "delta": Integer representing the shift in the character's feelings towards {{user}}. Use this STRICT scale:
    0 = Neutral interaction (no change in opinion).
    1 to 3 = Mild positive (character appreciates politeness, small help).
@@ -613,9 +612,9 @@ function renderSocialHud() {
         if (visibleCharacters === 0) {
             charsBox.innerHTML = `
                 <div class="bb-panel-hero bb-panel-hero-route">
-                    <div class="bb-panel-kicker">Маршрут сцены</div>
+                    <div class="bb-panel-kicker">Связи</div>
                     <div class="bb-panel-headline">Пока нет активных связей</div>
-                    <div class="bb-panel-subtitle">Начните сцену с персонажами — и HUD соберёт маршрут отношений, напряжения и ключевых сдвигов.</div>
+                    <div class="bb-panel-subtitle">Появится после сообщений, где есть взаимодействия с персонажами.</div>
                 </div>
                 <div class="bb-empty-hud">Здесь пока пусто.<br>Взаимодействуйте с персонажами.</div>
             `;
@@ -629,7 +628,7 @@ function renderSocialHud() {
                 const displayStatus = currentCalculatedStats[charName].status || getUnforgettableRoleStatus(memories.deep) || tier.label;
                 const unforgettableImpact = getUnforgettableImpact(memories.deep);
                 const lastHistory = [...(currentCalculatedStats[charName].history || [])].reverse().find(h => h.delta !== 0);
-                const spotlightLabel = index === 0 ? 'Ведущая линия' : index === 1 ? 'Напряжённая линия' : 'Линия сцены';
+                const spotlightLabel = index === 0 ? 'Главная связь' : index === 1 ? 'Важная связь' : 'Связь';
                 const softCount = memories.soft.length;
                 const deepCount = memories.deep.length;
 
@@ -729,8 +728,8 @@ function renderSocialHud() {
                         </div>
 
                         <div class="bb-char-editor" style="display:none; cursor: default;">
-                            <div class="bb-editor-title">Редактирование маршрута</div>
-                            <div class="bb-editor-hint">Измените базовое отношение или спрячьте персонажа из текущего роут-трекера.</div>
+                            <div class="bb-editor-title">Редактирование связи</div>
+                            <div class="bb-editor-hint">Измените базовое отношение или скройте персонажа из трекера.</div>
                             <input type="number" class="text_pole bb-edit-base-input" value="${baseAffinity}" style="width:100%; margin-bottom:8px; box-sizing:border-box;">
                             <div class="bb-editor-actions">
                                 <button class="menu_button bb-btn-save-char" data-char="${escapeHtml(charName)}" style="flex:1;"><i class="fa-solid fa-check"></i>&ensp;Сохранить</button>
@@ -740,7 +739,7 @@ function renderSocialHud() {
 
                         <div class="bb-char-log">
                             <div class="bb-char-log-section">
-                                <div class="bb-section-eyebrow">Сдвиги сцены</div>
+                                <div class="bb-section-eyebrow">Изменения</div>
                                 ${historyHtml}
                             </div>
                             <div class="bb-memory-section">
@@ -758,9 +757,9 @@ function renderSocialHud() {
 
             charsBox.innerHTML = `
                 <div class="bb-panel-hero bb-panel-hero-route">
-                    <div class="bb-panel-kicker">Маршрут сцены</div>
-                    <div class="bb-panel-headline">Активные линии сцены</div>
-                    <div class="bb-panel-subtitle">Отслеживайте, кто тянется к вам, кто держит дистанцию, и какие сцены становятся поворотными.</div>
+                    <div class="bb-panel-kicker">Связи</div>
+                    <div class="bb-panel-headline">Состояние отношений</div>
+                    <div class="bb-panel-subtitle">Здесь показаны текущие связи, изменения и важные воспоминания по персонажам.</div>
                     <div class="bb-panel-stat-grid">
                         <div class="bb-panel-stat">
                             <span class="bb-panel-stat-label">Связей</span>
@@ -771,7 +770,7 @@ function renderSocialHud() {
                             <strong>${escapeHtml(topCharacterName || '—')}</strong>
                         </div>
                         <div class="bb-panel-stat">
-                            <span class="bb-panel-stat-label">Пик сцены</span>
+                            <span class="bb-panel-stat-label">Макс. значение</span>
                             <strong>${topCharacterName ? (topAffinity > 0 ? '+' : '') + topAffinity : '—'}</strong>
                         </div>
                         <div class="bb-panel-stat">
@@ -825,9 +824,9 @@ function renderSocialHud() {
         const logs = chat_metadata['bb_vn_global_log'] || [];
         const promptPreviewHtml = `
             <div class="bb-panel-hero bb-panel-hero-system">
-                <div class="bb-panel-kicker">Системный монитор</div>
-                <div class="bb-panel-headline">Поток сценовых сигналов</div>
-                <div class="bb-panel-subtitle">Здесь видно, какие изменения отношений были замечены движком и какой prompt сейчас внедряется в сцену.</div>
+                <div class="bb-panel-kicker">Журнал</div>
+                <div class="bb-panel-headline">Системный журнал</div>
+                <div class="bb-panel-subtitle">Здесь показаны изменения отношений и текущий инжектируемый prompt.</div>
                 <div class="bb-panel-stat-grid">
                     <div class="bb-panel-stat">
                         <span class="bb-panel-stat-label">Событий</span>
@@ -838,21 +837,21 @@ function renderSocialHud() {
                         <strong>${escapeHtml(lastChoiceTone)}</strong>
                     </div>
                     <div class="bb-panel-stat">
-                        <span class="bb-panel-stat-label">Последний момент</span>
+                        <span class="bb-panel-stat-label">Последнее событие</span>
                         <strong>${escapeHtml(latestMoment?.title || '—')}</strong>
                     </div>
                     <div class="bb-panel-stat">
-                        <span class="bb-panel-stat-label">Prompt</span>
-                        <strong>Активный prompt</strong>
+                        <span class="bb-panel-stat-label">Инжект</span>
+                        <strong>Текущий prompt</strong>
                     </div>
                 </div>
             </div>
             <details class="bb-prompt-card" open>
                 <summary class="bb-prompt-summary">
-                    <span>🧠 Injected Prompt</span>
+                    <span>🧠 Inject Prompt</span>
                     <button type="button" class="menu_button bb-copy-prompt-btn"><i class="fa-solid fa-copy"></i>&nbsp; Копировать</button>
                 </summary>
-                <div class="bb-prompt-hint">Текущий системный текст, который BB VNE подмешивает в сцену. Карточка открыта по умолчанию, чтобы prompt был виден сразу.</div>
+                <div class="bb-prompt-hint">Текущий системный текст, который BB VNE добавляет в инжект.</div>
                 <pre class="bb-prompt-pre">${escapeHtml(getCombinedSocial())}</pre>
             </details>
         `;
@@ -892,18 +891,18 @@ function renderSocialHud() {
         if (currentStoryMoments.length === 0) {
             momentsBox.innerHTML = `
                 <div class="bb-panel-hero bb-panel-hero-diary">
-                    <div class="bb-panel-kicker">Дневник сцены</div>
+                    <div class="bb-panel-kicker">Дневник событий</div>
                     <div class="bb-panel-headline">Дневник ещё пуст</div>
-                    <div class="bb-panel-subtitle">Когда сцена наберёт эмоциональный вес, здесь появятся заметки о сдвигах, вспышках и незабываемых событиях.</div>
+                    <div class="bb-panel-subtitle">Здесь будут сохраняться важные изменения и заметные события.</div>
                 </div>
                 <div class="bb-empty-hud">Памятные моменты пока не накопились.</div>
             `;
         } else {
             let momentsHtml = `
                 <div class="bb-panel-hero bb-panel-hero-diary">
-                    <div class="bb-panel-kicker">Дневник сцены</div>
-                    <div class="bb-panel-headline">Хроника сцены</div>
-                    <div class="bb-panel-subtitle">Смотрите на отношения как на последовательность заметок — будто это тетрадь наблюдений за вашим route.</div>
+                    <div class="bb-panel-kicker">Дневник событий</div>
+                    <div class="bb-panel-headline">События</div>
+                    <div class="bb-panel-subtitle">Здесь собраны важные события, которые расширение зафиксировало по ходу чата.</div>
                     <div class="bb-panel-stat-grid">
                         <div class="bb-panel-stat">
                             <span class="bb-panel-stat-label">Записей</span>
@@ -959,18 +958,18 @@ function ensureHudContainer() {
     if (document.getElementById('bb-social-hud')) return;
     const hudHtml = `
         <div id="bb-social-hud">
-            <div id="bb-social-hud-toggle" title="HUD сцены">
+            <div id="bb-social-hud-toggle" title="VNE HUD">
                 <i class="fa-solid fa-users-viewfinder"></i>
                 <span class="bb-toggle-label">HUD</span>
                 <i class="fa-solid fa-chevron-left" id="bb-hud-arrow"></i>
             </div>
             <div class="bb-hud-header">
                 <div class="bb-hud-header-top">
-                    <span class="bb-hud-badge">BB Visual Novel Engine</span>
+                    <span class="bb-hud-badge">VNE</span>
                     <span class="bb-hud-live-dot"><i class="fa-solid fa-circle"></i> активно</span>
                 </div>
-                <div class="bb-hud-title">Директор сцены</div>
-                <div class="bb-hud-subtitle">связи · системный журнал · дневник сцены</div>
+                <div class="bb-hud-title">VNE</div>
+                <div class="bb-hud-subtitle">связи · журнал · дневник событий</div>
             </div>
             
             <div class="bb-hud-tabs">
@@ -1019,8 +1018,8 @@ CRITICAL: Your generated messages MUST logically continue from the VERY LAST sen
 For EACH action, write a LONG, HIGHLY DETAILED roleplay message (2-4 paragraphs) from {{user}}'s perspective. Include rich sensory details, deep internal monologues, and complex actions. DO NOT just react passively; make {{user}} take initiative to progress the plot or shift the dynamic. Match {{user}}'s persona perfectly. Write in Russian.
 
 CRITICAL RULES FOR EMOTIONAL CHOICE FRAMING:
-1. "tone": Describe the emotional flavor of the answer in 1-2 Russian words. Prefer labels like: "нежно", "холодно", "саркастично", "дерзко", "опасно". You may use another concise emotional label if it fits better.
-2. "forecast": A SHORT Russian hint for what this action may cause. Examples: "Может сблизить", "Риск обидеть", "Усилит напряжение", "Может вскрыть ревность".
+1. "tone": Describe the emotional flavor of the answer in 1-2 Russian words. Think in placeholder terms like "SHORT_RUSSIAN_TONE".
+2. "forecast": A SHORT Russian hint for what this action may cause. Think in placeholder terms like "SHORT_RUSSIAN_OUTCOME_HINT".
 3. "targets": Array of 1-3 character names that are most affected by this action. If no single character stands out, return an empty array.
 4. "risk": OPTIONAL legacy field for backward compatibility. If you include it, use "Низкий", "Средний", or "Высокий". Do not make it the main focus.
 
