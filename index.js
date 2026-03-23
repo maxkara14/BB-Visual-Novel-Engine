@@ -64,11 +64,17 @@ Answer the character's internal question: "Who is {{user}} to me?"
 
 CRITICAL LANGUAGE RULE: Output the JSON values ENTIRELY IN RUSSIAN.
 
-Format EXACTLY like this (include "base_affinity" ONLY for new characters!):
+Use this SHORT JSON SHAPE as a template (placeholders are instructions, not literal text; include "base_affinity" ONLY for new characters):
 \`\`\`json
 {
-  "social_updates":[
-    { "name": "Имя Персонажа", "base_affinity": 60, "delta": -15, "status": "Предатель", "reason": "Убил невинного человека на моих глазах" }
+  "social_updates": [
+    {
+      "name": "CHARACTER_NAME",
+      "base_affinity": STARTING_SCORE_IF_NEW,
+      "delta": POSITIVE_OR_NEGATIVE_INTEGER,
+      "status": "WHO_USER_IS_TO_THE_CHARACTER",
+      "reason": "SHORT_REASON_FOR_THE_CHANGE"
+    }
   ]
 }
 \`\`\``;
@@ -941,10 +947,6 @@ function updateHudVisibility() {
     const toastCont = $('#bb-social-toast-container');
     if (chatId) {
         $('#bb-social-hud-toggle').show();
-        hud.addClass('open');
-        toastCont.addClass('hud-open');
-        $('#bb-hud-arrow').removeClass('fa-chevron-left').addClass('fa-chevron-right');
-        renderSocialHud();
     } else {
         $('#bb-social-hud-toggle').hide();
         hud.removeClass('open');
@@ -1028,31 +1030,15 @@ CRITICAL JSON AND FORMATTING RULES:
 3. You MUST escape all internal double quotes inside the "message" string (e.g., \\"Hello\\") to ensure the JSON remains valid.
 4. To create paragraphs, use escaped newlines (\\n\\n) inside the "message" string. DO NOT use actual line breaks in the string, or it will break the JSON.
 
-Format exactly like this:
+Use this SHORT JSON SHAPE as a template. The placeholders below are instructions, not literal values. Return exactly 3 objects with this structure:
 [
   {
-    "intent": "Действие один (1-3 слова)",
-    "tone": "нежно",
-    "forecast": "Может сблизить",
-    "targets": ["Имя персонажа"],
-    "risk": "Низкий",
-    "message": "*Медленно выдыхаю, чувствуя, как напряжение сковывает плечи. Мой взгляд скользит по собеседнику, пытаясь уловить малейшую тень сомнений.*\\n\\n\\"Ты уверен, что нам стоит это делать?\\" — *спрашиваю я, и мой голос звучит тише обычного. Я делаю осторожный шаг вперед, сокращая дистанцию, но оставляя пути к отступлению.*\\n\\n*Внутри всё сжимается от предчувствия, но отступать уже поздно. Я скрещиваю руки на груди, готовясь к любому повороту событий, и терпеливо жду ответа.*"
-  },
-  {
-    "intent": "Действие два (1-3 слова)",
-    "tone": "саркастично",
-    "forecast": "Риск обидеть",
-    "targets": ["Имя персонажа"],
-    "risk": "Средний",
-    "message": "Длинный многоабзацевый текст с *действиями*, \\"диалогами\\" и \\n\\n переносами строк..."
-  },
-  {
-    "intent": "Действие три (1-3 слова)",
-    "tone": "опасно",
-    "forecast": "Усилит напряжение",
-    "targets": ["Имя персонажа"],
-    "risk": "Высокий",
-    "message": "Смелый многоабзацевый текст с *действиями*, \\"диалогами\\" и \\n\\n переносами строк..."
+    "intent": "SHORT_ACTION_LABEL",
+    "tone": "SHORT_RUSSIAN_TONE",
+    "forecast": "SHORT_RUSSIAN_OUTCOME_HINT",
+    "targets": ["MOST_AFFECTED_CHARACTER"],
+    "risk": "OPTIONAL_RISK_LABEL",
+    "message": "LONG_RUSSIAN_ROLEPLAY_REPLY_WITH_ESCAPED_QUOTES_AND_\n\n_PARAGRAPHS"
   }
 ]
 
