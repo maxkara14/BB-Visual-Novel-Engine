@@ -1,8 +1,8 @@
 {
     "name": "BB-Visual-Novel",
     "display_name": "BB Visual Novel Engine",
-    "description": "RPG-система отношений, интерактивное кино и умные логи.",
-    "version": "1.0.0",
+    "description": "Cистема отношений, визуальная новелла и генерация ответов.",
+    "version": "2.0.0",
     "author": "BruniikBron",
     "js": "index.js",
     "css": "style.css",
