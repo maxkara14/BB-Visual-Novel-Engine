@@ -731,8 +731,18 @@ function renderSocialHud() {
     const logBox = document.getElementById('bb-hud-log');
     if (logBox) {
         const logs = chat_metadata['bb_vn_global_log'] || [];
+        const promptPreviewHtml = `
+            <details class="bb-prompt-card">
+                <summary class="bb-prompt-summary">
+                    <span>🧠 Injected Prompt</span>
+                    <button type="button" class="menu_button bb-copy-prompt-btn"><i class="fa-solid fa-copy"></i>&nbsp; Копировать</button>
+                </summary>
+                <div class="bb-prompt-hint">Текущий системный текст, который BB VNE подмешивает в сцену.</div>
+                <pre class="bb-prompt-pre">${escapeHtml(getCombinedSocial())}</pre>
+            </details>
+        `;
         if (logs.length === 0) {
-            logBox.innerHTML = `<div class="bb-empty-hud">Журнал событий пуст.</div>`;
+            logBox.innerHTML = `${promptPreviewHtml}<div class="bb-empty-hud">Журнал событий пуст.</div>`;
         } else {
             let logHtml = '';
             [...logs].reverse().forEach(log => {
@@ -743,7 +753,23 @@ function renderSocialHud() {
                     </div>
                 `;
             });
-            logBox.innerHTML = logHtml;
+            logBox.innerHTML = promptPreviewHtml + logHtml;
+        }
+
+        const copyPromptBtn = logBox.querySelector('.bb-copy-prompt-btn');
+        if (copyPromptBtn) {
+            copyPromptBtn.addEventListener('click', async function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                try {
+                    await navigator.clipboard.writeText(getCombinedSocial());
+                    // @ts-ignore
+                    toastr.success("Prompt скопирован!");
+                } catch (error) {
+                    // @ts-ignore
+                    toastr.error("Не удалось скопировать prompt.");
+                }
+            });
         }
     }
 
@@ -791,8 +817,8 @@ function ensureHudContainer() {
             
             <div class="bb-hud-tabs">
                 <div class="bb-hud-tab active" data-tab="chars">👥 Связи</div>
-                <div class="bb-hud-tab" data-tab="log">📜 Журнал</div>
-                <div class="bb-hud-tab" data-tab="moments">✨ Моменты</div>
+                <div class="bb-hud-tab" data-tab="log">💻 Система</div>
+                <div class="bb-hud-tab" data-tab="moments">📖 Дневник</div>
             </div>
             <div class="bb-hud-content active" id="bb-hud-chars"></div>
             <div class="bb-hud-content" id="bb-hud-log"></div>
