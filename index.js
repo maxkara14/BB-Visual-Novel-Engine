@@ -235,7 +235,7 @@ function getShiftDescriptor(delta) {
         if (absDelta >= 9) return { short: 'Судьбоносно', full: 'Судьбоносное сближение', color: '#c084fc', logType: 'plus' };
         if (absDelta >= 4) return { short: 'Сильнее', full: 'Сильное сближение', color: '#4ade80', logType: 'plus' };
         if (absDelta >= 2) return { short: 'Теплее', full: 'Тёплый отклик', color: '#86efac', logType: 'plus' };
-        return { short: 'Мягче', full: 'Лёгкое потепление', color: '#bbf7d0', logType: 'plus' };
+        return { short: 'Потепление', full: 'Лёгкое потепление', color: '#bbf7d0', logType: 'plus' };
     }
     if (delta < 0) {
         if (absDelta >= 9) return { short: 'Перелом', full: 'Глубокая трещина', color: '#fca5a5', logType: 'minus' };
@@ -679,7 +679,7 @@ function renderSocialHud() {
                                         <span class="bb-char-score" style="color:${tier.color};">${affinity > 0 ? '+' : ''}${affinity}</span>
                                     </div>
                                     <div class="bb-char-subtitle">
-                                        <span class="bb-char-direction"><i class="fa-solid fa-bookmark"></i> ваша роль в его истории</span>
+                                        <span class="bb-char-direction"><i class="fa-solid fa-bookmark"></i> ваша роль в этой истории</span>
                                         <div class="bb-char-signals">
                                             <span class="bb-char-tier ${tier.class}" title="${escapeHtml(displayStatus)}">${escapeHtml(displayStatus)}</span>
                                             ${memories.deep.length > 0 ? `<span class="bb-unforgettable-impact">${escapeHtml(unforgettableImpact.label)}</span>` : ''}
@@ -965,7 +965,7 @@ function ensureHudContainer() {
             </div>
             <div class="bb-hud-header">
                 <div class="bb-hud-header-top">
-                    <span class="bb-hud-badge">VNE</span>
+                    <span class="bb-hud-badge">Visual Novel Engine</span>
                     <span class="bb-hud-live-dot"><i class="fa-solid fa-circle"></i> активно</span>
                 </div>
                 <div class="bb-hud-title">VNE</div>

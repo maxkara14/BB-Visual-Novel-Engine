@@ -100,7 +100,11 @@
 }
 .bb-hud-badge { color: #dbeafe; background: rgba(59, 130, 246, 0.1); }
 .bb-hud-live-dot { color: #f0abfc; background: rgba(168, 85, 247, 0.1); }
-.bb-hud-live-dot i { font-size: 8px; }
+.bb-hud-live-dot i { font-size: 8px; animation: bbLivePulse 1.4s ease-in-out infinite; }
+@keyframes bbLivePulse {
+    0%, 100% { transform: scale(0.9); opacity: 0.6; text-shadow: 0 0 0 rgba(240, 171, 252, 0.0); }
+    50% { transform: scale(1.15); opacity: 1; text-shadow: 0 0 10px rgba(240, 171, 252, 0.75); }
+}
 .bb-hud-title {
     font-size: 28px; font-weight: 900; color: #f8fafc;
     letter-spacing: 1px; text-transform: uppercase; line-height: 1;
@@ -328,7 +332,8 @@
 }
 .bb-vn-option:hover { transform: translateY(-3px); box-shadow: 0 16px 28px rgba(0,0,0,0.24); }
 .bb-vn-op-topline {
-    width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    width: 100%; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+    flex-wrap: wrap;
 }
 .bb-vn-op-index {
     display: inline-flex; align-items: center; justify-content: center;
@@ -340,7 +345,7 @@
     font-size: 16px; font-weight: 800; color: #fff;
     word-wrap: break-word; white-space: normal; line-height: 1.25;
 }
-.bb-vn-op-risk { font-size: 10px; text-transform: uppercase; font-weight: 800; padding: 4px 8px; border-radius: 999px; align-self: auto; flex-shrink: 0; }
+.bb-vn-op-risk { font-size: 10px; text-transform: uppercase; font-weight: 800; padding: 4px 8px; border-radius: 999px; align-self: auto; flex-shrink: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: center; line-height: 1.25; }
 .bb-vn-targets { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px; margin-top: 2px; width: 100%; }
 .bb-vn-target {
     display: inline-flex; justify-content: center; align-items: center;
@@ -460,7 +465,7 @@
     margin-bottom: 4px; padding: 14px; border-radius: 18px;
     background: linear-gradient(180deg, rgba(10, 18, 22, 0.97), rgba(8, 12, 16, 0.96));
     border: 1px solid rgba(74, 222, 128, 0.18); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
-    position: sticky; top: 0; z-index: 6; backdrop-filter: blur(12px);
+    position: relative; backdrop-filter: blur(12px);
 }
 .bb-prompt-summary {
     display: flex; justify-content: space-between; align-items: center; gap: 8px;
@@ -522,16 +527,18 @@
     transform: rotate(-0.35deg);
 }
 .bb-moment-card:nth-child(even) { transform: rotate(0.45deg); }
-.bb-moment-pin {
-    position: absolute; top: 12px; right: 14px; width: 10px; height: 10px; border-radius: 50%;
-    background: #fde68a; box-shadow: 0 0 0 4px rgba(253, 230, 138, 0.15);
-}
+.bb-moment-pin { display: none; }
 .bb-moment-header { display: flex; flex-direction: column; gap: 8px; }
 .bb-moment-meta { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
 .bb-moment-stamp {
     font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px;
     color: #fef3c7; background: rgba(245, 158, 11, 0.16);
     border: 1px solid rgba(245, 158, 11, 0.22); padding: 3px 8px; border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 7px;
+}
+.bb-moment-stamp::before {
+    content: ''; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    background: #fde68a; box-shadow: 0 0 10px rgba(253, 230, 138, 0.7);
 }
 .bb-moment-title { font-size: 16px; font-weight: 900; color: #fff7ed; line-height: 1.25; }
 .bb-moment-char { font-size: 10px; text-transform: uppercase; color: #fde68a; letter-spacing: 1.2px; }
