@@ -80,7 +80,9 @@ function getCombinedSocial() {
     if (characters.length > 0) {
         combinedStr += `\n\n[CURRENT RELATIONSHIP STATUS WITH {{user}}]:\n`;
         characters.forEach(char => {
-            const statusLabel = currentCalculatedStats[char].status || getTierInfo(currentCalculatedStats[char].affinity).label;
+            const tierLabel = getTierInfo(currentCalculatedStats[char].affinity).label;
+            const statusLabel = currentCalculatedStats[char].status || tierLabel;
+            const relationshipState = getAffinityNarrative(currentCalculatedStats[char].affinity);
             const softMemories = currentCalculatedStats[char].memories?.soft || [];
             const deepMemories = currentCalculatedStats[char].memories?.deep || [];
             const softLine = softMemories.length > 0
@@ -94,9 +96,9 @@ function getCombinedSocial() {
                 unforgettableLines.push(`- ${char}: ${deepMemories.map(m => m.text).join('; ')}`);
             }
 
-            combinedStr += `- ${char}: ${currentCalculatedStats[char].affinity}/100 (${statusLabel})${softLine}${deepLine}\n`;
+            combinedStr += `- ${char}: role_status=${statusLabel} | relationship_tier=${tierLabel} | relationship_state=${relationshipState}${softLine}${deepLine}\n`;
         });
-        combinedStr += "CRITICAL: Strictly align the characters' behavior, trust level, and dialogue towards {{user}} with these current affinity levels.";
+        combinedStr += "CRITICAL: Strictly align the characters' behavior, trust level, and dialogue towards {{user}} with these current relationship tiers, statuses, and emotional states.";
     }
     if (unforgettableLines.length > 0) {
         combinedStr += `\n\n[UNFORGETTABLE THINGS]:\n${unforgettableLines.join('\n')}\nCRITICAL: These are persistent emotional anchors. Characters must continue to remember them across scenes, even when the recent interaction is calm.`;
