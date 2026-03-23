@@ -69,10 +69,16 @@
 
 .bb-hud-header {
     padding: 18px 20px 14px; text-align: center;
-    font-size: 16px; font-weight: 800; color: #fff;
-    letter-spacing: 2px; text-transform: uppercase;
     background: linear-gradient(to right, rgba(96, 165, 250, 0.08), rgba(192, 132, 252, 0.1), rgba(96, 165, 250, 0.08));
     border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.bb-hud-title {
+    font-size: 18px; font-weight: 900; color: #f8fafc;
+    letter-spacing: 2px; text-transform: uppercase;
+}
+.bb-hud-subtitle {
+    margin-top: 6px; font-size: 10px; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 1.2px;
 }
 
 .bb-hud-tabs {
@@ -108,6 +114,10 @@
     box-shadow: 0 10px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.03);
 }
 .bb-char-card:hover { border-color: rgba(147, 197, 253, 0.18); background: linear-gradient(180deg, rgba(22, 28, 40, 0.98), rgba(14, 18, 28, 0.95)); box-shadow: 0 14px 26px rgba(0,0,0,0.24); }
+.bb-char-accent {
+    width: 56px; height: 3px; border-radius: 999px;
+    opacity: 0.95;
+}
 
 /* Новая шапка: Имя и шестеренка на одной линии, статус - ниже */
 .bb-char-header { display: flex; flex-direction: column; gap: 8px; }
@@ -122,6 +132,7 @@
     gap: 6px; 
 }
 .bb-char-direction { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px; }
+.bb-char-signals { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .bb-unforgettable-impact {
     font-size: 10px; padding: 4px 8px; border-radius: 999px;
     background: rgba(245, 158, 11, 0.12); color: #fbbf24;
@@ -288,6 +299,12 @@
     .bb-prompt-summary .menu_button {
         width: 100%;
     }
+    .bb-moment-meta {
+        flex-direction: column; align-items: flex-start;
+    }
+    .bb-char-signals {
+        width: 100%;
+    }
     
     /* Заставляем обертку для кнопок "Реролл/Свернуть" переносить их на новые строки, 
        чтобы они встали аккуратным столбиком и не вылезали за экран */
@@ -385,9 +402,17 @@
     border: 1px solid rgba(216, 180, 254, 0.14);
     box-shadow: 0 8px 18px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04);
 }
-.bb-moment-header { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-.bb-moment-title { font-size: 13px; font-weight: 800; color: #fdf4ff; }
+.bb-moment-header { display: flex; flex-direction: column; gap: 8px; }
+.bb-moment-meta { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.bb-moment-stamp {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+    color: #fef3c7; background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.22); padding: 3px 7px; border-radius: 999px;
+}
+.bb-moment-title { font-size: 14px; font-weight: 800; color: #fdf4ff; line-height: 1.25; }
 .bb-moment-char { font-size: 10px; text-transform: uppercase; color: #e9d5ff; letter-spacing: 1px; }
+.bb-moment-divider { height: 1px; background: linear-gradient(to right, rgba(216,180,254,0.22), transparent); }
+.bb-moment-body { display: flex; flex-direction: column; gap: 6px; }
 .bb-moment-text { font-size: 12px; color: #f5e9ff; line-height: 1.55; }
 .bb-moment-card.deep-positive { border-left: 3px solid #4ade80; }
 .bb-moment-card.deep-negative { border-left: 3px solid #ef4444; }

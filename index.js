@@ -637,15 +637,18 @@ function renderSocialHud() {
 
                 html += `
                     <div class="bb-char-card" data-char="${escapeHtml(charName)}">
+                        <div class="bb-char-accent" style="background:${tier.color}; box-shadow: 0 0 18px ${tier.color};"></div>
                         <div class="bb-char-header">
                             <div class="bb-char-title-row">
                                 <span class="bb-char-name">${escapeHtml(charName)}</span>
                                 <i class="fa-solid fa-gear bb-char-edit-btn" style="color:#94a3b8; cursor:pointer;" data-char="${escapeHtml(charName)}" title="Настройки персонажа"></i>
                             </div>
                             <div class="bb-char-subtitle">
-                                <span class="bb-char-direction"><i class="fa-solid fa-reply fa-rotate-180"></i> отношение к вам:</span>
-                                <span class="bb-char-tier ${tier.class}" title="${escapeHtml(displayStatus)}">${escapeHtml(displayStatus)}</span>
-                                ${memories.deep.length > 0 ? `<span class="bb-unforgettable-impact">${escapeHtml(unforgettableImpact.label)}</span>` : ''}
+                                <span class="bb-char-direction"><i class="fa-solid fa-bookmark"></i> ваша роль в его истории</span>
+                                <div class="bb-char-signals">
+                                    <span class="bb-char-tier ${tier.class}" title="${escapeHtml(displayStatus)}">${escapeHtml(displayStatus)}</span>
+                                    ${memories.deep.length > 0 ? `<span class="bb-unforgettable-impact">${escapeHtml(unforgettableImpact.label)}</span>` : ''}
+                                </div>
                             </div>
                         </div>
                         
@@ -779,14 +782,20 @@ function renderSocialHud() {
             momentsBox.innerHTML = `<div class="bb-empty-hud">Памятные моменты пока не накопились.</div>`;
         } else {
             let momentsHtml = '';
-            [...currentStoryMoments].reverse().forEach(moment => {
+            [...currentStoryMoments].reverse().forEach((moment, index) => {
                 momentsHtml += `
                     <div class="bb-moment-card ${escapeHtml(moment.type || 'neutral')}">
                         <div class="bb-moment-header">
+                            <div class="bb-moment-meta">
+                                <span class="bb-moment-stamp">Запись ${index + 1}</span>
+                                <span class="bb-moment-char">${escapeHtml(moment.char || 'Сцена')}</span>
+                            </div>
                             <span class="bb-moment-title">${escapeHtml(moment.title)}</span>
-                            <span class="bb-moment-char">${escapeHtml(moment.char || 'Сцена')}</span>
                         </div>
-                        <div class="bb-moment-text">${escapeHtml(moment.text)}</div>
+                        <div class="bb-moment-divider"></div>
+                        <div class="bb-moment-body">
+                            <div class="bb-moment-text">${escapeHtml(moment.text)}</div>
+                        </div>
                     </div>
                 `;
             });
@@ -813,7 +822,10 @@ function ensureHudContainer() {
                 <i class="fa-solid fa-users"></i>
                 <i class="fa-solid fa-chevron-left" id="bb-hud-arrow" style="font-size: 10px; margin-top: 5px;"></i>
             </div>
-            <div class="bb-hud-header">Social Link</div>
+            <div class="bb-hud-header">
+                <div class="bb-hud-title">Visual Route</div>
+                <div class="bb-hud-subtitle">relationship diary · scene memory · prompt debug</div>
+            </div>
             
             <div class="bb-hud-tabs">
                 <div class="bb-hud-tab active" data-tab="chars">👥 Связи</div>
