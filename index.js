@@ -82,10 +82,11 @@ function getCombinedSocial() {
         combinedStr += `\n\n[CURRENT RELATIONSHIP STATUS WITH {{user}}]:\n`;
         characters.forEach(char => {
             const tierLabel = getTierInfo(currentCalculatedStats[char].affinity).label;
-            const statusLabel = currentCalculatedStats[char].status || tierLabel;
-            const relationshipState = getAffinityNarrative(currentCalculatedStats[char].affinity);
             const softMemories = currentCalculatedStats[char].memories?.soft || [];
             const deepMemories = currentCalculatedStats[char].memories?.deep || [];
+            const derivedRoleStatus = getUnforgettableRoleStatus(deepMemories);
+            const statusLabel = currentCalculatedStats[char].status || derivedRoleStatus || tierLabel;
+            const relationshipState = getAffinityNarrative(currentCalculatedStats[char].affinity);
             const unforgettableImpact = getUnforgettableImpact(deepMemories);
             const softLine = softMemories.length > 0
                 ? ` | recent_memory: ${softMemories.map(m => m.text).join('; ')}`
@@ -97,7 +98,7 @@ function getCombinedSocial() {
             if (deepMemories.length > 0) {
                 unforgettableLines.push(`- ${char}: ${deepMemories.map(m => m.text).join('; ')}`);
                 if (unforgettableImpact.prompt) {
-                    unforgettableImpactLines.push(`- ${char}: impact=${unforgettableImpact.label} | direction=${unforgettableImpact.prompt}`);
+                    unforgettableImpactLines.push(`- ${char}: impact=${unforgettableImpact.label} | role_pressure=${derivedRoleStatus || 'нет'} | direction=${unforgettableImpact.prompt}`);
                 }
             }
 
@@ -286,6 +287,20 @@ function getUnforgettableImpact(memories = []) {
         label: 'Подспудная настороженность',
         prompt: 'Unforgettable negative events remain unresolved. Even neutral interactions should carry some hesitation, distance, or emotional recoil.',
     };
+}
+
+function getUnforgettableRoleStatus(memories = []) {
+    if (!Array.isArray(memories) || memories.length === 0) return '';
+
+    const total = memories.reduce((sum, memory) => sum + (parseInt(memory.delta) || 0), 0);
+    const hasPositive = memories.some(memory => (parseInt(memory.delta) || 0) > 0);
+    const hasNegative = memories.some(memory => (parseInt(memory.delta) || 0) < 0);
+
+    if (hasPositive && hasNegative) return 'Болезненно важный';
+    if (total >= 18) return 'Тот, кто изменил меня';
+    if (total > 0) return 'Тот, кому тянусь';
+    if (total <= -18) return 'Тот, кто оставил шрам';
+    return 'Тот, кому не верю';
 }
 
 function appendCharacterMemory(charStats, delta, reason) {
@@ -572,9 +587,11 @@ function renderSocialHud() {
             characters.sort((a, b) => currentCalculatedStats[b].affinity - currentCalculatedStats[a].affinity).forEach(charName => {
                 const affinity = currentCalculatedStats[charName].affinity;
                 const tier = getTierInfo(affinity);
-                const displayStatus = currentCalculatedStats[charName].status || tier.label;
                 const baseAffinity = chat_metadata['bb_vn_char_bases']?.[charName] ?? 0;
-                
+                const memories = currentCalculatedStats[charName].memories || { soft: [], deep: [] };
+                const displayStatus = currentCalculatedStats[charName].status || getUnforgettableRoleStatus(memories.deep) || tier.label;
+                const unforgettableImpact = getUnforgettableImpact(memories.deep);
+
                 // Добавили легкое свечение (box-shadow) для заполненной шкалы
                 let barStyle = '';
                 if (affinity >= 0) {
@@ -595,8 +612,6 @@ function renderSocialHud() {
                 });
                 if(historyHtml === '') historyHtml = '<i style="color:#64748b;">Нет записей</i>';
 
-                const memories = currentCalculatedStats[charName].memories || { soft: [], deep: [] };
-                const unforgettableImpact = getUnforgettableImpact(memories.deep);
                 const softMemoriesHtml = memories.soft.length > 0
                     ? [...memories.soft].reverse().map(memory => `<div class="bb-memory-pill ${memory.tone}">${escapeHtml(memory.text)}</div>`).join('')
                     : '<i style="color:#64748b;">Пока нет</i>';
