@@ -4,22 +4,35 @@ import { setExtensionPrompt, chat_metadata, saveChatDebounced, saveSettingsDebou
 import { extension_settings } from '../../../extensions.js';
 
 const MODULE_NAME = "BB-Visual-Novel";
+const DEFAULT_SETTINGS = {
+    autoSend: true,
+    autoGen: false,
+    useCustomApi: false,
+    customApiUrl: 'https://api.groq.com/openai/v1',
+    customApiKey: '',
+    customApiModel: '',
+    useMacro: false,
+    emotionalChoiceFraming: true,
+};
 
-if (!extension_settings[MODULE_NAME]) {
-    extension_settings[MODULE_NAME] = { 
-        autoSend: true, 
-        autoGen: false,
-        useCustomApi: false,
-        customApiUrl: 'https://api.groq.com/openai/v1',
-        customApiKey: '',
-        customApiModel: '',
-        useMacro: false,
-        emotionalChoiceFraming: true
-    };
-}
+extension_settings[MODULE_NAME] = {
+    ...DEFAULT_SETTINGS,
+    ...(extension_settings[MODULE_NAME] || {}),
+};
 
 let currentCalculatedStats = {};
 let currentStoryMoments = [];
+
+/**
+ * @typedef {Object} VNOption
+ * @property {string=} intent
+ * @property {string=} tone
+ * @property {string=} forecast
+ * @property {string=} risk
+ * @property {string=} message
+ * @property {string[]=} targets
+ * @property {string=} target
+ */
 
 // ==========================================
 // ФАЗА 1: СОЦИАЛЬНЫЙ ТРЕКИНГ (DEEP SYNC + УМНЫЕ СТАТЫ)
@@ -127,9 +140,30 @@ function showAffinityToast(name, delta, reason) {
     setTimeout(() => { $toast.remove(); }, 5000);
 }
 
+function getLegacyToneFromRisk(risk = "") {
+    const value = String(risk).toLowerCase();
+    if (value.includes('низк') || value.includes('low')) return 'нежно';
+    if (value.includes('выс') || value.includes('high')) return 'опасно';
+    if (value.includes('сред') || value.includes('med') || value.includes('medium')) return 'дерзко';
+    return 'нейтрально';
+}
+
+function getLegacyForecastFromRisk(risk = "") {
+    const value = String(risk).toLowerCase();
+    if (value.includes('низк') || value.includes('low')) return 'Может мягко сблизить';
+    if (value.includes('выс') || value.includes('high')) return 'Усилит напряжение';
+    if (value.includes('сред') || value.includes('med') || value.includes('medium')) return 'Может резко сдвинуть динамику';
+    return '';
+}
+
+/**
+ * @param {VNOption} option
+ * @returns {VNOption}
+ */
 function normalizeOptionData(option = {}) {
-    const tone = option.tone || option.risk || "";
-    const forecast = option.forecast || "";
+    const legacyRisk = option.risk || "";
+    const tone = option.tone || getLegacyToneFromRisk(legacyRisk);
+    const forecast = option.forecast || getLegacyForecastFromRisk(legacyRisk);
     const targets = Array.isArray(option.targets)
         ? option.targets.filter(Boolean)
         : typeof option.target === 'string' && option.target.trim()
@@ -141,6 +175,7 @@ function normalizeOptionData(option = {}) {
         tone,
         forecast,
         targets,
+        risk: legacyRisk,
     };
 }
 
@@ -729,7 +764,7 @@ async function generateFastPrompt(promptText) {
 }
 
 // ОТРИСОВКА КНОПОК ИЗ МАССИВА (РАБОТАЕТ ДЛЯ ГЕНЕРАЦИИ И КЭША)
-window['renderVNOptionsFromData'] = function(parsedOptions, autoOpen = false) {
+window['renderVNOptionsFromData'] = function(/** @type {VNOption[]} */ parsedOptions, autoOpen = false) {
     let optionsHtml = '';
     const useEmotionalChoiceFraming = !!extension_settings[MODULE_NAME].emotionalChoiceFraming;
     parsedOptions.forEach(rawOption => {
@@ -870,6 +905,7 @@ window['bbVnGenerateOptionsFlow'] = async function() {
         }
         cleanResult = cleanResult.replace(/,\s*([\]}])/g, '$1');
 
+        /** @type {VNOption[]} */
         let parsedOptions;
         try {
             parsedOptions = JSON.parse(cleanResult);
