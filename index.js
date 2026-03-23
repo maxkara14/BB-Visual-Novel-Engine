@@ -144,36 +144,145 @@ function notifyError(message, title) {
     /** @type {any} */ (toastr).error(message, title);
 }
 
+const TOAST_LIFETIME_MS = 5200;
+const TOAST_MAX_VISIBLE = 4;
+let toastSequence = 0;
+
 function ensureToastContainer() {
     if (!document.getElementById('bb-social-toast-container')) {
-        const extraClass = $('#bb-social-hud').hasClass('open') ? 'hud-open' : '';
-        $('body').append(`<div id="bb-social-toast-container" class="${extraClass}"></div>`);
+        $('body').append('<div id="bb-social-toast-container" aria-live="polite" aria-atomic="false"></div>');
     }
+    syncToastContainerWithHud();
 }
 
-function showAffinityToast(name, delta, reason) {
-    if (delta === 0) return; 
-    ensureToastContainer();
-    const isPositive = delta > 0;
-    const typeClass = isPositive ? 'positive' : 'negative';
-    const initial = name.charAt(0).toUpperCase();
-    const shift = getShiftDescriptor(delta);
+function syncToastContainerWithHud() {
+    const container = document.getElementById('bb-social-toast-container');
+    if (!container) return;
 
+    const hud = document.getElementById('bb-social-hud');
+    const hudIsOpen = !!hud && hud.classList.contains('open');
+    container.classList.toggle('hud-open', hudIsOpen);
+
+    if (!hudIsOpen) {
+        container.style.removeProperty('--bb-toast-open-top');
+        return;
+    }
+
+    const liveBadge = hud.querySelector('.bb-hud-live-dot');
+    if (!liveBadge) return;
+
+    const badgeRect = liveBadge.getBoundingClientRect();
+    container.style.setProperty('--bb-toast-open-top', `${Math.max(12, Math.round(badgeRect.bottom + 8))}px`);
+}
+
+function removeToast(toastElement) {
+    if (!toastElement || toastElement.dataset.state === 'closing') return;
+    toastElement.dataset.state = 'closing';
+    toastElement.classList.remove('is-visible');
+    window.setTimeout(() => {
+        if (toastElement.parentNode) toastElement.parentNode.removeChild(toastElement);
+    }, 260);
+}
+
+function enforceToastLimit() {
+    const activeToasts = Array.from(document.querySelectorAll('#bb-social-toast-container .bb-social-toast'));
+    if (activeToasts.length < TOAST_MAX_VISIBLE) return;
+
+    const excess = activeToasts.length - TOAST_MAX_VISIBLE + 1;
+    activeToasts.slice(0, excess).forEach(removeToast);
+}
+
+function showHudToast({ title, text, badge = 'Система', variant = 'system', icon = 'fa-solid fa-sparkles', accent = '', meta = '' }) {
+    ensureToastContainer();
+    enforceToastLimit();
+    const toastId = `bb-social-toast-${++toastSequence}`;
+    const accentStyle = accent ? `style="--bb-toast-accent:${accent};"` : '';
     const toastHtml = `
-        <div class="bb-social-toast ${typeClass}">
-            <div class="bb-st-icon">${initial}</div>
+        <article id="${toastId}" class="bb-social-toast ${variant}" ${accentStyle}>
+            <div class="bb-st-glow"></div>
+            <div class="bb-st-icon"><i class="${icon}"></i></div>
             <div class="bb-st-content">
-                <div class="bb-st-header">
-                    <span class="bb-st-name">${name}</span>
-                    <span class="bb-st-delta">${shift.short}</span>
+                <div class="bb-st-topline">
+                    <span class="bb-st-badge">${escapeHtml(badge)}</span>
+                    ${meta ? `<span class="bb-st-meta">${escapeHtml(meta)}</span>` : ''}
                 </div>
-                <span class="bb-st-reason">"${reason}"</span>
+                <div class="bb-st-header">
+                    <span class="bb-st-name">${escapeHtml(title)}</span>
+                </div>
+                <span class="bb-st-reason">${escapeHtml(text)}</span>
+                <span class="bb-st-progress"></span>
             </div>
-        </div>
+        </article>
     `;
-    const $toast = $(toastHtml);
-    $('#bb-social-toast-container').append($toast);
-    setTimeout(() => { $toast.remove(); }, 5000);
+    const toastContainer = document.getElementById('bb-social-toast-container');
+    if (!toastContainer) return;
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    const toastElement = document.getElementById(toastId);
+    if (!toastElement) return;
+
+    window.requestAnimationFrame(() => toastElement.classList.add('is-visible'));
+    window.setTimeout(() => removeToast(toastElement), TOAST_LIFETIME_MS);
+}
+
+function showRelationshipToast(name, delta, reason) {
+    if (delta === 0) return;
+    const shift = getShiftDescriptor(delta);
+    showHudToast({
+        title: `${name} · ${shift.short}`,
+        text: reason || shift.full,
+        badge: 'Связи',
+        variant: delta > 0 ? 'positive' : 'negative',
+        icon: delta > 0 ? 'fa-solid fa-heart' : 'fa-solid fa-heart-crack',
+        accent: shift.color,
+        meta: delta > 0 ? `+${Math.abs(delta)}` : `−${Math.abs(delta)}`,
+    });
+}
+
+function getMomentToastPriority(type = '') {
+    const priorityMap = {
+        'deep-positive': 5,
+        'deep-negative': 5,
+        'status-shift': 4,
+        'tier-shift': 3,
+        'soft-positive': 2,
+        'soft-negative': 2,
+        'intro': 1,
+    };
+    return priorityMap[type] || 0;
+}
+
+function pickToastMoment(currentMoment, nextMoment) {
+    if (!nextMoment) return currentMoment;
+    if (!currentMoment) return nextMoment;
+    return getMomentToastPriority(nextMoment.type) >= getMomentToastPriority(currentMoment.type)
+        ? nextMoment
+        : currentMoment;
+}
+
+function showStoryMomentToast(moment) {
+    if (!moment) return;
+
+    const toastMap = {
+        'deep-positive': { badge: 'Дневник', variant: 'milestone', icon: 'fa-solid fa-stars', accent: '#c084fc' },
+        'deep-negative': { badge: 'Дневник', variant: 'alert', icon: 'fa-solid fa-bolt', accent: '#fb7185' },
+        'soft-positive': { badge: 'Дневник', variant: 'positive', icon: 'fa-solid fa-book-open-reader', accent: '#4ade80' },
+        'soft-negative': { badge: 'Дневник', variant: 'negative', icon: 'fa-solid fa-feather-pointed', accent: '#f87171' },
+        'tier-shift': { badge: 'Маршрут', variant: 'system', icon: 'fa-solid fa-arrow-trend-up', accent: '#60a5fa' },
+        'status-shift': { badge: 'Маршрут', variant: 'milestone', icon: 'fa-solid fa-user-pen', accent: '#f59e0b' },
+        'intro': { badge: 'Трекер', variant: 'system', icon: 'fa-solid fa-user-plus', accent: '#93c5fd' },
+    };
+    const toastConfig = toastMap[moment.type] || toastMap['soft-positive'];
+    const rawText = String(moment.text || '');
+    const prefix = moment.char ? `${moment.char}: ` : '';
+    const text = prefix && rawText.startsWith(prefix) ? rawText : `${moment.char || 'Сцена'}: ${rawText}`;
+    showHudToast({
+        title: moment.title || 'Новая запись',
+        text,
+        badge: toastConfig.badge,
+        variant: toastConfig.variant,
+        icon: toastConfig.icon,
+        accent: toastConfig.accent,
+    });
 }
 
 function getLegacyToneFromRisk(risk = "") {
@@ -375,6 +484,7 @@ function maybeAddStoryMoment(moment) {
     if (!moment || !moment.title || !moment.text) return;
     currentStoryMoments.push(moment);
     if (currentStoryMoments.length > 30) currentStoryMoments.shift();
+    return moment;
 }
 
 function tryBindPendingChoiceContextToMessage(msg) {
@@ -521,6 +631,13 @@ function recalculateAllStats(isNewMessage = false) {
                     if (isNewMessage && idx === chat.length - 1 && update.base_affinity !== undefined) {
                         // Меняем пробелы на перенос строки
                         const formattedName = escapeHtml(charName).replace(/ /g, '<br>');
+                        const introMoment = maybeAddStoryMoment({
+                            type: 'intro',
+                            char: charName,
+                            title: 'Новый контакт',
+                            text: `${charName} появился в трекере отношений.`,
+                        });
+                        showStoryMomentToast(introMoment);
                         addGlobalLog('init', `
                             <div class="bb-glog-main">
                                 <span class="bb-glog-char">${formattedName}</span>
@@ -545,46 +662,51 @@ function recalculateAllStats(isNewMessage = false) {
 
                 const previousTier = getTierInfo(previousAffinity).label;
                 const newTier = getTierInfo(currentCalculatedStats[charName].affinity).label;
+                let toastMoment = null;
                 if (previousTier !== newTier) {
-                    maybeAddStoryMoment({
+                    toastMoment = pickToastMoment(toastMoment, maybeAddStoryMoment({
                         type: 'tier-shift',
                         char: charName,
                         title: 'Сдвиг в отношениях',
                         text: `${charName}: статус изменился с «${previousTier}» на «${newTier}».`,
-                    });
+                    }));
                 }
 
                 if (update.status && previousStatus && previousStatus !== update.status) {
-                    maybeAddStoryMoment({
+                    toastMoment = pickToastMoment(toastMoment, maybeAddStoryMoment({
                         type: 'status-shift',
                         char: charName,
                         title: 'Новый образ в его глазах',
                         text: `${charName}: теперь вы для него — «${normalizeStatusLabel(update.status)}».`,
-                    });
+                    }));
                 }
 
                 if (Math.abs(delta) >= 2 && update.reason) {
                     const shift = getShiftDescriptor(delta);
-                    maybeAddStoryMoment({
+                    toastMoment = pickToastMoment(toastMoment, maybeAddStoryMoment({
                         type: delta > 0 ? 'soft-positive' : 'soft-negative',
                         char: charName,
                         title: shift.full,
                         text: `${charName}: ${update.reason}`,
-                    });
+                    }));
                 }
 
                 if (Math.abs(delta) >= 9 && update.reason) {
-                    maybeAddStoryMoment({
+                    toastMoment = pickToastMoment(toastMoment, maybeAddStoryMoment({
                         type: delta > 0 ? 'deep-positive' : 'deep-negative',
                         char: charName,
                         title: 'Незабываемое событие',
                         text: `${charName}: ${update.reason}`,
-                    });
+                    }));
                 }
                 
                 // === ОБНОВЛЕННЫЙ ЛОГ ДЛЯ ИЗМЕНЕНИЯ ОТНОШЕНИЙ ===
                 if (isNewMessage && idx === chat.length - 1 && delta !== 0) {
-                    showAffinityToast(charName, delta, update.reason || "");
+                    if (toastMoment) {
+                        showStoryMomentToast(toastMoment);
+                    } else {
+                        showRelationshipToast(charName, delta, update.reason || "");
+                    }
                     const shift = getShiftDescriptor(delta);
                     // Меняем пробелы на перенос строки
                     const formattedName = escapeHtml(charName).replace(/ /g, '<br>');
@@ -958,6 +1080,8 @@ function renderSocialHud() {
             momentsBox.innerHTML = momentsHtml;
         }
     }
+
+    syncToastContainerWithHud();
 }
 
 function updateHudVisibility() {
@@ -972,6 +1096,7 @@ function updateHudVisibility() {
         toastCont.removeClass('hud-open');
         $('#bb-hud-arrow').removeClass('fa-chevron-right').addClass('fa-chevron-left');
     }
+    syncToastContainerWithHud();
 }
 
 function ensureHudContainer() {
@@ -1024,7 +1149,10 @@ function ensureHudContainer() {
             toastCont.removeClass('hud-open');
             $('#bb-hud-arrow').removeClass('fa-chevron-right').addClass('fa-chevron-left');
         }
+        syncToastContainerWithHud();
     });
+
+    window.addEventListener('resize', syncToastContainerWithHud);
 }
 
 // ==========================================

@@ -1,43 +1,170 @@
 /* === АНИМАЦИИ УВЕДОМЛЕНИЙ === */
-@keyframes slideInRight {
-    0% { transform: translateX(100%); opacity: 0; }
-    10% { transform: translateX(0); opacity: 1; }
-    90% { transform: translateX(0); opacity: 1; }
-    100% { transform: translateX(100%); opacity: 0; }
+@keyframes bbToastEnter {
+    0% { transform: translate3d(0, -14px, 0) scale(0.96); opacity: 0; }
+    100% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
 }
-@keyframes toastBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-@keyframes toastShake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+@keyframes bbToastExit {
+    0% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+    100% { transform: translate3d(0, -12px, 0) scale(0.97); opacity: 0; }
+}
+@keyframes bbToastGlow {
+    0%, 100% { opacity: 0.35; transform: scale(1); }
+    50% { opacity: 0.72; transform: scale(1.05); }
+}
+@keyframes bbToastProgress {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+}
 
 /* === КОНТЕЙНЕР УВЕДОМЛЕНИЙ === */
 #bb-social-toast-container {
-    position: fixed; top: 80px; right: 20px;
-    display: flex; flex-direction: column; gap: 10px;
-    z-index: 99999; pointer-events: none;
-    transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --bb-toast-open-top: 88px;
+    position: fixed;
+    top: 78px;
+    right: 20px;
+    width: min(360px, calc(100vw - 28px));
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+    z-index: 2200;
+    pointer-events: none;
+    transition: top 0.28s ease, right 0.28s ease, width 0.28s ease;
 }
-#bb-social-toast-container.hud-open { right: 410px; }
+#bb-social-toast-container.hud-open {
+    top: var(--bb-toast-open-top);
+    right: 14px;
+    width: min(350px, calc(100vw - 28px));
+}
 
 /* === КАРТОЧКА УВЕДОМЛЕНИЯ === */
 .bb-social-toast {
-    background: rgba(20, 20, 25, 0.95); backdrop-filter: blur(10px);
-    border-radius: 8px; padding: 12px 16px; width: 280px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    display: flex; align-items: center; gap: 12px;
-    border-left: 4px solid #fff;
+    --bb-toast-accent: #93c5fd;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    padding: 13px 14px;
+    border-radius: 22px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background:
+        linear-gradient(180deg, rgba(16, 22, 34, 0.97), rgba(10, 14, 24, 0.95)),
+        radial-gradient(circle at top right, var(--bb-toast-accent), transparent 58%);
+    box-shadow:
+        0 18px 44px rgba(2, 6, 23, 0.48),
+        inset 0 1px 0 rgba(255,255,255,0.07),
+        0 0 0 1px rgba(255,255,255,0.05);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    transform: translate3d(0, -14px, 0) scale(0.96);
+    opacity: 0;
 }
-.bb-social-toast.positive { border-left-color: #4ade80; animation: slideInRight 5s forwards, toastBounce 2s ease-in-out infinite; }
-.bb-social-toast.negative { border-left-color: #ef4444; animation: slideInRight 5s forwards, toastShake 0.5s ease-in-out 2; }
-.bb-st-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 16px; font-weight: bold; color: #fff; flex-shrink: 0; }
-.bb-social-toast.positive .bb-st-icon { background: rgba(74, 222, 128, 0.2); color: #4ade80; }
-.bb-social-toast.negative .bb-st-icon { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
-.bb-st-content { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-.bb-st-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
-.bb-st-name { font-size: 13px; font-weight: bold; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bb-st-delta { font-size: 14px; font-weight: 900; }
-.bb-social-toast.positive .bb-st-delta { color: #4ade80; }
-.bb-social-toast.negative .bb-st-delta { color: #ef4444; }
-.bb-st-reason { font-size: 11px; color: #a1a1aa; line-height: 1.2; font-style: italic; }
+.bb-social-toast.is-visible { animation: bbToastEnter 0.34s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.bb-social-toast[data-state="closing"] { animation: bbToastExit 0.24s ease forwards; }
+.bb-social-toast.positive { --bb-toast-accent: #4ade80; }
+.bb-social-toast.negative { --bb-toast-accent: #fb7185; }
+.bb-social-toast.milestone { --bb-toast-accent: #c084fc; }
+.bb-social-toast.alert { --bb-toast-accent: #f59e0b; }
+.bb-social-toast.system { --bb-toast-accent: #60a5fa; }
+.bb-st-glow {
+    position: absolute;
+    inset: -40% auto auto 55%;
+    width: 160px;
+    height: 160px;
+    border-radius: 999px;
+    background: radial-gradient(circle, var(--bb-toast-accent), transparent 66%);
+    filter: blur(4px);
+    opacity: 0.55;
+    pointer-events: none;
+    animation: bbToastGlow 2.8s ease-in-out infinite;
+}
+.bb-st-icon {
+    position: relative;
+    z-index: 1;
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 17px;
+    color: var(--bb-toast-accent);
+    flex-shrink: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04));
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 10px 18px rgba(0,0,0,0.2);
+}
+.bb-st-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    gap: 6px;
+}
+.bb-st-topline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.bb-st-badge,
+.bb-st-meta {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 800;
+}
+.bb-st-badge {
+    color: var(--bb-toast-accent);
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+}
+.bb-st-meta {
+    color: var(--bb-toast-accent);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+}
+.bb-st-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+}
+.bb-st-name {
+    font-size: 14px;
+    font-weight: 900;
+    color: #f8fafc;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.bb-st-reason {
+    font-size: 12px;
+    color: #cbd5e1;
+    line-height: 1.45;
+    max-width: 100%;
+}
+.bb-st-progress {
+    margin-top: 2px;
+    display: block;
+    width: 100%;
+    height: 3px;
+    transform-origin: left center;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--bb-toast-accent), transparent);
+    opacity: 0.8;
+    animation: bbToastProgress 5.2s linear forwards;
+}
 
 /* =========================================
    HUD: БОКОВАЯ ПАНЕЛЬ (SOCIAL LINK)
@@ -405,6 +532,21 @@
 
 /* ФИКС МОБИЛЬНЫХ КНОПОК И ОТСТУПОВ */
 @media (max-width: 600px) {
+    #bb-social-toast-container,
+    #bb-social-toast-container.hud-open {
+        top: 70px;
+        right: 10px;
+        left: 10px;
+        width: auto;
+    }
+    .bb-social-toast {
+        border-radius: 18px;
+        padding: 12px;
+    }
+    .bb-st-name {
+        font-size: 13px;
+    }
+
     /* Делаем основные кнопки более компактными на телефоне */
     .bb-vn-option {
         flex: 0 0 100% !important;
