@@ -116,6 +116,11 @@
     gap: 6px; 
 }
 .bb-char-direction { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px; }
+.bb-unforgettable-impact {
+    font-size: 10px; padding: 4px 8px; border-radius: 999px;
+    background: rgba(245, 158, 11, 0.12); color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.28); font-weight: 800;
+}
 
 /* Резиновый статус */
 .bb-char-tier {

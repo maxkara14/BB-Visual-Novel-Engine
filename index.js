@@ -77,6 +77,7 @@ function getCombinedSocial() {
     let combinedStr = SOCIAL_PROMPT;
     const characters = Object.keys(currentCalculatedStats);
     const unforgettableLines = [];
+    const unforgettableImpactLines = [];
     if (characters.length > 0) {
         combinedStr += `\n\n[CURRENT RELATIONSHIP STATUS WITH {{user}}]:\n`;
         characters.forEach(char => {
@@ -85,6 +86,7 @@ function getCombinedSocial() {
             const relationshipState = getAffinityNarrative(currentCalculatedStats[char].affinity);
             const softMemories = currentCalculatedStats[char].memories?.soft || [];
             const deepMemories = currentCalculatedStats[char].memories?.deep || [];
+            const unforgettableImpact = getUnforgettableImpact(deepMemories);
             const softLine = softMemories.length > 0
                 ? ` | recent_memory: ${softMemories.map(m => m.text).join('; ')}`
                 : '';
@@ -94,14 +96,20 @@ function getCombinedSocial() {
 
             if (deepMemories.length > 0) {
                 unforgettableLines.push(`- ${char}: ${deepMemories.map(m => m.text).join('; ')}`);
+                if (unforgettableImpact.prompt) {
+                    unforgettableImpactLines.push(`- ${char}: impact=${unforgettableImpact.label} | direction=${unforgettableImpact.prompt}`);
+                }
             }
 
-            combinedStr += `- ${char}: role_status=${statusLabel} | relationship_tier=${tierLabel} | relationship_state=${relationshipState}${softLine}${deepLine}\n`;
+            combinedStr += `- ${char}: role_status=${statusLabel} | relationship_tier=${tierLabel} | relationship_state=${relationshipState}${softLine}${deepLine}${deepMemories.length > 0 ? ` | unforgettable_impact=${unforgettableImpact.label}` : ''}\n`;
         });
         combinedStr += "CRITICAL: Strictly align the characters' behavior, trust level, and dialogue towards {{user}} with these current relationship tiers, statuses, and emotional states.";
     }
     if (unforgettableLines.length > 0) {
-        combinedStr += `\n\n[UNFORGETTABLE THINGS]:\n${unforgettableLines.join('\n')}\nCRITICAL: These are persistent emotional anchors. Characters must continue to remember them across scenes, even when the recent interaction is calm.`;
+        combinedStr += `\n\n[UNFORGETTABLE EVENTS]:\n${unforgettableLines.join('\n')}\nCRITICAL: These are persistent emotional anchors. Characters must continue to remember them across scenes, even when the recent interaction is calm.`;
+    }
+    if (unforgettableImpactLines.length > 0) {
+        combinedStr += `\n\n[UNFORGETTABLE EVENTS IMPACT]:\n${unforgettableImpactLines.join('\n')}\nCRITICAL: Unforgettable events must outweigh small recent mood shifts when the scene is ambiguous.`;
     }
     combinedStr += buildChoiceContextPrompt();
     return combinedStr;
@@ -239,6 +247,45 @@ function getAffinityNarrative(affinity) {
     if (affinity <= 50) return 'Осторожное сближение';
     if (affinity <= 80) return 'Стабильное доверие';
     return 'Очень близкая связь';
+}
+
+function getUnforgettableImpact(memories = []) {
+    if (!Array.isArray(memories) || memories.length === 0) {
+        return { label: 'Нет активного следа', prompt: '' };
+    }
+
+    const total = memories.reduce((sum, memory) => sum + (parseInt(memory.delta) || 0), 0);
+    const hasPositive = memories.some(memory => (parseInt(memory.delta) || 0) > 0);
+    const hasNegative = memories.some(memory => (parseInt(memory.delta) || 0) < 0);
+
+    if (hasPositive && hasNegative) {
+        return {
+            label: 'Противоречивый след',
+            prompt: 'Past unforgettable events create inner conflict: the character is torn between closeness and pain, so reactions should feel emotionally unstable and layered.',
+        };
+    }
+    if (total >= 18) {
+        return {
+            label: 'Тянется сквозь всё',
+            prompt: 'Unforgettable positive events create a powerful pull toward {{user}}. Even in tense scenes, warmth, trust, or longing should leak through.',
+        };
+    }
+    if (total > 0) {
+        return {
+            label: 'Глубокое доверие',
+            prompt: 'Unforgettable positive events still shape the character. Small gestures from {{user}} should be interpreted more softly and personally.',
+        };
+    }
+    if (total <= -18) {
+        return {
+            label: 'Шрам не зажил',
+            prompt: 'Unforgettable negative events still dominate the character’s perception. Suspicion, pain, or guardedness should override calm surface behavior.',
+        };
+    }
+    return {
+        label: 'Подспудная настороженность',
+        prompt: 'Unforgettable negative events remain unresolved. Even neutral interactions should carry some hesitation, distance, or emotional recoil.',
+    };
 }
 
 function appendCharacterMemory(charStats, delta, reason) {
@@ -475,7 +522,7 @@ function recalculateAllStats(isNewMessage = false) {
                     maybeAddStoryMoment({
                         type: delta > 0 ? 'deep-positive' : 'deep-negative',
                         char: charName,
-                        title: 'Незабываемая вещь',
+                        title: 'Незабываемое событие',
                         text: `${charName}: ${update.reason}`,
                     });
                 }
@@ -549,6 +596,7 @@ function renderSocialHud() {
                 if(historyHtml === '') historyHtml = '<i style="color:#64748b;">Нет записей</i>';
 
                 const memories = currentCalculatedStats[charName].memories || { soft: [], deep: [] };
+                const unforgettableImpact = getUnforgettableImpact(memories.deep);
                 const softMemoriesHtml = memories.soft.length > 0
                     ? [...memories.soft].reverse().map(memory => `<div class="bb-memory-pill ${memory.tone}">${escapeHtml(memory.text)}</div>`).join('')
                     : '<i style="color:#64748b;">Пока нет</i>';
@@ -566,6 +614,7 @@ function renderSocialHud() {
                             <div class="bb-char-subtitle">
                                 <span class="bb-char-direction"><i class="fa-solid fa-reply fa-rotate-180"></i> отношение к вам:</span>
                                 <span class="bb-char-tier ${tier.class}" title="${escapeHtml(displayStatus)}">${escapeHtml(displayStatus)}</span>
+                                ${memories.deep.length > 0 ? `<span class="bb-unforgettable-impact">${escapeHtml(unforgettableImpact.label)}</span>` : ''}
                             </div>
                         </div>
                         
@@ -601,7 +650,7 @@ function renderSocialHud() {
                                 <div class="bb-memory-list">${softMemoriesHtml}</div>
                             </div>
                             <div class="bb-memory-section">
-                                <div class="bb-memory-title">Незабываемые вещи</div>
+                                <div class="bb-memory-title">Незабываемые события</div>
                                 <div class="bb-memory-list">${deepMemoriesHtml}</div>
                             </div>
                         </div>
