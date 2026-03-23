@@ -230,13 +230,13 @@ function getShiftDescriptor(delta) {
         if (absDelta >= 9) return { short: 'Судьбоносно', full: 'Судьбоносное сближение', color: '#c084fc', logType: 'plus' };
         if (absDelta >= 4) return { short: 'Сильнее', full: 'Сильное сближение', color: '#4ade80', logType: 'plus' };
         if (absDelta >= 2) return { short: 'Теплее', full: 'Тёплый отклик', color: '#86efac', logType: 'plus' };
-        return { short: 'Легче', full: 'Лёгкий положительный сдвиг', color: '#bbf7d0', logType: 'plus' };
+        return { short: 'Мягче', full: 'Лёгкое потепление', color: '#bbf7d0', logType: 'plus' };
     }
     if (delta < 0) {
         if (absDelta >= 9) return { short: 'Перелом', full: 'Глубокая трещина', color: '#fca5a5', logType: 'minus' };
         if (absDelta >= 4) return { short: 'Холоднее', full: 'Сильное охлаждение', color: '#f87171', logType: 'minus' };
         if (absDelta >= 2) return { short: 'Напряжённо', full: 'Нарастающее напряжение', color: '#fda4af', logType: 'minus' };
-        return { short: 'Колко', full: 'Лёгкий негативный сдвиг', color: '#fecdd3', logType: 'minus' };
+        return { short: 'Неловко', full: 'Лёгкое охлаждение', color: '#fecdd3', logType: 'minus' };
     }
     return { short: 'Ровно', full: 'Без ощутимых изменений', color: '#94a3b8', logType: 'system' };
 }

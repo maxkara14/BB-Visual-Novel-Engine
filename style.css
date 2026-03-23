@@ -45,8 +45,9 @@
 #bb-social-hud {
     position: fixed; top: 0; right: 0;
     width: 340px; height: 100vh;
-    background: rgba(15, 15, 20, 0.95); backdrop-filter: blur(15px);
-    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    background: linear-gradient(180deg, rgba(14, 18, 27, 0.97), rgba(10, 12, 20, 0.96)); backdrop-filter: blur(18px);
+    border-left: 1px solid rgba(147, 197, 253, 0.12);
+    box-shadow: -18px 0 30px rgba(0,0,0,0.28);
     /* ФИКС Z-INDEX: Скрываем панель под основными меню Таверны */
     z-index: 1500; transform: translateX(100%);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -57,33 +58,36 @@
 
 #bb-social-hud-toggle {
     position: absolute; left: -42px; top: 40%;
-    background: rgba(20, 20, 25, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.1); border-right: none;
-    color: #c084fc; padding: 15px 10px; border-radius: 10px 0 0 10px; cursor: pointer;
-    box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+    background: linear-gradient(180deg, rgba(14, 18, 27, 0.96), rgba(24, 17, 34, 0.94));
+    border: 1px solid rgba(147, 197, 253, 0.14); border-right: none;
+    color: #c4b5fd; padding: 15px 10px; border-radius: 12px 0 0 12px; cursor: pointer;
+    box-shadow: -8px 0 18px rgba(0,0,0,0.32);
     display: flex; flex-direction: column; align-items: center; gap: 5px;
     transition: background 0.2s, color 0.2s;
 }
 #bb-social-hud-toggle:hover { background: rgba(40, 40, 50, 0.95); color: #fff; }
 
 .bb-hud-header {
-    padding: 15px 20px; text-align: center;
+    padding: 18px 20px 14px; text-align: center;
     font-size: 16px; font-weight: 800; color: #fff;
     letter-spacing: 2px; text-transform: uppercase;
-    background: linear-gradient(to right, rgba(192, 132, 252, 0.1), transparent, rgba(192, 132, 252, 0.1));
+    background: linear-gradient(to right, rgba(96, 165, 250, 0.08), rgba(192, 132, 252, 0.1), rgba(96, 165, 250, 0.08));
+    border-bottom: 1px solid rgba(255,255,255,0.04);
 }
 
 .bb-hud-tabs {
-    display: flex; border-bottom: 1px solid rgba(255,255,255,0.1);
-    background: rgba(0,0,0,0.2);
+    display: flex; gap: 8px; padding: 10px 12px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.01);
 }
 .bb-hud-tab {
     flex: 1; text-align: center; padding: 10px; cursor: pointer;
-    color: #94a3b8; font-size: 12px; text-transform: uppercase; font-weight: bold;
-    transition: all 0.2s ease; border-bottom: 2px solid transparent;
+    color: #94a3b8; font-size: 11px; text-transform: uppercase; font-weight: bold;
+    transition: all 0.2s ease; border: 1px solid rgba(255,255,255,0.05); border-radius: 999px;
+    background: rgba(255,255,255,0.02);
 }
 .bb-hud-tab:hover { color: #e2e8f0; }
-.bb-hud-tab.active { color: #c084fc; border-bottom-color: #c084fc; background: rgba(192, 132, 252, 0.1); }
+.bb-hud-tab.active { color: #f8fafc; border-color: rgba(192, 132, 252, 0.26); background: linear-gradient(180deg, rgba(96, 165, 250, 0.14), rgba(192, 132, 252, 0.12)); box-shadow: 0 8px 18px rgba(0,0,0,0.16); }
 
 .bb-hud-content {
     flex: 1; overflow-y: auto; padding: 15px;
@@ -96,12 +100,14 @@
 
 /* КАРТОЧКИ ПЕРСОНАЖЕЙ */
 .bb-char-card {
-    background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 10px; padding: 15px; cursor: pointer;
+    background: linear-gradient(180deg, rgba(18, 22, 34, 0.96), rgba(12, 16, 26, 0.92));
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px; padding: 15px; cursor: pointer;
     display: flex; flex-direction: column; gap: 12px;
-    transition: transform 0.2s, border-color 0.2s;
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s ease;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.03);
 }
-.bb-char-card:hover { border-color: rgba(255,255,255,0.15); background: rgba(20, 20, 25, 0.8); }
+.bb-char-card:hover { border-color: rgba(147, 197, 253, 0.18); background: linear-gradient(180deg, rgba(22, 28, 40, 0.98), rgba(14, 18, 28, 0.95)); box-shadow: 0 14px 26px rgba(0,0,0,0.24); }
 
 /* Новая шапка: Имя и шестеренка на одной линии, статус - ниже */
 .bb-char-header { display: flex; flex-direction: column; gap: 8px; }
@@ -169,20 +175,21 @@
 #bb-vn-action-bar {
     width: 100%; padding: 8px 10px; box-sizing: border-box;
     display: flex; flex-direction: column; gap: 8px;
-    background: rgba(15, 15, 20, 0.5);
-    border-radius: 8px 8px 0 0; margin-bottom: 5px;
+    background: linear-gradient(180deg, rgba(17, 21, 31, 0.76), rgba(22, 14, 30, 0.56));
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px 12px 0 0; margin-bottom: 5px;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
     overflow: visible;
 }
 
 .bb-vn-main-btn {
-    background: rgba(15, 15, 20, 0.8); border: 1px solid #c084fc;
+    background: linear-gradient(180deg, rgba(19, 23, 35, 0.94), rgba(24, 17, 34, 0.88)); border: 1px solid rgba(192, 132, 252, 0.44);
     color: #e2e8f0; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;
-    padding: 10px; border-radius: 8px; text-align: center; cursor: pointer;
-    box-shadow: 0 0 10px rgba(192, 132, 252, 0.2); transition: all 0.2s ease;
+    padding: 12px; border-radius: 12px; text-align: center; cursor: pointer;
+    box-shadow: 0 10px 22px rgba(0,0,0,0.2); transition: all 0.2s ease;
 }
-.bb-vn-main-btn:hover { background: rgba(192, 132, 252, 0.2); box-shadow: 0 0 15px rgba(192, 132, 252, 0.4); text-shadow: 0 0 5px #fff; }
+.bb-vn-main-btn:hover { background: linear-gradient(180deg, rgba(34, 39, 56, 0.98), rgba(43, 26, 58, 0.92)); box-shadow: 0 14px 26px rgba(0,0,0,0.24); text-shadow: 0 0 5px #fff; }
 .bb-vn-main-btn.loading { border-color: #f59e0b; color: #f59e0b; pointer-events: none; animation: pulseGlow 1.5s infinite; }
 
 @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); } 50% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.6); } }
@@ -191,13 +198,14 @@
 #bb-vn-options-container.active { display: flex; }
 
 .bb-vn-option {
-    flex: 1; min-width: 30%; background: rgba(20, 20, 25, 0.9);
-    border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
-    padding: 12px; cursor: pointer; display: flex; flex-direction: column; gap: 5px;
+    flex: 1; min-width: 30%; background: linear-gradient(180deg, rgba(19, 23, 35, 0.94), rgba(14, 18, 28, 0.92));
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 14px;
+    padding: 14px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 7px;
     align-items: center; text-align: center; transition: all 0.2s ease;
     height: auto; box-sizing: border-box; position: relative; overflow: visible;
+    box-shadow: 0 12px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.03);
 }
-.bb-vn-option:hover { transform: translateY(-3px); }
+.bb-vn-option:hover { transform: translateY(-3px); box-shadow: 0 16px 28px rgba(0,0,0,0.24); }
 .bb-vn-op-head { 
     display: flex; align-items: center; justify-content: center; 
     font-size: 14px; font-weight: bold; color: #fff; 
@@ -299,6 +307,8 @@
     margin-bottom: 12px; padding: 12px; border-radius: 10px;
     background: linear-gradient(180deg, rgba(18, 18, 24, 0.96), rgba(10, 10, 14, 0.94));
     border: 1px solid rgba(96, 165, 250, 0.18); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    position: sticky; top: 0; z-index: 6;
+    backdrop-filter: blur(12px);
 }
 .bb-prompt-summary {
     display: flex; justify-content: space-between; align-items: center; gap: 8px;
