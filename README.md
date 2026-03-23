@@ -172,4 +172,6 @@
 
 ---
 
-**Автор:** [BruniikBron](https://maxkara14.github.io/BruniikBron/)
+**Автор:** 
+[BruniikBron](https://maxkara14.github.io/BruniikBron/) 
+[TG](t.me/Brun11kBr0n)
