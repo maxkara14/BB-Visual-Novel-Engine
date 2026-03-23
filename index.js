@@ -132,6 +132,18 @@ function injectCombinedSocialPrompt() {
     } catch (e) { console.error("[BB VN] Ошибка инъекции:", e); }
 }
 
+function notifySuccess(message, title) {
+    /** @type {any} */ (toastr).success(message, title);
+}
+
+function notifyInfo(message, title) {
+    /** @type {any} */ (toastr).info(message, title);
+}
+
+function notifyError(message, title) {
+    /** @type {any} */ (toastr).error(message, title);
+}
+
 function ensureToastContainer() {
     if (!document.getElementById('bb-social-toast-container')) {
         const extraClass = $('#bb-social-hud').hasClass('open') ? 'hud-open' : '';
@@ -803,13 +815,14 @@ function renderSocialHud() {
 
             $('.bb-btn-save-char').off('click').on('click', function() {
                 const charName = $(this).attr('data-char');
-                const newBase = parseInt($(this).closest('.bb-char-editor').find('.bb-edit-base-input').val());
+                const rawBase = $(this).closest('.bb-char-editor').find('.bb-edit-base-input').val();
+                const newBase = parseInt(String(rawBase), 10);
                 if (!isNaN(newBase)) {
                     if (!chat_metadata['bb_vn_char_bases']) chat_metadata['bb_vn_char_bases'] = {};
                     chat_metadata['bb_vn_char_bases'][charName] = newBase;
                     saveChatDebounced();
                     recalculateAllStats();
-                    toastr.success("Настройки сохранены!");
+                    notifySuccess("Настройки сохранены!");
                 }
             });
 
@@ -821,7 +834,7 @@ function renderSocialHud() {
                 }
                 saveChatDebounced();
                 recalculateAllStats();
-                toastr.info(`${charName} скрыт.`);
+                notifyInfo(`${charName} скрыт.`);
             });
         }
     }
@@ -885,9 +898,9 @@ function renderSocialHud() {
                 e.stopPropagation();
                 try {
                     await navigator.clipboard.writeText(getCombinedSocial());
-                    toastr.success("Prompt скопирован!");
+                    notifySuccess("Prompt скопирован!");
                 } catch (error) {
-                    toastr.error("Не удалось скопировать prompt.");
+                    notifyError("Не удалось скопировать prompt.");
                 }
             });
         }
@@ -1301,7 +1314,7 @@ window['bbVnGenerateOptionsFlow'] = async function() {
     } catch (e) {
         console.error("[BB VN] Ошибка генерации:", e);
         // @ts-ignore
-        toastr.error("Не удалось сгенерировать варианты");
+        notifyError("Не удалось сгенерировать варианты");
         btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия (Visual Novel)').show();
     }
 };
@@ -1389,7 +1402,7 @@ function wipeGlobalLog() {
     saveChatDebounced();
     renderSocialHud();
     // @ts-ignore
-    toastr.success("Журнал событий очищен!");
+    notifySuccess("Журнал событий очищен!");
 }
 
 function wipeAllSocialData() {
@@ -1412,7 +1425,7 @@ function wipeAllSocialData() {
     saveChatDebounced();
     recalculateAllStats();
     // @ts-ignore
-    toastr.success("История отношений в этом чате полностью сброшена!");
+    notifySuccess("История отношений в этом чате полностью сброшена!");
 }
 
 function setupExtensionSettings() {
@@ -1505,13 +1518,13 @@ function setupExtensionSettings() {
     });
 
     $('#bb-vn-cfg-url, #bb-vn-cfg-key').on('change input', function() {
-        extension_settings[MODULE_NAME].customApiUrl = $('#bb-vn-cfg-url').val();
-        extension_settings[MODULE_NAME].customApiKey = $('#bb-vn-cfg-key').val();
+        extension_settings[MODULE_NAME].customApiUrl = String($('#bb-vn-cfg-url').val() || "");
+        extension_settings[MODULE_NAME].customApiKey = String($('#bb-vn-cfg-key').val() || "");
         saveSettingsDebounced();
     });
     
     $(document).on('change', '#bb-vn-cfg-model', function() {
-         extension_settings[MODULE_NAME].customApiModel = $(this).val();
+         extension_settings[MODULE_NAME].customApiModel = String($(this).val() || "");
          saveSettingsDebounced();
     });
 
@@ -1524,8 +1537,8 @@ function setupExtensionSettings() {
     $('#bb-vn-btn-connect').on('click', async function() {
         const btn = $(this);
         // @ts-ignore
-        const url = $('#bb-vn-cfg-url').val().replace(/\/$/, '');
-        const key = $('#bb-vn-cfg-key').val();
+        const url = String($('#bb-vn-cfg-url').val() || '').replace(/\/$/, '');
+        const key = String($('#bb-vn-cfg-key').val() || '');
 
         btn.html('<i class="fa-solid fa-spinner fa-spin"></i> Подключение...');
 
@@ -1553,11 +1566,11 @@ function setupExtensionSettings() {
                 if (extension_settings[MODULE_NAME].customApiModel && select.find(`option[value="${extension_settings[MODULE_NAME].customApiModel}"]`).length) {
                     select.val(extension_settings[MODULE_NAME].customApiModel);
                 } else {
-                    extension_settings[MODULE_NAME].customApiModel = select.val();
+                    extension_settings[MODULE_NAME].customApiModel = String(select.val() || '');
                 }
                 
                 // @ts-ignore
-                toastr.success("Модели успешно загружены!", "BB Visual Novel");
+                notifySuccess("Модели успешно загружены!", "BB Visual Novel");
                 saveSettingsDebounced();
             } else {
                 throw new Error("API не вернул список моделей.");
@@ -1565,7 +1578,7 @@ function setupExtensionSettings() {
         } catch (e) {
             console.error("[BB VN] Ошибка подключения к API:", e);
             // @ts-ignore
-            toastr.error(`Не удалось подключиться: ${e.message}`, "BB Visual Novel");
+            notifyError(`Не удалось подключиться: ${e.message}`, "BB Visual Novel");
         } finally {
             btn.html('<i class="fa-solid fa-plug"></i> Подключиться / Обновить');
         }
@@ -1576,7 +1589,7 @@ function setupExtensionSettings() {
         saveChatDebounced();
         recalculateAllStats();
         // @ts-ignore
-        toastr.success("Скрытые персонажи восстановлены!");
+        notifySuccess("Скрытые персонажи восстановлены!");
     });
 
     const clearLogBtn = document.getElementById('bb-social-clear-log-btn');
