@@ -465,7 +465,7 @@ const OPTIONS_PROMPT = `Analyze the recent chat. Generate exactly 3 highly disti
 
 CRITICAL: Your generated messages MUST logically continue from the VERY LAST sentence of the [IMMEDIATE TRIGGER]. Do not ignore the character's final question, movement, or action. React directly to it!
 
-For EACH action, write a DETAILED roleplay message (actions, internal thoughts, dialogue, sensory details) from {{user}}'s perspective. DO NOT just react passively; make {{user}} take initiative to progress the plot or shift the dynamic. Match {{user}}'s persona perfectly. Write in Russian.
+For EACH action, write a LONG, HIGHLY DETAILED roleplay message (2-4 paragraphs) from {{user}}'s perspective. Include rich sensory details, deep internal monologues, and complex actions. DO NOT just react passively; make {{user}} take initiative to progress the plot or shift the dynamic. Match {{user}}'s persona perfectly. Write in Russian.
 
 CRITICAL RULES FOR RISK LEVELS:
 1. "Низкий" (Low Risk): Safe, polite, cautious, or expected. Maintains the status quo, agrees with the character, avoids conflict, or follows instructions.
@@ -476,23 +476,24 @@ CRITICAL JSON AND FORMATTING RULES:
 1. Return STRICTLY a valid JSON array. DO NOT output any conversational text outside the JSON.
 2. INSIDE the "message" field, you MUST use standard roleplay formatting: asterisks for *actions/thoughts* and quotes for dialogue.
 3. You MUST escape all internal double quotes inside the "message" string (e.g., \\"Hello\\") to ensure the JSON remains valid.
+4. To create paragraphs, use escaped newlines (\\n\\n) inside the "message" string. DO NOT use actual line breaks in the string, or it will break the JSON.
 
 Format exactly like this:
 [
   {
     "intent": "Действие один (1-3 слова)",
     "risk": "Низкий",
-    "message": "*Осторожно осматриваюсь.* \\"Ты уверена, что нам стоит это делать?\\" *Задумчиво хмурюсь, ожидая ответа.*"
+    "message": "*Медленно выдыхаю, чувствуя, как напряжение сковывает плечи. Мой взгляд скользит по собеседнику, пытаясь уловить малейшую тень сомнений.*\\n\\n\\"Ты уверен, что нам стоит это делать?\\" — *спрашиваю я, и мой голос звучит тише обычного. Я делаю осторожный шаг вперед, сокращая дистанцию, но оставляя пути к отступлению.*\\n\\n*Внутри всё сжимается от предчувствия, но отступать уже поздно. Я скрещиваю руки на груди, готовясь к любому повороту событий, и терпеливо жду ответа.*"
   },
   {
     "intent": "Действие два (1-3 слова)",
     "risk": "Средний",
-    "message": "Подробный текст с *действиями* и \\"диалогами\\"..."
+    "message": "Длинный многоабзацевый текст с *действиями*, \\"диалогами\\" и \\n\\n переносами строк..."
   },
   {
     "intent": "Действие три (1-3 слова)",
     "risk": "Высокий",
-    "message": "Смелый текст с *действиями* и \\"диалогами\\"..."
+    "message": "Смелый многоабзацевый текст с *действиями*, \\"диалогами\\" и \\n\\n переносами строк..."
   }
 ]
 
