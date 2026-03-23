@@ -15,7 +15,7 @@
     z-index: 99999; pointer-events: none;
     transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-#bb-social-toast-container.hud-open { right: 360px; }
+#bb-social-toast-container.hud-open { right: 410px; }
 
 /* === КАРТОЧКА УВЕДОМЛЕНИЯ === */
 .bb-social-toast {

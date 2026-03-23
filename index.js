@@ -607,7 +607,7 @@ function renderSocialHud() {
         if (visibleCharacters === 0) {
             charsBox.innerHTML = `
                 <div class="bb-panel-hero bb-panel-hero-route">
-                    <div class="bb-panel-kicker">Route board</div>
+                    <div class="bb-panel-kicker">Маршрут сцены</div>
                     <div class="bb-panel-headline">Пока нет активных связей</div>
                     <div class="bb-panel-subtitle">Начните сцену с персонажами — и HUD соберёт маршрут отношений, напряжения и ключевых сдвигов.</div>
                 </div>
@@ -623,7 +623,7 @@ function renderSocialHud() {
                 const displayStatus = currentCalculatedStats[charName].status || getUnforgettableRoleStatus(memories.deep) || tier.label;
                 const unforgettableImpact = getUnforgettableImpact(memories.deep);
                 const lastHistory = [...(currentCalculatedStats[charName].history || [])].reverse().find(h => h.delta !== 0);
-                const spotlightLabel = index === 0 ? 'Ведущая линия' : index === 1 ? 'Напряжённая линия' : 'Route link';
+                const spotlightLabel = index === 0 ? 'Ведущая линия' : index === 1 ? 'Напряжённая линия' : 'Линия сцены';
                 const softCount = memories.soft.length;
                 const deepCount = memories.deep.length;
 
@@ -734,7 +734,7 @@ function renderSocialHud() {
 
                         <div class="bb-char-log">
                             <div class="bb-char-log-section">
-                                <div class="bb-section-eyebrow">Scene shifts</div>
+                                <div class="bb-section-eyebrow">Сдвиги сцены</div>
                                 ${historyHtml}
                             </div>
                             <div class="bb-memory-section">
@@ -752,7 +752,7 @@ function renderSocialHud() {
 
             charsBox.innerHTML = `
                 <div class="bb-panel-hero bb-panel-hero-route">
-                    <div class="bb-panel-kicker">Route board</div>
+                    <div class="bb-panel-kicker">Маршрут сцены</div>
                     <div class="bb-panel-headline">Активные линии сцены</div>
                     <div class="bb-panel-subtitle">Отслеживайте, кто тянется к вам, кто держит дистанцию, и какие сцены становятся поворотными.</div>
                     <div class="bb-panel-stat-grid">
@@ -819,7 +819,7 @@ function renderSocialHud() {
         const logs = chat_metadata['bb_vn_global_log'] || [];
         const promptPreviewHtml = `
             <div class="bb-panel-hero bb-panel-hero-system">
-                <div class="bb-panel-kicker">System monitor</div>
+                <div class="bb-panel-kicker">Системный монитор</div>
                 <div class="bb-panel-headline">Поток сценовых сигналов</div>
                 <div class="bb-panel-subtitle">Здесь видно, какие изменения отношений были замечены движком и какой prompt сейчас внедряется в сцену.</div>
                 <div class="bb-panel-stat-grid">
@@ -837,7 +837,7 @@ function renderSocialHud() {
                     </div>
                     <div class="bb-panel-stat">
                         <span class="bb-panel-stat-label">Prompt</span>
-                        <strong>Live inject</strong>
+                        <strong>Активный prompt</strong>
                     </div>
                 </div>
             </div>
@@ -886,7 +886,7 @@ function renderSocialHud() {
         if (currentStoryMoments.length === 0) {
             momentsBox.innerHTML = `
                 <div class="bb-panel-hero bb-panel-hero-diary">
-                    <div class="bb-panel-kicker">Story diary</div>
+                    <div class="bb-panel-kicker">Дневник сцены</div>
                     <div class="bb-panel-headline">Дневник ещё пуст</div>
                     <div class="bb-panel-subtitle">Когда сцена наберёт эмоциональный вес, здесь появятся заметки о сдвигах, вспышках и незабываемых событиях.</div>
                 </div>
@@ -895,7 +895,7 @@ function renderSocialHud() {
         } else {
             let momentsHtml = `
                 <div class="bb-panel-hero bb-panel-hero-diary">
-                    <div class="bb-panel-kicker">Story diary</div>
+                    <div class="bb-panel-kicker">Дневник сцены</div>
                     <div class="bb-panel-headline">Хроника сцены</div>
                     <div class="bb-panel-subtitle">Смотрите на отношения как на последовательность заметок — будто это тетрадь наблюдений за вашим route.</div>
                     <div class="bb-panel-stat-grid">
@@ -937,11 +937,19 @@ function renderSocialHud() {
 
 function updateHudVisibility() {
     const chatId = SillyTavern.getContext().chatId;
+    const hud = $('#bb-social-hud');
+    const toastCont = $('#bb-social-toast-container');
     if (chatId) {
         $('#bb-social-hud-toggle').show();
+        hud.addClass('open');
+        toastCont.addClass('hud-open');
+        $('#bb-hud-arrow').removeClass('fa-chevron-left').addClass('fa-chevron-right');
+        renderSocialHud();
     } else {
         $('#bb-social-hud-toggle').hide();
-        $('#bb-social-hud').removeClass('open');
+        hud.removeClass('open');
+        toastCont.removeClass('hud-open');
+        $('#bb-hud-arrow').removeClass('fa-chevron-right').addClass('fa-chevron-left');
     }
 }
 
@@ -949,7 +957,7 @@ function ensureHudContainer() {
     if (document.getElementById('bb-social-hud')) return;
     const hudHtml = `
         <div id="bb-social-hud">
-            <div id="bb-social-hud-toggle" title="Social Link">
+            <div id="bb-social-hud-toggle" title="HUD сцены">
                 <i class="fa-solid fa-users-viewfinder"></i>
                 <span class="bb-toggle-label">HUD</span>
                 <i class="fa-solid fa-chevron-left" id="bb-hud-arrow"></i>
@@ -957,10 +965,10 @@ function ensureHudContainer() {
             <div class="bb-hud-header">
                 <div class="bb-hud-header-top">
                     <span class="bb-hud-badge">BB Visual Novel Engine</span>
-                    <span class="bb-hud-live-dot"><i class="fa-solid fa-circle"></i> live</span>
+                    <span class="bb-hud-live-dot"><i class="fa-solid fa-circle"></i> активно</span>
                 </div>
-                <div class="bb-hud-title">Route Director</div>
-                <div class="bb-hud-subtitle">relationships · system signal · diary memory</div>
+                <div class="bb-hud-title">Директор сцены</div>
+                <div class="bb-hud-subtitle">связи · системный журнал · дневник сцены</div>
             </div>
             
             <div class="bb-hud-tabs">
