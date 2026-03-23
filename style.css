@@ -168,7 +168,7 @@
     border-radius: 8px 8px 0 0; margin-bottom: 5px;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .bb-vn-main-btn {
@@ -182,7 +182,7 @@
 
 @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); } 50% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.6); } }
 
-#bb-vn-options-container { display: none; gap: 10px; width: 100%; flex-wrap: wrap; }
+#bb-vn-options-container { display: none; gap: 10px; width: 100%; flex-wrap: wrap; overflow: visible; }
 #bb-vn-options-container.active { display: flex; }
 
 .bb-vn-option {
@@ -207,7 +207,7 @@
 }
 .bb-vn-target.muted { color: #94a3b8; }
 .bb-vn-forecast-hover {
-    position: absolute; left: 50%; top: calc(100% + 10px); transform: translateX(-50%) translateY(4px);
+    position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%) translateY(-4px);
     width: min(240px, calc(100vw - 40px));
     background: rgba(10, 10, 14, 0.97); border: 1px solid rgba(192, 132, 252, 0.35); border-radius: 10px;
     box-shadow: 0 12px 24px rgba(0,0,0,0.35); padding: 10px 12px;

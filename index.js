@@ -76,6 +76,7 @@ Format EXACTLY like this (include "base_affinity" ONLY for new characters!):
 function getCombinedSocial() {
     let combinedStr = SOCIAL_PROMPT;
     const characters = Object.keys(currentCalculatedStats);
+    const unforgettableLines = [];
     if (characters.length > 0) {
         combinedStr += `\n\n[CURRENT RELATIONSHIP STATUS WITH {{user}}]:\n`;
         characters.forEach(char => {
@@ -89,9 +90,16 @@ function getCombinedSocial() {
                 ? ` | unforgettable: ${deepMemories.map(m => m.text).join('; ')}`
                 : '';
 
+            if (deepMemories.length > 0) {
+                unforgettableLines.push(`- ${char}: ${deepMemories.map(m => m.text).join('; ')}`);
+            }
+
             combinedStr += `- ${char}: ${currentCalculatedStats[char].affinity}/100 (${statusLabel})${softLine}${deepLine}\n`;
         });
         combinedStr += "CRITICAL: Strictly align the characters' behavior, trust level, and dialogue towards {{user}} with these current affinity levels.";
+    }
+    if (unforgettableLines.length > 0) {
+        combinedStr += `\n\n[UNFORGETTABLE THINGS]:\n${unforgettableLines.join('\n')}\nCRITICAL: These are persistent emotional anchors. Characters must continue to remember them across scenes, even when the recent interaction is calm.`;
     }
     combinedStr += buildChoiceContextPrompt();
     return combinedStr;
@@ -435,7 +443,7 @@ function recalculateAllStats(isNewMessage = false) {
                     maybeAddStoryMoment({
                         type: delta > 0 ? 'deep-positive' : 'deep-negative',
                         char: charName,
-                        title: delta > 0 ? 'Сильная тёплая память' : 'Незабываемая рана',
+                        title: 'Незабываемая вещь',
                         text: `${charName}: ${update.reason}`,
                     });
                 }
@@ -562,7 +570,7 @@ function renderSocialHud() {
                                 <div class="bb-memory-list">${softMemoriesHtml}</div>
                             </div>
                             <div class="bb-memory-section">
-                                <div class="bb-memory-title">Глубокая память</div>
+                                <div class="bb-memory-title">Незабываемые вещи</div>
                                 <div class="bb-memory-list">${deepMemoriesHtml}</div>
                             </div>
                         </div>
