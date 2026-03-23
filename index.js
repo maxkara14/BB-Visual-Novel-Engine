@@ -127,9 +127,9 @@ function showAffinityToast(name, delta, reason) {
     if (delta === 0) return; 
     ensureToastContainer();
     const isPositive = delta > 0;
-    const sign = isPositive ? '+' : '';
     const typeClass = isPositive ? 'positive' : 'negative';
     const initial = name.charAt(0).toUpperCase();
+    const shift = getShiftDescriptor(delta);
 
     const toastHtml = `
         <div class="bb-social-toast ${typeClass}">
@@ -137,7 +137,7 @@ function showAffinityToast(name, delta, reason) {
             <div class="bb-st-content">
                 <div class="bb-st-header">
                     <span class="bb-st-name">${name}</span>
-                    <span class="bb-st-delta">${sign}${delta}</span>
+                    <span class="bb-st-delta">${shift.short}</span>
                 </div>
                 <span class="bb-st-reason">"${reason}"</span>
             </div>
@@ -211,6 +211,32 @@ function getMemoryTone(delta) {
     if (delta > 0) return 'positive';
     if (delta < 0) return 'negative';
     return 'neutral';
+}
+
+function getShiftDescriptor(delta) {
+    const absDelta = Math.abs(delta);
+    if (delta > 0) {
+        if (absDelta >= 9) return { short: 'Судьбоносно', full: 'Судьбоносное сближение', color: '#c084fc', logType: 'plus' };
+        if (absDelta >= 4) return { short: 'Сильнее', full: 'Сильное сближение', color: '#4ade80', logType: 'plus' };
+        if (absDelta >= 2) return { short: 'Теплее', full: 'Тёплый отклик', color: '#86efac', logType: 'plus' };
+        return { short: 'Легче', full: 'Лёгкий положительный сдвиг', color: '#bbf7d0', logType: 'plus' };
+    }
+    if (delta < 0) {
+        if (absDelta >= 9) return { short: 'Перелом', full: 'Глубокая трещина', color: '#fca5a5', logType: 'minus' };
+        if (absDelta >= 4) return { short: 'Холоднее', full: 'Сильное охлаждение', color: '#f87171', logType: 'minus' };
+        if (absDelta >= 2) return { short: 'Напряжённо', full: 'Нарастающее напряжение', color: '#fda4af', logType: 'minus' };
+        return { short: 'Колко', full: 'Лёгкий негативный сдвиг', color: '#fecdd3', logType: 'minus' };
+    }
+    return { short: 'Ровно', full: 'Без ощутимых изменений', color: '#94a3b8', logType: 'system' };
+}
+
+function getAffinityNarrative(affinity) {
+    if (affinity <= -50) return 'Глубокий разлом';
+    if (affinity < -10) return 'Холод и настороженность';
+    if (affinity <= 10) return 'Хрупкий нейтралитет';
+    if (affinity <= 50) return 'Осторожное сближение';
+    if (affinity <= 80) return 'Стабильное доверие';
+    return 'Очень близкая связь';
 }
 
 function appendCharacterMemory(charStats, delta, reason) {
@@ -342,16 +368,6 @@ function recalculateAllStats(isNewMessage = false) {
 
         if (msg?.is_user && msg.extra?.bb_vn_choice_context) {
             latestChoiceContext = msg.extra.bb_vn_choice_context;
-            const choiceTargets = Array.isArray(latestChoiceContext.targets) && latestChoiceContext.targets.length > 0
-                ? latestChoiceContext.targets.join(', ')
-                : 'сцена в целом';
-
-            maybeAddStoryMoment({
-                type: 'choice-vector',
-                char: choiceTargets,
-                title: 'Выбран эмоциональный ход',
-                text: `${latestChoiceContext.intent || 'Без названия'} · ${latestChoiceContext.tone || 'нейтрально'} · ${latestChoiceContext.forecast || 'без прогноза'}.`,
-            });
         }
 
         if (scanAndCleanMessage(msg, idx)) needsSave = true;
@@ -404,7 +420,7 @@ function recalculateAllStats(isNewMessage = false) {
                         addGlobalLog('init', `
                             <div class="bb-glog-main">
                                 <span class="bb-glog-char">${formattedName}</span>
-                                <span class="bb-glog-delta">Старт: ${base}</span>
+                                <span class="bb-glog-delta">Новый контакт</span>
                             </div>
                             <div class="bb-glog-reason">Первая встреча в трекере</div>
                         `);
@@ -417,8 +433,9 @@ function recalculateAllStats(isNewMessage = false) {
                         text: `${charName}: первая фиксация в трекере отношений.`,
                     });
                 }
-                
+
                 const previousAffinity = currentCalculatedStats[charName].affinity;
+                const previousStatus = currentCalculatedStats[charName].status || "";
                 currentCalculatedStats[charName].affinity += delta;
                 if (currentCalculatedStats[charName].affinity > 100) currentCalculatedStats[charName].affinity = 100;
                 if (currentCalculatedStats[charName].affinity < -100) currentCalculatedStats[charName].affinity = -100;
@@ -439,6 +456,25 @@ function recalculateAllStats(isNewMessage = false) {
                     });
                 }
 
+                if (update.status && previousStatus && previousStatus !== update.status) {
+                    maybeAddStoryMoment({
+                        type: 'status-shift',
+                        char: charName,
+                        title: 'Новый образ в его глазах',
+                        text: `${charName}: теперь вы для него — «${update.status}».`,
+                    });
+                }
+
+                if (Math.abs(delta) >= 2 && update.reason) {
+                    const shift = getShiftDescriptor(delta);
+                    maybeAddStoryMoment({
+                        type: delta > 0 ? 'soft-positive' : 'soft-negative',
+                        char: charName,
+                        title: shift.full,
+                        text: `${charName}: ${update.reason}`,
+                    });
+                }
+
                 if (Math.abs(delta) >= 9 && update.reason) {
                     maybeAddStoryMoment({
                         type: delta > 0 ? 'deep-positive' : 'deep-negative',
@@ -451,13 +487,13 @@ function recalculateAllStats(isNewMessage = false) {
                 // === ОБНОВЛЕННЫЙ ЛОГ ДЛЯ ИЗМЕНЕНИЯ ОТНОШЕНИЙ ===
                 if (isNewMessage && idx === chat.length - 1 && delta !== 0) {
                     showAffinityToast(charName, delta, update.reason || "");
-                    const sign = delta > 0 ? '+' : '';
+                    const shift = getShiftDescriptor(delta);
                     // Меняем пробелы на перенос строки
                     const formattedName = escapeHtml(charName).replace(/ /g, '<br>');
-                    addGlobalLog(delta > 0 ? 'plus' : 'minus', `
+                    addGlobalLog(shift.logType, `
                         <div class="bb-glog-main">
                             <span class="bb-glog-char">${formattedName}</span>
-                            <span class="bb-glog-delta">${sign}${delta}</span>
+                            <span class="bb-glog-delta">${shift.short}</span>
                         </div>
                         <div class="bb-glog-reason">"${escapeHtml(update.reason)}"</div>
                     `);
@@ -509,10 +545,9 @@ function renderSocialHud() {
                 let historyHtml = '';
                 const historyArr = currentCalculatedStats[charName].history || [];
                 [...historyArr].reverse().forEach(h => {
-                    const sign = h.delta > 0 ? '+' : '';
-                    const color = h.delta > 0 ? '#4ade80' : '#ef4444';
+                    const shift = getShiftDescriptor(h.delta);
                     if (h.delta !== 0) {
-                        historyHtml += `<div class="bb-log-entry"><span class="bb-log-delta" style="color:${color}">${sign}${h.delta}</span> <span class="bb-log-reason">"${escapeHtml(h.reason)}"</span></div>`;
+                        historyHtml += `<div class="bb-log-entry"><span class="bb-log-delta" style="color:${shift.color}">${escapeHtml(shift.short)}</span> <span class="bb-log-reason">"${escapeHtml(h.reason)}"</span></div>`;
                     }
                 });
                 if(historyHtml === '') historyHtml = '<i style="color:#64748b;">Нет записей</i>';
@@ -540,16 +575,16 @@ function renderSocialHud() {
                         
                         <div class="bb-progress-wrapper">
                             <div class="bb-progress-labels">
-                                <span>-100</span>
-                                <span>0</span>
-                                <span>+100</span>
+                                <span>Дистанция</span>
+                                <span>Грань</span>
+                                <span>Близость</span>
                             </div>
                             <div class="bb-progress-bg">
                                 <div class="bb-progress-center-line"></div>
                                 <div class="bb-progress-fill" style="${barStyle}"></div>
                             </div>
                             <div class="bb-char-stats">
-                                Текущий показатель: <strong style="color:${tier.color}; font-size:13px;">${affinity}</strong>
+                                Общее ощущение: <strong style="color:${tier.color}; font-size:13px;">${getAffinityNarrative(affinity)}</strong>
                             </div>
                         </div>
                         
