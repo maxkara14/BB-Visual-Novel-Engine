@@ -771,9 +771,9 @@
         touch-action: none;
     }
     #bb-social-hud {
-        width: 100vw;
+        width: calc(100vw - 56px);
         height: 100dvh;
-        max-width: 100vw;
+        max-width: calc(100vw - 56px);
         border-left: none;
         box-shadow: none;
         padding-top: 0;

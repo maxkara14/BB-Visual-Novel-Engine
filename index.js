@@ -1090,7 +1090,9 @@ function updateHudVisibility() {
     const characterId = context.characterId;
     const groupId = context.groupId;
     const hasChatMessages = Array.isArray(context.chat) && context.chat.length > 0;
-    const hasActiveChat = Boolean(chatId || characterId || groupId) || hasChatMessages;
+    const hasConversationTarget = Boolean(characterId || groupId);
+    const chatViewportVisible = $('#chat').is(':visible');
+    const hasActiveChat = Boolean(chatId) || hasChatMessages || (hasConversationTarget && chatViewportVisible);
 
     if (hasActiveChat) {
         $('#bb-social-hud-toggle').show();
