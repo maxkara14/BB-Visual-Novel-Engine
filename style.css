@@ -830,11 +830,12 @@
 }
 .bb-glog-item {
     display: grid; grid-template-columns: 74px 1fr; gap: 12px;
-    padding: 12px; border-radius: 16px;
+    padding: 12px 12px 34px; border-radius: 16px;
     background: linear-gradient(180deg, rgba(6, 12, 17, 0.96), rgba(9, 16, 22, 0.9));
     border: 1px solid rgba(255,255,255,0.06);
     font-size: 13px; line-height: 1.45;
     box-shadow: 0 12px 22px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.03);
+    position: relative;
 }
 .bb-glog-item.plus { border-color: rgba(74, 222, 128, 0.18); }
 .bb-glog-item.minus { border-color: rgba(239, 68, 68, 0.18); }
@@ -860,6 +861,37 @@
 .plus .bb-glog-reason { color: #86efac; }
 .minus .bb-glog-reason { color: #fca5a5; }
 .init .bb-glog-reason { color: #d8b4fe; }
+.bb-glog-points {
+    position: absolute;
+    left: 12px;
+    bottom: 8px;
+    min-width: 46px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: rgba(148, 163, 184, 0.14);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    color: #cbd5e1;
+    text-align: center;
+}
+.plus .bb-glog-points {
+    color: #86efac;
+    border-color: rgba(74, 222, 128, 0.35);
+    background: rgba(20, 83, 45, 0.28);
+}
+.minus .bb-glog-points {
+    color: #fca5a5;
+    border-color: rgba(248, 113, 113, 0.38);
+    background: rgba(127, 29, 29, 0.28);
+}
+.init .bb-glog-points {
+    color: #e9d5ff;
+    border-color: rgba(192, 132, 252, 0.38);
+    background: rgba(76, 29, 149, 0.25);
+}
 
 /* =========================================
    ДНЕВНИК МОМЕНТОВ

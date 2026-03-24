@@ -447,6 +447,11 @@ function getShiftDescriptor(delta) {
     return { short: 'Без изменений', full: 'Без ощутимых изменений', color: '#94a3b8', logType: 'system' };
 }
 
+function formatAffinityPoints(value) {
+    const points = parseInt(value, 10) || 0;
+    return points > 0 ? `+${points}` : `${points}`;
+}
+
 function getAffinityNarrative(affinity) {
     if (affinity <= -50) return 'Глубокий разлом';
     if (affinity < -10) return 'Холод и настороженность';
@@ -717,6 +722,7 @@ function recalculateAllStats(isNewMessage = false) {
                                 <span class="bb-glog-delta">Новый контакт</span>
                             </div>
                             <div class="bb-glog-reason">Первая встреча в трекере</div>
+                            <span class="bb-glog-points">${formatAffinityPoints(base)}</span>
                         `);
                     }
 
@@ -789,6 +795,7 @@ function recalculateAllStats(isNewMessage = false) {
                             <span class="bb-glog-delta">${shift.short}</span>
                         </div>
                         <div class="bb-glog-reason">"${escapeHtml(update.reason)}"</div>
+                        <span class="bb-glog-points">${formatAffinityPoints(delta)}</span>
                     `);
                 }
             });
