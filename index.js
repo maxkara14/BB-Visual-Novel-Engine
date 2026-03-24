@@ -1088,8 +1088,7 @@ function renderSocialHud() {
 function updateHudVisibility() {
     const context = SillyTavern.getContext();
     const chatId = context.chatId;
-    const hasChatMessages = Array.isArray(context.chat) && context.chat.length > 0;
-    const hasActiveChat = Boolean(chatId) || hasChatMessages;
+    const hasActiveChat = Boolean(chatId);
 
     if (hasActiveChat) {
         $('#bb-social-hud-toggle').show();
