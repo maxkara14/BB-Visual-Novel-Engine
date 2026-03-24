@@ -780,7 +780,7 @@
         overflow: visible;
     }
     #bb-social-hud-toggle {
-        display: flex !important;
+        display: flex;
         left: -56px;
         top: clamp(64px, 19%, 30dvh);
         width: 56px;
