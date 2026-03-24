@@ -1133,7 +1133,7 @@ function ensureHudContainer() {
         <div id="bb-social-hud">
             <div id="bb-social-hud-toggle" title="VNE HUD">
                 <i class="fa-solid fa-users-viewfinder"></i>
-                <span class="bb-toggle-label">HUD</span>
+                <span class="bb-toggle-label">VNE</span>
                 <i class="fa-solid fa-chevron-left" id="bb-hud-arrow"></i>
             </div>
             <div class="bb-hud-header">
@@ -1185,6 +1185,25 @@ function ensureHudContainer() {
         closeSocialHud();
     });
 
+    const toggleElement = document.getElementById('bb-social-hud-toggle');
+    let toggleIdleTimer = null;
+    const scheduleToggleIdle = () => {
+        if (!toggleElement) return;
+        window.clearTimeout(toggleIdleTimer);
+        toggleElement.classList.remove('bb-toggle-idle');
+        if (window.innerWidth > 760) return;
+        toggleIdleTimer = window.setTimeout(() => {
+            toggleElement.classList.add('bb-toggle-idle');
+        }, 1500);
+    };
+    scheduleToggleIdle();
+
+    if (toggleElement) {
+        ['pointerdown', 'touchstart', 'mouseenter', 'focus'].forEach(eventName => {
+            toggleElement.addEventListener(eventName, scheduleToggleIdle);
+        });
+    }
+
     let lastHudTouchTap = 0;
     $('#bb-social-hud').on('pointerup', function(event) {
         if (!event || event.pointerType !== 'touch') return;
@@ -1209,6 +1228,7 @@ function ensureHudContainer() {
             $('#bb-social-hud-backdrop').addClass('open');
             $('body').addClass('bb-social-hud-active');
         }
+        scheduleToggleIdle();
         syncToastContainerWithHud();
     });
 
