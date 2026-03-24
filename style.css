@@ -777,7 +777,7 @@
         border-left: none;
         box-shadow: none;
         padding-top: 0;
-        overflow: hidden;
+        overflow: visible;
     }
     #bb-social-hud-toggle {
         display: flex !important;
@@ -789,6 +789,7 @@
         padding: 12px 7px;
         gap: 7px;
         touch-action: manipulation;
+        z-index: 3;
     }
     #bb-social-hud-toggle .bb-toggle-label {
         font-size: 9px;
