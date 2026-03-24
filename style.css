@@ -189,8 +189,58 @@
 }
 #bb-social-hud.open { transform: translateX(0); }
 
+#bb-social-hud-backdrop {
+    position: fixed;
+    inset: 0;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    opacity: 0;
+    pointer-events: none;
+    background: rgba(2, 6, 23, 0.4);
+    backdrop-filter: blur(4px);
+    z-index: 1490;
+    transition: opacity 0.24s ease;
+}
+#bb-social-hud-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+#bb-social-hud-mobile-launcher {
+    display: none;
+    position: fixed;
+    right: 12px;
+    bottom: 14px;
+    bottom: calc(14px + constant(safe-area-inset-bottom));
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    z-index: 20050;
+    align-items: center;
+    gap: 8px;
+    min-height: 46px;
+    padding: 10px 14px;
+    border-radius: 16px;
+    border: 1px solid rgba(147, 197, 253, 0.22);
+    background: linear-gradient(180deg, rgba(10, 14, 23, 0.98), rgba(28, 19, 37, 0.95));
+    color: #dbeafe;
+    box-shadow: 0 12px 24px rgba(0,0,0,0.34);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+#bb-social-hud-mobile-launcher i { font-size: 14px; }
+@media (min-width: 761px) {
+    #bb-social-hud-backdrop,
+    #bb-social-hud-backdrop.open,
+    #bb-social-hud-mobile-launcher {
+        opacity: 0;
+        pointer-events: none;
+    }
+}
+
 #bb-social-hud-toggle {
-    position: absolute; left: -62px; top: 24%;
+    position: absolute; left: -62px; top: 20%;
     width: 62px;
     background: linear-gradient(180deg, rgba(10, 14, 23, 0.98), rgba(28, 19, 37, 0.95));
     border: 1px solid rgba(147, 197, 253, 0.16); border-right: none;
@@ -220,6 +270,11 @@
 .bb-hud-header-top {
     display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px;
 }
+.bb-hud-status-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
 .bb-hud-badge,
 .bb-hud-live-dot {
     display: inline-flex; align-items: center; gap: 6px;
@@ -229,6 +284,21 @@
 .bb-hud-badge { color: #dbeafe; background: rgba(59, 130, 246, 0.1); }
 .bb-hud-live-dot { color: #f0abfc; background: rgba(168, 85, 247, 0.1); }
 .bb-hud-live-dot i { font-size: 8px; animation: bbLivePulse 1.4s ease-in-out infinite; }
+.bb-hud-mobile-close {
+    display: none;
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04);
+    color: #e2e8f0;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.bb-hud-mobile-close i { font-size: 15px; }
 @keyframes bbLivePulse {
     0%, 100% { opacity: 0.55; filter: drop-shadow(0 0 0 rgba(240, 171, 252, 0)); }
     50% { opacity: 1; filter: drop-shadow(0 0 6px rgba(240, 171, 252, 0.55)); }
@@ -533,6 +603,9 @@
 
 /* ФИКС МОБИЛЬНЫХ КНОПОК И ОТСТУПОВ */
 @media (max-width: 600px) {
+    body.bb-social-hud-active {
+        overflow: hidden;
+    }
     #bb-social-toast-container,
     #bb-social-toast-container.hud-open {
         top: 70px;
@@ -575,7 +648,11 @@
     }
     .bb-vn-forecast-hover {
         position: static; transform: none; opacity: 1; pointer-events: auto;
-        width: 100%; margin-top: 6px;
+        width: 100%; max-width: 100%; margin-top: 6px;
+        box-sizing: border-box;
+    }
+    .bb-vn-option:hover .bb-vn-forecast-hover {
+        transform: none;
     }
     .bb-prompt-summary {
         flex-direction: column; align-items: flex-start;
@@ -691,6 +768,76 @@
 
 @media (max-width: 900px) {
     #bb-social-hud { width: min(100vw, 390px); padding-top: 0; }
+}
+@media (max-width: 760px) {
+    body.bb-social-hud-active {
+        overflow: hidden;
+        touch-action: none;
+    }
+    #bb-social-hud {
+        width: calc(100vw - 56px);
+        height: 100dvh;
+        max-width: calc(100vw - 56px);
+        border-left: none;
+        box-shadow: none;
+        padding-top: 0;
+        overflow: visible;
+    }
+    #bb-social-hud-toggle {
+        display: flex;
+        left: -56px;
+        top: clamp(64px, 19%, 30dvh);
+        width: 56px;
+        min-height: 126px;
+        border-radius: 16px 0 0 16px;
+        padding: 12px 7px;
+        gap: 7px;
+        touch-action: manipulation;
+        z-index: 3;
+    }
+    #bb-social-hud-toggle .bb-toggle-label {
+        font-size: 9px;
+        letter-spacing: 1.6px;
+    }
+    #bb-social-hud-mobile-launcher {
+        display: none !important;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(8px);
+    }
+    .bb-hud-header {
+        padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 14px;
+    }
+    .bb-hud-header-top {
+        align-items: flex-start;
+    }
+    .bb-hud-status-row {
+        flex-shrink: 0;
+    }
+    .bb-hud-mobile-close {
+        display: inline-flex;
+    }
+    .bb-hud-tabs {
+        position: sticky;
+        top: 0;
+        z-index: 4;
+        padding: 10px 12px;
+        backdrop-filter: blur(16px);
+    }
+    .bb-hud-tab {
+        min-height: 52px;
+        border-radius: 16px;
+        font-size: 10px;
+    }
+    .bb-hud-content {
+        padding: 14px 12px calc(24px + env(safe-area-inset-bottom, 0px));
+    }
+    #bb-social-toast-container.hud-open {
+        top: calc(72px + env(safe-area-inset-top, 0px));
+        right: 10px;
+        left: 10px;
+        width: auto;
+    }
 }
 .bb-moment-card.deep-positive { border-left: 3px solid #4ade80; }
 .bb-moment-card.deep-negative { border-left: 3px solid #ef4444; }
