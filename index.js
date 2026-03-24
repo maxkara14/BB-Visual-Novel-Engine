@@ -1085,8 +1085,12 @@ function renderSocialHud() {
 }
 
 function updateHudVisibility() {
-    const chatId = SillyTavern.getContext().chatId;
-    if (chatId) {
+    const context = SillyTavern.getContext();
+    const chatId = context.chatId;
+    const hasChatMessages = Array.isArray(context.chat) && context.chat.length > 0;
+    const hasActiveChat = Boolean(chatId) || hasChatMessages;
+
+    if (hasActiveChat) {
         $('#bb-social-hud-toggle').show();
         $('#bb-social-hud-mobile-launcher').show();
     } else {
