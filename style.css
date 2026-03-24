@@ -472,6 +472,121 @@
 .bb-editor-actions { display: flex; gap: 8px; }
 .bb-btn-hide-char { background: rgba(239,68,68,0.15) !important; color: #f87171 !important; border-color: rgba(239,68,68,0.35) !important; }
 
+#bb-hide-char-confirm {
+    position: fixed;
+    inset: 0;
+    height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    padding-top: max(18px, env(safe-area-inset-top, 0px));
+    padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
+    z-index: 32000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    box-sizing: border-box;
+}
+#bb-hide-char-confirm.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+.bb-hide-confirm-backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: rgba(2, 6, 23, 0.68);
+    backdrop-filter: blur(6px);
+}
+.bb-hide-confirm-card {
+    position: relative;
+    width: min(460px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px;
+    border-radius: 20px;
+    border: 1px solid rgba(239, 68, 68, 0.28);
+    background:
+        radial-gradient(circle at top right, rgba(239, 68, 68, 0.2), transparent 54%),
+        linear-gradient(180deg, rgba(10, 14, 23, 0.97), rgba(20, 14, 29, 0.96));
+    box-shadow:
+        0 24px 48px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255,255,255,0.08);
+    margin: auto;
+    max-height: calc(100dvh - max(36px, env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px) + 24px));
+    overflow-y: auto;
+}
+.bb-hide-confirm-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fca5a5;
+    font-size: 17px;
+    border: 1px solid rgba(248, 113, 113, 0.4);
+    background: rgba(127, 29, 29, 0.35);
+}
+.bb-hide-confirm-content { display: flex; flex-direction: column; gap: 8px; }
+.bb-hide-confirm-title {
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.25;
+    color: #fff;
+}
+.bb-hide-confirm-text {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #cbd5e1;
+}
+.bb-hide-confirm-text strong { color: #fff; }
+.bb-hide-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.bb-hide-confirm-cancel {
+    background: rgba(148, 163, 184, 0.16) !important;
+    color: #e2e8f0 !important;
+    border-color: rgba(148, 163, 184, 0.36) !important;
+}
+.bb-hide-confirm-approve {
+    background: rgba(239, 68, 68, 0.18) !important;
+    color: #fca5a5 !important;
+    border-color: rgba(248, 113, 113, 0.45) !important;
+}
+
+@media (max-width: 760px) {
+    #bb-hide-char-confirm {
+        padding: 12px;
+        padding-top: max(12px, env(safe-area-inset-top, 0px));
+        padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    }
+    .bb-hide-confirm-card {
+        width: min(460px, 100%);
+        max-width: 460px;
+        border-radius: 18px;
+        padding: 16px;
+        gap: 10px;
+    }
+    .bb-hide-confirm-title { font-size: 16px; }
+    .bb-hide-confirm-text { font-size: 12px; }
+    .bb-hide-confirm-actions {
+        justify-content: flex-end;
+        flex-direction: row;
+        align-items: center;
+    }
+    .bb-hide-confirm-actions .menu_button {
+        width: auto;
+        flex: 1;
+        min-height: 40px;
+    }
+}
+
 .bb-char-log {
     display: none; padding: 0 16px 16px;
     border-top: 1px solid rgba(255,255,255,0.06);
