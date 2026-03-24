@@ -1085,23 +1085,51 @@ function renderSocialHud() {
 }
 
 function updateHudVisibility() {
-    const chatId = SillyTavern.getContext().chatId;
-    const hud = $('#bb-social-hud');
-    const toastCont = $('#bb-social-toast-container');
-    if (chatId) {
+    const context = SillyTavern.getContext();
+    const chatId = context.chatId;
+    const hasActiveChat = Boolean(chatId);
+
+    if (hasActiveChat) {
         $('#bb-social-hud-toggle').show();
+        $('#bb-social-hud-mobile-launcher').show();
     } else {
         $('#bb-social-hud-toggle').hide();
-        hud.removeClass('open');
-        toastCont.removeClass('hud-open');
-        $('#bb-hud-arrow').removeClass('fa-chevron-right').addClass('fa-chevron-left');
+        $('#bb-social-hud-mobile-launcher').hide();
+        closeSocialHud();
     }
+    syncToastContainerWithHud();
+}
+
+function openSocialHud() {
+    const hud = $('#bb-social-hud');
+    if (!hud.length) return;
+
+    hud.addClass('open');
+    $('#bb-social-hud-backdrop').addClass('open');
+    $('body').addClass('bb-social-hud-active');
+    $('#bb-social-toast-container').addClass('hud-open');
+    $('#bb-hud-arrow').removeClass('fa-chevron-left').addClass('fa-chevron-right');
+    renderSocialHud();
+    syncToastContainerWithHud();
+}
+
+function closeSocialHud() {
+    $('#bb-social-hud').removeClass('open');
+    $('#bb-social-hud-backdrop').removeClass('open');
+    $('body').removeClass('bb-social-hud-active');
+    $('#bb-social-toast-container').removeClass('hud-open');
+    $('#bb-hud-arrow').removeClass('fa-chevron-right').addClass('fa-chevron-left');
     syncToastContainerWithHud();
 }
 
 function ensureHudContainer() {
     if (document.getElementById('bb-social-hud')) return;
     const hudHtml = `
+        <button type="button" id="bb-social-hud-backdrop" aria-label="Закрыть HUD"></button>
+        <button type="button" id="bb-social-hud-mobile-launcher" aria-label="Открыть HUD">
+            <i class="fa-solid fa-users-viewfinder"></i>
+            <span>VNE</span>
+        </button>
         <div id="bb-social-hud">
             <div id="bb-social-hud-toggle" title="VNE HUD">
                 <i class="fa-solid fa-users-viewfinder"></i>
@@ -1111,7 +1139,12 @@ function ensureHudContainer() {
             <div class="bb-hud-header">
                 <div class="bb-hud-header-top">
                     <span class="bb-hud-badge">Visual Novel Engine</span>
-                    <span class="bb-hud-live-dot"><i class="fa-solid fa-circle"></i> активно</span>
+                    <div class="bb-hud-status-row">
+                        <span class="bb-hud-live-dot"><i class="fa-solid fa-circle"></i> активно</span>
+                        <button type="button" class="bb-hud-mobile-close" aria-label="Закрыть HUD">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="bb-hud-title">VNE</div>
                 <div class="bb-hud-subtitle">связи · журнал · дневник событий</div>
@@ -1137,22 +1170,55 @@ function ensureHudContainer() {
     });
 
     $('#bb-social-hud-toggle').on('click', function() {
-        const hud = $('#bb-social-hud');
-        const toastCont = $('#bb-social-toast-container');
-        hud.toggleClass('open');
-        
-        if (hud.hasClass('open')) {
-            toastCont.addClass('hud-open');
-            $('#bb-hud-arrow').removeClass('fa-chevron-left').addClass('fa-chevron-right');
-            renderSocialHud();
+        if ($('#bb-social-hud').hasClass('open')) {
+            closeSocialHud();
         } else {
-            toastCont.removeClass('hud-open');
-            $('#bb-hud-arrow').removeClass('fa-chevron-right').addClass('fa-chevron-left');
+            openSocialHud();
+        }
+    });
+
+    $('#bb-social-hud-mobile-launcher').on('click', function() {
+        openSocialHud();
+    });
+
+    $('#bb-social-hud-backdrop, .bb-hud-mobile-close').on('click', function() {
+        closeSocialHud();
+    });
+
+    let lastHudTouchTap = 0;
+    $('#bb-social-hud').on('pointerup', function(event) {
+        if (!event || event.pointerType !== 'touch') return;
+        const now = Date.now();
+        if (now - lastHudTouchTap <= 320) {
+            lastHudTouchTap = 0;
+            closeSocialHud();
+            return;
+        }
+        lastHudTouchTap = now;
+    });
+
+    $('#bb-social-hud').on('dblclick', function() {
+        closeSocialHud();
+    });
+
+    window.addEventListener('resize', function() {
+        if (window.innerWidth > 760) {
+            $('#bb-social-hud-backdrop').removeClass('open');
+            $('body').removeClass('bb-social-hud-active');
+        } else if ($('#bb-social-hud').hasClass('open')) {
+            $('#bb-social-hud-backdrop').addClass('open');
+            $('body').addClass('bb-social-hud-active');
         }
         syncToastContainerWithHud();
     });
 
-    window.addEventListener('resize', syncToastContainerWithHud);
+    window.addEventListener('hashchange', function() {
+        updateHudVisibility();
+    });
+
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) updateHudVisibility();
+    });
 }
 
 // ==========================================
