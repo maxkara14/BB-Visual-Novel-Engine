@@ -1088,14 +1088,8 @@ function renderSocialHud() {
 function updateHudVisibility() {
     const context = SillyTavern.getContext();
     const chatId = context.chatId;
-    const characterId = context.characterId;
-    const groupId = context.groupId;
     const hasChatMessages = Array.isArray(context.chat) && context.chat.length > 0;
-    const hasConversationTarget = Boolean(characterId || groupId);
-    const chatViewportVisible = $('#chat').is(':visible');
-    const chatInputVisible = $('#send_form:visible, #send_textarea:visible, #chat-input:visible, #chat_input:visible').length > 0;
-    const inChatUi = chatViewportVisible && chatInputVisible;
-    const hasActiveChat = inChatUi && (Boolean(chatId) || hasChatMessages || hasConversationTarget);
+    const hasActiveChat = Boolean(chatId) || hasChatMessages;
 
     if (hasActiveChat) {
         $('#bb-social-hud-toggle').show();
