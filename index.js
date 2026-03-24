@@ -22,6 +22,7 @@ extension_settings[MODULE_NAME] = {
 
 let currentCalculatedStats = {};
 let currentStoryMoments = [];
+let hudVisibilityIntervalId = null;
 
 /**
  * @typedef {Object} VNOption
@@ -1092,7 +1093,9 @@ function updateHudVisibility() {
     const hasChatMessages = Array.isArray(context.chat) && context.chat.length > 0;
     const hasConversationTarget = Boolean(characterId || groupId);
     const chatViewportVisible = $('#chat').is(':visible');
-    const hasActiveChat = Boolean(chatId) || hasChatMessages || (hasConversationTarget && chatViewportVisible);
+    const chatInputVisible = $('#send_form:visible, #send_textarea:visible, #chat-input:visible, #chat_input:visible').length > 0;
+    const inChatUi = chatViewportVisible && chatInputVisible;
+    const hasActiveChat = inChatUi && (Boolean(chatId) || hasChatMessages || hasConversationTarget);
 
     if (hasActiveChat) {
         $('#bb-social-hud-toggle').show();
@@ -1187,6 +1190,22 @@ function ensureHudContainer() {
     });
 
     $('#bb-social-hud-backdrop, .bb-hud-mobile-close').on('click', function() {
+        closeSocialHud();
+    });
+
+    let lastHudTouchTap = 0;
+    $('#bb-social-hud').on('pointerup', function(event) {
+        if (!event || event.pointerType !== 'touch') return;
+        const now = Date.now();
+        if (now - lastHudTouchTap <= 320) {
+            lastHudTouchTap = 0;
+            closeSocialHud();
+            return;
+        }
+        lastHudTouchTap = now;
+    });
+
+    $('#bb-social-hud').on('dblclick', function() {
         closeSocialHud();
     });
 
@@ -1809,6 +1828,12 @@ jQuery(async () => {
             recalculateAllStats(); 
             updateHudVisibility();
         });
+
+        if (!hudVisibilityIntervalId) {
+            hudVisibilityIntervalId = window.setInterval(() => {
+                updateHudVisibility();
+            }, 1200);
+        }
 
         // ПРИ СВАЙПЕ ИЛИ НОВОМ СООБЩЕНИИ ПЫТАЕМСЯ ВОССТАНОВИТЬ КЭШ КНОПОК
         eventSource.on(event_types.MESSAGE_RECEIVED, () => { window['restoreVNOptions'](false); recalculateAllStats(true); }); 
