@@ -1088,8 +1088,10 @@ function updateHudVisibility() {
     const chatId = SillyTavern.getContext().chatId;
     if (chatId) {
         $('#bb-social-hud-toggle').show();
+        $('#bb-social-hud-mobile-launcher').show();
     } else {
         $('#bb-social-hud-toggle').hide();
+        $('#bb-social-hud-mobile-launcher').hide();
         closeSocialHud();
     }
     syncToastContainerWithHud();
@@ -1121,6 +1123,10 @@ function ensureHudContainer() {
     if (document.getElementById('bb-social-hud')) return;
     const hudHtml = `
         <button type="button" id="bb-social-hud-backdrop" aria-label="Закрыть HUD"></button>
+        <button type="button" id="bb-social-hud-mobile-launcher" aria-label="Открыть HUD">
+            <i class="fa-solid fa-users-viewfinder"></i>
+            <span>VNE</span>
+        </button>
         <div id="bb-social-hud">
             <div id="bb-social-hud-toggle" title="VNE HUD">
                 <i class="fa-solid fa-users-viewfinder"></i>
@@ -1166,6 +1172,10 @@ function ensureHudContainer() {
         } else {
             openSocialHud();
         }
+    });
+
+    $('#bb-social-hud-mobile-launcher').on('click', function() {
+        openSocialHud();
     });
 
     $('#bb-social-hud-backdrop, .bb-hud-mobile-close').on('click', function() {

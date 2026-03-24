@@ -206,9 +206,32 @@
     opacity: 1;
     pointer-events: auto;
 }
+#bb-social-hud-mobile-launcher {
+    display: none;
+    position: fixed;
+    right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    z-index: 1601;
+    align-items: center;
+    gap: 8px;
+    min-height: 46px;
+    padding: 10px 14px;
+    border-radius: 16px;
+    border: 1px solid rgba(147, 197, 253, 0.22);
+    background: linear-gradient(180deg, rgba(10, 14, 23, 0.98), rgba(28, 19, 37, 0.95));
+    color: #dbeafe;
+    box-shadow: 0 12px 24px rgba(0,0,0,0.34);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+#bb-social-hud-mobile-launcher i { font-size: 14px; }
 @media (min-width: 761px) {
     #bb-social-hud-backdrop,
-    #bb-social-hud-backdrop.open {
+    #bb-social-hud-backdrop.open,
+    #bb-social-hud-mobile-launcher {
         opacity: 0;
         pointer-events: none;
     }
@@ -754,33 +777,12 @@
         padding-top: 0;
         overflow: hidden;
     }
-    #bb-social-hud-toggle {
-        position: fixed;
-        left: auto;
-        right: 12px;
-        top: auto;
-        bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-        width: auto;
-        min-width: 58px;
-        padding: 12px 14px;
-        border-radius: 18px;
-        border-right: 1px solid rgba(147, 197, 253, 0.16);
-        gap: 6px;
-        flex-direction: row;
-        z-index: 1600;
-    }
-    #bb-social-hud.open #bb-social-hud-toggle {
+    #bb-social-hud-toggle { display: none !important; }
+    #bb-social-hud-mobile-launcher { display: inline-flex; }
+    body.bb-social-hud-active #bb-social-hud-mobile-launcher {
         opacity: 0;
         pointer-events: none;
         transform: translateY(8px);
-    }
-    #bb-hud-arrow {
-        font-size: 12px;
-    }
-    .bb-toggle-label {
-        writing-mode: initial;
-        transform: none;
-        letter-spacing: 1.2px;
     }
     .bb-hud-header {
         padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 14px;
