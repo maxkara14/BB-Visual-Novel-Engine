@@ -144,6 +144,79 @@ function notifyError(message, title) {
     /** @type {any} */ (toastr).error(message, title);
 }
 
+let hideCharacterConfirmResolver = null;
+
+function ensureHideCharacterConfirmModal() {
+    if (document.getElementById('bb-hide-char-confirm')) return;
+
+    const modalHtml = `
+        <div id="bb-hide-char-confirm" aria-hidden="true">
+            <button type="button" class="bb-hide-confirm-backdrop" data-action="cancel" aria-label="Закрыть подтверждение"></button>
+            <div class="bb-hide-confirm-card" role="dialog" aria-modal="true" aria-labelledby="bb-hide-confirm-title">
+                <div class="bb-hide-confirm-icon"><i class="fa-solid fa-eye-slash"></i></div>
+                <div class="bb-hide-confirm-content">
+                    <h3 id="bb-hide-confirm-title" class="bb-hide-confirm-title">Скрыть персонажа из Связей?</h3>
+                    <p class="bb-hide-confirm-text">
+                        Персонаж <strong id="bb-hide-confirm-char"></strong> пропадёт из трекера. Его можно вернуть кнопкой «Вернуть скрытых персонажей».
+                    </p>
+                </div>
+                <div class="bb-hide-confirm-actions">
+                    <button type="button" class="menu_button bb-hide-confirm-cancel" data-action="cancel">Отмена</button>
+                    <button type="button" class="menu_button bb-hide-confirm-approve" data-action="confirm">
+                        <i class="fa-solid fa-eye-slash"></i>&ensp;Скрыть
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    $('body').append(modalHtml);
+
+    $('#bb-hide-char-confirm [data-action="cancel"]').on('click', function() {
+        resolveHideCharacterConfirmation(false);
+    });
+    $('#bb-hide-char-confirm [data-action="confirm"]').on('click', function() {
+        resolveHideCharacterConfirmation(true);
+    });
+}
+
+function resolveHideCharacterConfirmation(value) {
+    const modal = document.getElementById('bb-hide-char-confirm');
+    if (modal) {
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+    if (hideCharacterConfirmResolver) {
+        hideCharacterConfirmResolver(value);
+        hideCharacterConfirmResolver = null;
+    }
+}
+
+function requestHideCharacterConfirmation(charName) {
+    ensureHideCharacterConfirmModal();
+    const modal = document.getElementById('bb-hide-char-confirm');
+    const charNode = document.getElementById('bb-hide-confirm-char');
+    const cancelButton = modal?.querySelector('.bb-hide-confirm-cancel');
+    if (!modal || !charNode) return Promise.resolve(false);
+
+    charNode.textContent = charName;
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    if (cancelButton instanceof HTMLElement) {
+        window.requestAnimationFrame(() => cancelButton.focus());
+    }
+
+    return new Promise(resolve => {
+        hideCharacterConfirmResolver = resolve;
+    });
+}
+
+document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const modal = document.getElementById('bb-hide-char-confirm');
+    if (!modal || !modal.classList.contains('open')) return;
+    resolveHideCharacterConfirmation(false);
+});
+
 const TOAST_LIFETIME_MS = 5200;
 const TOAST_MAX_VISIBLE = 4;
 let toastSequence = 0;
@@ -948,8 +1021,10 @@ function renderSocialHud() {
                 }
             });
 
-            $('.bb-btn-hide-char').off('click').on('click', function() {
+            $('.bb-btn-hide-char').off('click').on('click', async function() {
                 const charName = $(this).attr('data-char');
+                const confirmed = await requestHideCharacterConfirmation(charName);
+                if (!confirmed) return;
                 if (!chat_metadata['bb_vn_ignored_chars']) chat_metadata['bb_vn_ignored_chars'] = [];
                 if (!chat_metadata['bb_vn_ignored_chars'].includes(charName)) {
                     chat_metadata['bb_vn_ignored_chars'].push(charName);
@@ -1124,6 +1199,7 @@ function closeSocialHud() {
 
 function ensureHudContainer() {
     if (document.getElementById('bb-social-hud')) return;
+    ensureHideCharacterConfirmModal();
     const hudHtml = `
         <button type="button" id="bb-social-hud-backdrop" aria-label="Закрыть HUD"></button>
         <button type="button" id="bb-social-hud-mobile-launcher" aria-label="Открыть HUD">
