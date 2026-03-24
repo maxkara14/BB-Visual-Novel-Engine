@@ -210,8 +210,10 @@
     display: none;
     position: fixed;
     right: 12px;
+    bottom: 14px;
+    bottom: calc(14px + constant(safe-area-inset-bottom));
     bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-    z-index: 1601;
+    z-index: 20050;
     align-items: center;
     gap: 8px;
     min-height: 46px;
@@ -778,7 +780,12 @@
         overflow: hidden;
     }
     #bb-social-hud-toggle { display: none !important; }
-    #bb-social-hud-mobile-launcher { display: inline-flex; }
+    #bb-social-hud-mobile-launcher {
+        display: inline-flex !important;
+        opacity: 1;
+        pointer-events: auto;
+        transform: none;
+    }
     body.bb-social-hud-active #bb-social-hud-mobile-launcher {
         opacity: 0;
         pointer-events: none;
