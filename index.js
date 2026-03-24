@@ -22,7 +22,6 @@ extension_settings[MODULE_NAME] = {
 
 let currentCalculatedStats = {};
 let currentStoryMoments = [];
-let hudVisibilityIntervalId = null;
 
 /**
  * @typedef {Object} VNOption
@@ -1212,6 +1211,14 @@ function ensureHudContainer() {
         }
         syncToastContainerWithHud();
     });
+
+    window.addEventListener('hashchange', function() {
+        updateHudVisibility();
+    });
+
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) updateHudVisibility();
+    });
 }
 
 // ==========================================
@@ -1821,12 +1828,6 @@ jQuery(async () => {
             recalculateAllStats(); 
             updateHudVisibility();
         });
-
-        if (!hudVisibilityIntervalId) {
-            hudVisibilityIntervalId = window.setInterval(() => {
-                updateHudVisibility();
-            }, 1200);
-        }
 
         // ПРИ СВАЙПЕ ИЛИ НОВОМ СООБЩЕНИИ ПЫТАЕМСЯ ВОССТАНОВИТЬ КЭШ КНОПОК
         eventSource.on(event_types.MESSAGE_RECEIVED, () => { window['restoreVNOptions'](false); recalculateAllStats(true); }); 
