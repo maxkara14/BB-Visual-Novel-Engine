@@ -634,12 +634,12 @@
 }
 
 .bb-vn-main-btn {
-    background: linear-gradient(180deg, rgba(24, 31, 47, 0.96), rgba(34, 21, 46, 0.92)); border: 1px solid rgba(192, 132, 252, 0.44);
-    color: #e2e8f0; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px;
-    padding: 10px 12px; border-radius: 13px; text-align: center; cursor: pointer;
+    background: linear-gradient(180deg, rgba(15, 20, 30, 0.94), rgba(13, 18, 28, 0.92)); border: 1px solid rgba(148, 163, 184, 0.22);
+    color: #e2e8f0; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.9px;
+    padding: 9px 11px; border-radius: 13px; text-align: center; cursor: pointer;
     box-shadow: 0 12px 24px rgba(0,0,0,0.22); transition: all 0.2s ease;
 }
-.bb-vn-main-btn:hover { background: linear-gradient(180deg, rgba(34, 39, 56, 0.98), rgba(43, 26, 58, 0.92)); box-shadow: 0 14px 26px rgba(0,0,0,0.24); text-shadow: 0 0 5px #fff; }
+.bb-vn-main-btn:hover { background: linear-gradient(180deg, rgba(23, 31, 46, 0.96), rgba(16, 23, 36, 0.94)); box-shadow: 0 14px 26px rgba(0,0,0,0.24); }
 .bb-vn-main-btn.loading { border-color: #f59e0b; color: #f59e0b; pointer-events: none; animation: pulseGlow 1.5s infinite; }
 
 @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); } 50% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.6); } }
@@ -681,6 +681,16 @@
     overflow: hidden;
 }
 .bb-vn-op-risk { font-size: 9px; text-transform: uppercase; font-weight: 800; padding: 3px 7px; border-radius: 999px; align-self: auto; flex-shrink: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; line-height: 1.2; }
+.bb-vn-option.text-expanded .bb-vn-op-head {
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    overflow: visible;
+}
+.bb-vn-option.text-expanded .bb-vn-op-risk {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+}
 .bb-vn-targets { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 4px; margin-top: 1px; width: 100%; }
 .bb-vn-target {
     display: inline-flex; justify-content: center; align-items: center;
@@ -771,15 +781,15 @@
 .bb-vn-option.tone-danger { border-top: 2px solid rgba(248, 113, 113, 0.75); background: linear-gradient(180deg, rgba(41, 18, 24, 0.96), rgba(24, 13, 18, 0.92)); border-color: rgba(248, 113, 113, 0.26); }
 
 #bb-vn-btn-reroll {
-    background: linear-gradient(180deg, rgba(68, 43, 14, 0.98), rgba(42, 27, 10, 0.94));
-    border-color: rgba(245, 158, 11, 0.35) !important;
+    background: linear-gradient(180deg, rgba(15, 20, 30, 0.92), rgba(13, 18, 28, 0.9));
+    border-color: rgba(148, 163, 184, 0.25) !important;
 }
-#bb-vn-btn-reroll .bb-vn-op-head { color: #fde68a; }
+#bb-vn-btn-reroll i { color: #fbbf24; }
 #bb-vn-btn-cancel {
-    background: linear-gradient(180deg, rgba(28, 36, 48, 0.98), rgba(16, 21, 30, 0.94));
-    border-color: rgba(148, 163, 184, 0.22) !important;
+    background: linear-gradient(180deg, rgba(15, 20, 30, 0.92), rgba(13, 18, 28, 0.9));
+    border-color: rgba(148, 163, 184, 0.25) !important;
 }
-#bb-vn-btn-cancel .bb-vn-op-head { color: #cbd5e1; }
+#bb-vn-btn-cancel i { color: #cbd5e1; }
 
 /* ФИКС МОБИЛЬНЫХ КНОПОК И ОТСТУПОВ */
 @media (max-width: 600px) {

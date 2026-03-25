@@ -397,6 +397,31 @@ function normalizeOptionData(option = {}) {
     };
 }
 
+function canonicalizeIntent(text = "") {
+    return String(text || '')
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function dedupeOptions(options = []) {
+    /** @type {Set<string>} */
+    const seenIntents = new Set();
+    /** @type {VNOption[]} */
+    const unique = [];
+
+    options.forEach(option => {
+        const normalized = normalizeOptionData(option);
+        const key = canonicalizeIntent(normalized.intent || normalized.message || '');
+        if (!key || seenIntents.has(key)) return;
+        seenIntents.add(key);
+        unique.push(normalized);
+    });
+
+    return unique;
+}
+
 function normalizeStatusLabel(value = "") {
     return String(value || '')
         .replace(/_/g, ' ')
@@ -1345,6 +1370,7 @@ CRITICAL JSON AND FORMATTING RULES:
 2. INSIDE the "message" field, you MUST use standard roleplay formatting: asterisks for *actions/thoughts* and quotes for dialogue.
 3. You MUST escape all internal double quotes inside the "message" string (e.g., \\"Hello\\") to ensure the JSON remains valid.
 4. To create paragraphs, use escaped newlines (\\n\\n) inside the "message" string. DO NOT use actual line breaks in the string, or it will break the JSON.
+5. Each option must be clearly different in intent from the others. Never output near-duplicates with only wording changes.
 
 Use this SHORT JSON SHAPE as a template. The placeholders below are instructions, not literal values. Return exactly 3 objects with this structure:
 [
@@ -1468,7 +1494,7 @@ window['renderVNOptionsFromData'] = function(/** @type {VNOption[]} */ parsedOpt
         $('#bb-vn-btn-generate').removeClass('loading').hide();
     } else {
         $('#bb-vn-options-container').removeClass('active');
-        $('#bb-vn-btn-generate').removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия (Сохранены)').show();
+        $('#bb-vn-btn-generate').removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> VN · сохранено').show();
     }
 
     $('.bb-vn-option[data-intent]').off('click').on('click', function() {
@@ -1508,7 +1534,7 @@ window['renderVNOptionsFromData'] = function(/** @type {VNOption[]} */ parsedOpt
             
             if (extension_settings[MODULE_NAME].autoSend) {
                 $('#bb-vn-options-container').removeClass('active');
-                $('#bb-vn-btn-generate').show().html('<i class="fa-solid fa-clapperboard"></i> Действия (Visual Novel)');
+                $('#bb-vn-btn-generate').show().html('<i class="fa-solid fa-clapperboard"></i> Действия VN');
                 const sendBtn = document.getElementById('send_but');
                 if (sendBtn) sendBtn.click();
             }
@@ -1518,20 +1544,35 @@ window['renderVNOptionsFromData'] = function(/** @type {VNOption[]} */ parsedOpt
     $(document).off('pointerdown.bb-vn-forecast').on('pointerdown.bb-vn-forecast', function(event) {
         if ($(event.target).closest('.bb-vn-option[data-intent]').length > 0) return;
         $('.bb-vn-option.preview-open').removeClass('preview-open');
+        $('.bb-vn-option.text-expanded').removeClass('text-expanded');
+    });
+
+    $('.bb-vn-op-head, .bb-vn-op-risk').off('click.bb-vn-text').on('click.bb-vn-text', function(event) {
+        const isTouchDevice = window.matchMedia('(hover: none), (pointer: coarse)').matches;
+        if (!isTouchDevice) return;
+        const card = $(this).closest('.bb-vn-option[data-intent]');
+        if (!card.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        card.toggleClass('text-expanded');
     });
 
     $('#bb-vn-btn-cancel').off('click').on('click', function() {
         $('#bb-vn-options-container').removeClass('active');
-        $('#bb-vn-btn-generate').show().html('<i class="fa-solid fa-clapperboard"></i> Действия (Сохранены)');
+        $('#bb-vn-btn-generate').show().html('<i class="fa-solid fa-clapperboard"></i> VN · сохранено');
     });
 
     $('#bb-vn-btn-reroll').off('click').on('click', async function() {
-        await window['bbVnGenerateOptionsFlow']();
+        const previousIntents = $('#bb-vn-options-container .bb-vn-option[data-intent]')
+            .map(function() { return $(this).attr('data-intent') || ''; })
+            .get()
+            .filter(Boolean);
+        await window['bbVnGenerateOptionsFlow'](previousIntents);
     });
 };
 
 // ГЛОБАЛЬНАЯ ФУНКЦИЯ ДЛЯ ГЕНЕРАЦИИ
-window['bbVnGenerateOptionsFlow'] = async function() {
+window['bbVnGenerateOptionsFlow'] = async function(excludedIntents = []) {
     const btn = $('#bb-vn-btn-generate');
     if (btn.hasClass('loading')) return;
 
@@ -1552,6 +1593,13 @@ window['bbVnGenerateOptionsFlow'] = async function() {
             .replace('{{chat}}', recentMessages)
             .replace('{{persona}}', persona)
             .replace('{{lastMessage}}', lastMessageText); // Вшиваем триггер в промпт
+
+        const cleanedExcludedIntents = Array.isArray(excludedIntents)
+            ? excludedIntents.map(item => String(item || '').trim()).filter(Boolean)
+            : [];
+        if (cleanedExcludedIntents.length > 0) {
+            prompt += `\n\n[DO NOT REPEAT THESE PREVIOUS ACTION IDEAS]\n${cleanedExcludedIntents.map((item, idx) => `${idx + 1}. ${item}`).join('\n')}\nGenerate clearly different actions.`;
+        }
 
 // --- ПОДКЛЮЧАЕМ РЕЖИССЁРА (ЕСЛИ ОН ЕСТЬ) ---
         if (typeof window['bbGetSceneDirectorPrompt'] === 'function') {
@@ -1611,7 +1659,10 @@ window['bbVnGenerateOptionsFlow'] = async function() {
         }
 
         if (parsedOptions && parsedOptions.length > 0) {
-            parsedOptions = parsedOptions.map(normalizeOptionData);
+            parsedOptions = dedupeOptions(parsedOptions);
+            if (parsedOptions.length < 3) {
+                throw new Error("Модель вернула слишком похожие варианты. Попробуйте реролл ещё раз.");
+            }
             // СОХРАНЕНИЕ КНОПОК В ПАМЯТЬ СВАЙПА!
             const lastMsg = chat[chat.length - 1];
             const swipeId = lastMsg.swipe_id || 0;
@@ -1627,7 +1678,7 @@ window['bbVnGenerateOptionsFlow'] = async function() {
         console.error("[BB VN] Ошибка генерации:", e);
         // @ts-ignore
         notifyError("Не удалось сгенерировать варианты");
-        btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия (Visual Novel)').show();
+        btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия VN').show();
     }
 };
 
@@ -1659,7 +1710,7 @@ window['clearVNOptions'] = function() {
     const ta = document.querySelector('#send_textarea');
     // @ts-ignore
     if (!ta || ta.value.trim().length === 0) {
-        $('#bb-vn-btn-generate').show().removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия (Visual Novel)');
+        $('#bb-vn-btn-generate').show().removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия VN');
     }
 };
 
@@ -1669,7 +1720,7 @@ function injectVNActionsUI() {
     const barHtml = `
         <div id="bb-vn-action-bar" style="display: flex;">
             <div id="bb-vn-btn-generate" class="bb-vn-main-btn">
-                <i class="fa-solid fa-clapperboard"></i> Действия (Visual Novel)
+                <i class="fa-solid fa-clapperboard"></i> Действия VN
             </div>
             <div id="bb-vn-options-container"></div>
         </div>
