@@ -55,7 +55,11 @@ The status MUST be user-facing and usually include a relation noun like: "вра
 You are NOT limited to a fixed dictionary: adapt wording to the current scene, setting, and relationship context.
 Examples (valid): "проблемный ученик", "опасная соперница", "нежеланный союзник".
 Examples (invalid): "разочарованный наставник", "строгий учитель", "уставший капитан" (these describe the character, not {{user}}).
-CRITICAL: "name" must be a single concrete character. NEVER use groups like classes, teams, factions, "коллектив", or "все".
+CRITICAL: "name" must be a single concrete character and should look like a personal name.
+GOOD examples: "Кёджуро Ренгоку", "Аой Канзаки", "Хироси Симадзу".
+GOOD format: one person, singular, specific identity.
+If multiple people react, split into separate entries (one per person).
+Never merge people into one update.
 3. "delta": Integer representing the shift in the character's feelings towards {{user}}. Use this STRICT scale:
    0 = Neutral interaction (no change in opinion).
    1 to 3 = Mild positive (character appreciates politeness, small help).
@@ -530,7 +534,10 @@ function sanitizeMoodlet(value = "") {
 function isCollectiveEntityName(name = "") {
     const value = String(name || '').trim().toLowerCase();
     if (!value) return true;
-    return /(^|\b)(класс|коллектив|группа|отряд|команда|фракция|клан|семья|все|ученики|народ)(\b|$)/i.test(value);
+    const collectiveTokenRegex = /(^|\b)(класс|class|коллектив|группа|отряд|команда|team|фракция|faction|клан|семья|family|все|ученики|students|народ|люди|совет|советники|гильдия|отряд|корпус)(\b|$)/i;
+    const numberedClassRegex = /\b(\d{1,2}\s*[-–]?\s*[абвгa-z]|[абвгa-z]\s*[-–]?\s*\d{1,2})\b/i;
+    const pluralRoleRegex = /\b(ученик(и|ов)|солдат(ы|ов)|охотник(и|ов)|геро(и|ев)|член(ы|ов))\b/i;
+    return collectiveTokenRegex.test(value) || numberedClassRegex.test(value) || pluralRoleRegex.test(value);
 }
 
 function isLikelySelfRoleStatus(status = "") {
