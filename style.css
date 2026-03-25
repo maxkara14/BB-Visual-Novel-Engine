@@ -624,13 +624,13 @@
 #bb-vn-action-bar {
     width: 100%; padding: 8px 10px; box-sizing: border-box;
     display: flex; flex-direction: column; gap: 8px;
-    background: linear-gradient(180deg, rgba(11, 16, 25, 0.9), rgba(20, 14, 29, 0.72));
-    border: 1px solid rgba(255,255,255,0.08);
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.06);
     border-radius: 14px 14px 0 0; margin-bottom: 4px;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
     overflow: visible;
-    box-shadow: 0 -12px 24px rgba(0,0,0,0.12);
+    box-shadow: none;
 }
 
 .bb-vn-main-btn {
