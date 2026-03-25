@@ -429,6 +429,48 @@
 }
 .bb-char-meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; }
 .bb-char-meta-card strong { font-size: 13px; color: #f8fafc; line-height: 1.35; }
+.bb-last-shift-stack {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+.bb-shift-chip,
+.bb-shift-points {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    font-weight: 900;
+    letter-spacing: 0.2px;
+}
+.bb-shift-chip {
+    font-size: 11px;
+    padding: 4px 9px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    background: rgba(148, 163, 184, 0.14);
+    color: #e2e8f0;
+}
+.bb-shift-points {
+    font-size: 12px;
+    padding: 4px 8px;
+    border: 1px solid rgba(148, 163, 184, 0.34);
+    background: rgba(15, 23, 42, 0.6);
+    color: #cbd5e1;
+    min-width: 44px;
+    justify-content: center;
+}
+.bb-shift-chip.positive,
+.bb-shift-points.positive {
+    border-color: rgba(74, 222, 128, 0.42);
+    background: rgba(74, 222, 128, 0.14);
+    color: #86efac;
+}
+.bb-shift-chip.negative,
+.bb-shift-points.negative {
+    border-color: rgba(248, 113, 113, 0.44);
+    background: rgba(239, 68, 68, 0.14);
+    color: #fca5a5;
+}
 
 .bb-char-tier {
     font-size: 10px; padding: 4px 8px; border-radius: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;
@@ -609,10 +651,18 @@
 .bb-log-delta { font-weight: 900; min-width: 74px; text-align: left; }
 .bb-log-reason { color: #cbd5e1; }
 .bb-memory-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.bb-memory-list-deep {
+    max-height: 122px;
+    overflow-y: auto;
+    padding-right: 4px;
+    scrollbar-width: thin;
+}
 .bb-memory-pill {
     display: inline-flex; align-items: center; gap: 4px;
     padding: 4px 8px; border-radius: 999px; font-size: 10px;
     border: 1px solid rgba(255,255,255,0.08); background: rgba(148, 163, 184, 0.12); color: #dbe4f0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
 }
 .bb-memory-pill.positive { background: rgba(74, 222, 128, 0.12); color: #86efac; border-color: rgba(74, 222, 128, 0.3); }
 .bb-memory-pill.negative { background: rgba(239, 68, 68, 0.12); color: #fca5a5; border-color: rgba(239, 68, 68, 0.3); }

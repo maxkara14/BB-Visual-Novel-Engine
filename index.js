@@ -989,6 +989,11 @@ function renderSocialHud() {
                 const displayStatus = currentCalculatedStats[charName].status || getUnforgettableRoleStatus(memories.deep) || tier.label;
                 const unforgettableImpact = getUnforgettableImpact(memories.deep);
                 const lastHistory = [...(currentCalculatedStats[charName].history || [])].reverse().find(h => h.delta !== 0);
+                const lastShift = lastHistory ? getShiftDescriptor(lastHistory.delta, lastHistory.moodlet || '') : null;
+                const lastShiftPoints = lastHistory ? formatAffinityPoints(lastHistory.delta) : '0';
+                const lastShiftToneClass = lastHistory
+                    ? (lastHistory.delta > 0 ? 'positive' : lastHistory.delta < 0 ? 'negative' : 'neutral')
+                    : 'neutral';
                 const spotlightLabel = index === 0 ? 'Главная связь' : index === 1 ? 'Важная связь' : 'Связь';
                 const softCount = memories.soft.length;
                 const deepCount = memories.deep.length;
@@ -1050,7 +1055,10 @@ function renderSocialHud() {
                                 <div class="bb-char-route-meta">
                                     <div class="bb-char-meta-card">
                                         <span class="bb-char-meta-label">Последний сдвиг</span>
-                                        <strong>${lastHistory ? escapeHtml(getShiftDescriptor(lastHistory.delta, lastHistory.moodlet || '').full) : 'Пока ровно'}</strong>
+                                        <strong class="bb-last-shift-stack">
+                                            <span class="bb-shift-chip ${lastShiftToneClass}">${escapeHtml(lastShift ? lastShift.short : 'ровно')}</span>
+                                            <span class="bb-shift-points ${lastShiftToneClass}">${escapeHtml(lastShiftPoints)}</span>
+                                        </strong>
                                     </div>
                                     <div class="bb-char-meta-card">
                                         <span class="bb-char-meta-label">Основа</span>
@@ -1109,7 +1117,7 @@ function renderSocialHud() {
                             </div>
                             <div class="bb-memory-section">
                                 <div class="bb-memory-title">Незабываемые события</div>
-                                <div class="bb-memory-list">${deepMemoriesHtml}</div>
+                                <div class="bb-memory-list bb-memory-list-deep">${deepMemoriesHtml}</div>
                             </div>
                         </div>
                     </div>
