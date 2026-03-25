@@ -431,8 +431,9 @@
 .bb-char-meta-card strong { font-size: 13px; color: #f8fafc; line-height: 1.35; }
 .bb-last-shift-stack {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
     width: 100%;
     min-height: 24px;
 }
@@ -450,13 +451,14 @@
     border: 1px solid rgba(148, 163, 184, 0.28);
     background: rgba(148, 163, 184, 0.14);
     color: #e2e8f0;
-    max-width: calc(100% - 56px);
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    overflow: hidden;
+    max-width: 100%;
+    white-space: normal;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
 }
 .bb-shift-points {
-    margin-left: auto;
+    margin-left: 0;
+    align-self: flex-end;
     font-size: 14px;
     padding: 0;
     border: none;
