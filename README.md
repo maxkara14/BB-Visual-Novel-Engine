@@ -145,7 +145,7 @@
 
 ---
 
-### HUD связей / дневник и системный журнал
+### HUD связей / системный журнал и дневник
 
 <img width="1173" height="878" alt="el" src="https://github.com/user-attachments/assets/2eca36f6-82c8-40b5-86b7-10d6a3baa98d" />
 
