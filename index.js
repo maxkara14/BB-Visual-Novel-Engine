@@ -416,7 +416,10 @@ function normalizeGeneratedMessage(message = "") {
         .replace(/\\r/g, '\r')
         .replace(/\\\\t/g, '\t')
         .replace(/\\t/g, '\t')
+        .replace(/\\\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
         .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\')
+        .replace(/\\+$/g, '')
         .trim();
 }
 
@@ -468,6 +471,12 @@ function dedupeOptions(options = []) {
     });
 
     return unique;
+}
+
+function extractJsonStringMatches(input = "", field = "") {
+    const escapedField = String(field || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`"${escapedField}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, 'gi');
+    return [...String(input || '').matchAll(regex)].map(match => match[1] || '');
 }
 
 function normalizeStatusLabel(value = "") {
@@ -1682,11 +1691,11 @@ window['bbVnGenerateOptionsFlow'] = async function(excludedIntents = []) {
             parsedOptions = JSON.parse(cleanResult);
         } catch (err) {
             parsedOptions = [];
-            const intentMatches = [...cleanResult.matchAll(/"intent"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
-            const toneMatches = [...cleanResult.matchAll(/"tone"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
-            const forecastMatches = [...cleanResult.matchAll(/"forecast"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
-            const riskMatches = [...cleanResult.matchAll(/"risk"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
-            const messageMatches = [...cleanResult.matchAll(/"message"\s*:\s*"([^"]+)"/gi)].map(m => m[1]);
+            const intentMatches = extractJsonStringMatches(cleanResult, 'intent');
+            const toneMatches = extractJsonStringMatches(cleanResult, 'tone');
+            const forecastMatches = extractJsonStringMatches(cleanResult, 'forecast');
+            const riskMatches = extractJsonStringMatches(cleanResult, 'risk');
+            const messageMatches = extractJsonStringMatches(cleanResult, 'message');
             const targetsMatches = [...cleanResult.matchAll(/"targets"\s*:\s*\[([^\]]*)\]/gi)].map(m =>
                 m[1]
                     .split(',')
