@@ -155,7 +155,7 @@
 
 ### HUD-уведомления
 
-<img width="390" height="599" alt="уведомления" src="https://github.com/user-attachments/assets/96efa199-9e9d-4f44-900d-fb1dfadb60d5" />
+<img width="361" height="125" alt="Screenshot_5" src="https://github.com/user-attachments/assets/d0a055c3-6b95-4d3b-a64c-9be54d200e54" />
 
 ---
 
