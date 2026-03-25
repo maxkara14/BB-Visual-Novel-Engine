@@ -522,22 +522,22 @@ function hasUserRelationNoun(status = "") {
     return /(враг|союзник|ученик|одноклассник|соперник|угроза|цель|друг|пария|изгой|пешка|гость|интерес|партн[её]р)/i.test(value);
 }
 
-function getFallbackUserFacingStatus(affinity = 0, previousStatus = "") {
+function getFallbackUserFacingStatus(affinity = 0, previousStatus = "", delta = 0) {
     const prev = sanitizeRelationshipStatus(previousStatus);
     if (prev && !isLikelySelfRoleStatus(prev) && hasUserRelationNoun(prev)) return prev;
 
-    if (affinity <= -40) return 'опасный враг';
-    if (affinity < -10) return 'идеологический враг';
-    if (affinity <= 10) return 'нестабильный контакт';
-    if (affinity <= 50) return 'осторожный союзник';
-    return 'ценный союзник';
+    if (affinity <= -50) return delta < 0 ? 'ненавистный враг' : 'опасный враг';
+    if (affinity < -15) return delta > 0 ? 'напряжённый соперник' : 'принципиальный враг';
+    if (affinity < 15) return delta >= 0 ? 'сомневающийся союзник' : 'настороженный союзник';
+    if (affinity < 60) return delta > 0 ? 'уважаемый союзник' : 'осторожный союзник';
+    return delta > 0 ? 'близкий союзник' : 'ценный союзник';
 }
 
-function coerceUserFacingStatus(candidateStatus = "", affinity = 0, previousStatus = "") {
+function coerceUserFacingStatus(candidateStatus = "", affinity = 0, previousStatus = "", delta = 0) {
     const incoming = sanitizeRelationshipStatus(candidateStatus);
     if (!incoming) return '';
     if (isLikelySelfRoleStatus(incoming) || !hasUserRelationNoun(incoming)) {
-        return getFallbackUserFacingStatus(affinity, previousStatus);
+        return getFallbackUserFacingStatus(affinity, previousStatus, delta);
     }
     return incoming;
 }
@@ -840,7 +840,7 @@ function recalculateAllStats(isNewMessage = false) {
                     currentCalculatedStats[charName] = {
                         affinity: base,
                         history: [],
-                        status: coerceUserFacingStatus(update.status || "", base, ""),
+                        status: coerceUserFacingStatus(update.status || "", base, "", delta),
                         memories: { soft: [], deep: [] }
                     };
                     
@@ -875,7 +875,8 @@ function recalculateAllStats(isNewMessage = false) {
                 const safeStatus = coerceUserFacingStatus(
                     update.status || '',
                     currentCalculatedStats[charName].affinity,
-                    previousStatus
+                    previousStatus,
+                    delta
                 );
                 if (safeStatus) currentCalculatedStats[charName].status = safeStatus;
 
