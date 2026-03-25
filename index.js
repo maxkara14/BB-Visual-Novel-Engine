@@ -408,6 +408,18 @@ function sanitizeIntentLabel(intent = "", tone = "", risk = "") {
     return normalized.slice(0, 64);
 }
 
+function normalizeGeneratedMessage(message = "") {
+    return String(message || '')
+        .replace(/\\\\n/g, '\n')
+        .replace(/\\n/g, '\n')
+        .replace(/\\\\r/g, '\r')
+        .replace(/\\r/g, '\r')
+        .replace(/\\\\t/g, '\t')
+        .replace(/\\t/g, '\t')
+        .replace(/\\"/g, '"')
+        .trim();
+}
+
 /**
  * @param {VNOption} option
  * @returns {VNOption}
@@ -425,6 +437,7 @@ function normalizeOptionData(option = {}) {
     return {
         ...option,
         intent: sanitizeIntentLabel(option.intent || '', tone, legacyRisk),
+        message: normalizeGeneratedMessage(option.message || ''),
         tone,
         forecast,
         targets,
@@ -1416,7 +1429,7 @@ Use this SHORT JSON SHAPE as a template. The placeholders below are instructions
     "forecast": "SHORT_RUSSIAN_OUTCOME_HINT",
     "targets": ["MOST_AFFECTED_CHARACTER"],
     "risk": "OPTIONAL_RISK_LABEL",
-    "message": "LONG_RUSSIAN_ROLEPLAY_REPLY_WITH_ESCAPED_QUOTES_AND_\n\n_PARAGRAPHS"
+    "message": "LONG_RUSSIAN_ROLEPLAY_REPLY_WITH_ESCAPED_QUOTES_AND_\\n\\n_PARAGRAPHS"
   }
 ]
 
