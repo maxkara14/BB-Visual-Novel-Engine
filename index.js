@@ -524,13 +524,22 @@ function hasUserRelationNoun(status = "") {
 
 function getFallbackUserFacingStatus(affinity = 0, previousStatus = "") {
     const prev = sanitizeRelationshipStatus(previousStatus);
-    if (prev) return prev;
+    if (prev && !isLikelySelfRoleStatus(prev) && hasUserRelationNoun(prev)) return prev;
 
     if (affinity <= -40) return 'опасный враг';
     if (affinity < -10) return 'идеологический враг';
     if (affinity <= 10) return 'нестабильный контакт';
     if (affinity <= 50) return 'осторожный союзник';
     return 'ценный союзник';
+}
+
+function coerceUserFacingStatus(candidateStatus = "", affinity = 0, previousStatus = "") {
+    const incoming = sanitizeRelationshipStatus(candidateStatus);
+    if (!incoming) return '';
+    if (isLikelySelfRoleStatus(incoming) || !hasUserRelationNoun(incoming)) {
+        return getFallbackUserFacingStatus(affinity, previousStatus);
+    }
+    return incoming;
 }
 
 function getToneClass(tone = "") {
@@ -831,7 +840,7 @@ function recalculateAllStats(isNewMessage = false) {
                     currentCalculatedStats[charName] = {
                         affinity: base,
                         history: [],
-                        status: sanitizeRelationshipStatus(update.status || ""),
+                        status: coerceUserFacingStatus(update.status || "", base, ""),
                         memories: { soft: [], deep: [] }
                     };
                     
@@ -863,12 +872,11 @@ function recalculateAllStats(isNewMessage = false) {
                 currentCalculatedStats[charName].affinity += delta;
                 if (currentCalculatedStats[charName].affinity > 100) currentCalculatedStats[charName].affinity = 100;
                 if (currentCalculatedStats[charName].affinity < -100) currentCalculatedStats[charName].affinity = -100;
-                const incomingStatus = sanitizeRelationshipStatus(update.status || '');
-                const safeStatus = incomingStatus
-                    ? (isLikelySelfRoleStatus(incomingStatus) || !hasUserRelationNoun(incomingStatus)
-                        ? getFallbackUserFacingStatus(currentCalculatedStats[charName].affinity, previousStatus)
-                        : incomingStatus)
-                    : '';
+                const safeStatus = coerceUserFacingStatus(
+                    update.status || '',
+                    currentCalculatedStats[charName].affinity,
+                    previousStatus
+                );
                 if (safeStatus) currentCalculatedStats[charName].status = safeStatus;
 
                 currentCalculatedStats[charName].history.push({ delta, reason: update.reason || "" });
