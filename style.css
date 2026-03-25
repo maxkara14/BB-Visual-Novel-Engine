@@ -622,35 +622,40 @@
    ИНТЕРАКТИВНОЕ КИНО (ПАНЕЛЬ НАД ЧАТОМ)
 ========================================= */
 #bb-vn-action-bar {
-    width: 100%; padding: 10px 12px; box-sizing: border-box;
-    display: flex; flex-direction: column; gap: 10px;
-    background: linear-gradient(180deg, rgba(11, 16, 25, 0.9), rgba(20, 14, 29, 0.72));
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 18px 18px 0 0; margin-bottom: 6px;
+    width: 100%; padding: 8px 10px; box-sizing: border-box;
+    display: flex; flex-direction: column; gap: 8px;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px 14px 0 0; margin-bottom: 4px;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
     overflow: visible;
-    box-shadow: 0 -12px 24px rgba(0,0,0,0.12);
+    box-shadow: none;
 }
 
 .bb-vn-main-btn {
-    background: linear-gradient(180deg, rgba(24, 31, 47, 0.96), rgba(34, 21, 46, 0.92)); border: 1px solid rgba(192, 132, 252, 0.44);
-    color: #e2e8f0; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px;
-    padding: 14px; border-radius: 16px; text-align: center; cursor: pointer;
+    background: linear-gradient(180deg, rgba(15, 20, 30, 0.94), rgba(13, 18, 28, 0.92)); border: 1px solid rgba(148, 163, 184, 0.22);
+    color: #e2e8f0; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.9px;
+    padding: 9px 11px; border-radius: 13px; text-align: center; cursor: pointer;
     box-shadow: 0 12px 24px rgba(0,0,0,0.22); transition: all 0.2s ease;
 }
-.bb-vn-main-btn:hover { background: linear-gradient(180deg, rgba(34, 39, 56, 0.98), rgba(43, 26, 58, 0.92)); box-shadow: 0 14px 26px rgba(0,0,0,0.24); text-shadow: 0 0 5px #fff; }
+.bb-vn-main-btn:hover { background: linear-gradient(180deg, rgba(23, 31, 46, 0.96), rgba(16, 23, 36, 0.94)); box-shadow: 0 14px 26px rgba(0,0,0,0.24); }
 .bb-vn-main-btn.loading { border-color: #f59e0b; color: #f59e0b; pointer-events: none; animation: pulseGlow 1.5s infinite; }
 
 @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); } 50% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.6); } }
 
-#bb-vn-options-container { display: none; gap: 10px; width: 100%; flex-wrap: wrap; overflow: visible; }
-#bb-vn-options-container.active { display: flex; }
+#bb-vn-options-container { display: none; gap: 8px; width: 100%; overflow: visible; }
+#bb-vn-options-container.active {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+    gap: 8px;
+    align-items: start;
+}
 
 .bb-vn-option {
-    flex: 1; min-width: 30%; background: linear-gradient(180deg, rgba(19, 24, 38, 0.98), rgba(12, 16, 26, 0.95));
-    border: 1px solid rgba(255,255,255,0.12); border-radius: 18px;
-    padding: 14px 13px; cursor: pointer; display: flex; flex-direction: column; gap: 9px;
+    flex: 1; min-width: 0; background: linear-gradient(180deg, rgba(19, 24, 38, 0.98), rgba(12, 16, 26, 0.95));
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 14px;
+    padding: 10px 11px; cursor: pointer; display: flex; flex-direction: column; gap: 6px;
     align-items: flex-start; text-align: left; transition: all 0.2s ease;
     height: auto; box-sizing: border-box; position: relative; overflow: visible;
     box-shadow: 0 14px 26px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.03);
@@ -662,28 +667,82 @@
 }
 .bb-vn-op-index {
     display: inline-flex; align-items: center; justify-content: center;
-    padding: 4px 8px; border-radius: 999px; background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.08); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8;
+    padding: 3px 7px; border-radius: 999px; background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08); font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8;
 }
 .bb-vn-op-head {
-    display: flex; align-items: center; justify-content: flex-start; width: 100%;
-    font-size: 16px; font-weight: 800; color: #fff;
-    word-wrap: break-word; white-space: normal; line-height: 1.25;
+    width: 100%;
+    font-size: 13px; font-weight: 800; color: #fff;
+    word-wrap: break-word; white-space: normal; line-height: 1.3;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
 }
-.bb-vn-op-risk { font-size: 10px; text-transform: uppercase; font-weight: 800; padding: 4px 8px; border-radius: 999px; align-self: auto; flex-shrink: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: center; line-height: 1.25; }
-.bb-vn-targets { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px; margin-top: 2px; width: 100%; }
+.bb-vn-op-risk { font-size: 9px; text-transform: uppercase; font-weight: 800; padding: 3px 7px; border-radius: 999px; align-self: auto; flex-shrink: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; line-height: 1.2; }
+.bb-vn-option.text-expanded .bb-vn-op-head {
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    overflow: visible;
+}
+.bb-vn-option.text-expanded .bb-vn-op-risk {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+}
+.bb-vn-targets { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 4px; margin-top: 1px; width: 100%; }
 .bb-vn-target {
     display: inline-flex; justify-content: center; align-items: center;
-    font-size: 10px; padding: 4px 8px; border-radius: 999px;
+    font-size: 9px; padding: 3px 7px; border-radius: 999px;
     background: rgba(148, 163, 184, 0.16); color: #dbe4f0;
     border: 1px solid rgba(148, 163, 184, 0.18);
-    white-space: normal; text-align: center; line-height: 1.25;
-    word-break: break-word; overflow-wrap: anywhere; max-width: 100%;
+    white-space: nowrap; text-align: center; line-height: 1.2;
+    overflow: hidden; text-overflow: ellipsis; max-width: min(180px, 100%);
 }
 .bb-vn-target.muted { color: #94a3b8; }
-.bb-vn-utility-row { flex: 0 0 100%; display:flex; gap:10px; margin-top:6px; }
+.bb-vn-utility-row { flex: 0 0 100%; display:flex; gap:8px; margin-top:2px; }
 .bb-vn-utility-card { text-align: left; }
 .bb-vn-utility-card .bb-vn-op-head { justify-content: flex-start; }
+.bb-vn-utility-row {
+    grid-column: 4;
+    grid-row: 1;
+    margin-top: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    align-self: stretch;
+}
+.bb-vn-utility-compact {
+    flex: 0 0 auto;
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    min-height: 42px;
+    padding: 0;
+    border-radius: 12px;
+    justify-content: center;
+    align-items: center;
+    display: inline-flex;
+    margin-left: auto;
+}
+.bb-vn-utility-row #bb-vn-btn-cancel {
+    margin-left: 0;
+}
+.bb-vn-utility-compact i {
+    font-size: 15px;
+}
+.bb-vn-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+}
 .bb-vn-forecast-hover {
     position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%) translateY(-4px);
     width: clamp(220px, 32vw, 320px); max-width: calc(100vw - 40px);
@@ -693,9 +752,13 @@
     z-index: 12; white-space: normal;
 }
 .bb-vn-option:hover .bb-vn-forecast-hover { opacity: 1; transform: translateX(-50%) translateY(0); }
+.bb-vn-option.preview-open .bb-vn-forecast-hover {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
 .bb-vn-forecast-title { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #c084fc; margin-bottom: 4px; }
 .bb-vn-forecast-text {
-    display: block; font-size: 12px; line-height: 1.4; color: #e2e8f0;
+    display: block; font-size: 11px; line-height: 1.35; color: #e2e8f0;
     white-space: normal; word-break: break-word; overflow-wrap: anywhere; text-wrap: pretty;
 }
 
@@ -718,15 +781,15 @@
 .bb-vn-option.tone-danger { border-top: 2px solid rgba(248, 113, 113, 0.75); background: linear-gradient(180deg, rgba(41, 18, 24, 0.96), rgba(24, 13, 18, 0.92)); border-color: rgba(248, 113, 113, 0.26); }
 
 #bb-vn-btn-reroll {
-    background: linear-gradient(180deg, rgba(68, 43, 14, 0.98), rgba(42, 27, 10, 0.94));
-    border-color: rgba(245, 158, 11, 0.35) !important;
+    background: linear-gradient(180deg, rgba(15, 20, 30, 0.92), rgba(13, 18, 28, 0.9));
+    border-color: rgba(148, 163, 184, 0.25) !important;
 }
-#bb-vn-btn-reroll .bb-vn-op-head { color: #fde68a; }
+#bb-vn-btn-reroll i { color: #fbbf24; }
 #bb-vn-btn-cancel {
-    background: linear-gradient(180deg, rgba(28, 36, 48, 0.98), rgba(16, 21, 30, 0.94));
-    border-color: rgba(148, 163, 184, 0.22) !important;
+    background: linear-gradient(180deg, rgba(15, 20, 30, 0.92), rgba(13, 18, 28, 0.9));
+    border-color: rgba(148, 163, 184, 0.25) !important;
 }
-#bb-vn-btn-cancel .bb-vn-op-head { color: #cbd5e1; }
+#bb-vn-btn-cancel i { color: #cbd5e1; }
 
 /* ФИКС МОБИЛЬНЫХ КНОПОК И ОТСТУПОВ */
 @media (max-width: 600px) {
@@ -750,36 +813,42 @@
 
     /* Делаем основные кнопки более компактными на телефоне */
     .bb-vn-option {
-        flex: 0 0 100% !important;
-        min-width: 100% !important;
-        padding: 8px 10px !important; /* Уменьшили высоту кнопок */
+        min-width: 0 !important;
+        padding: 7px 9px !important;
+        gap: 5px !important;
+    }
+    #bb-vn-options-container.active {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+    }
+    .bb-vn-option[data-intent] {
+        grid-column: 1;
+        width: 100%;
     }
     .bb-vn-op-head {
-        font-size: 14px;
+        font-size: 12px;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
     }
     .bb-vn-op-topline {
         flex-wrap: wrap;
     }
     .bb-vn-op-risk {
-        font-size: 9px; /* Уменьшили ярлычок риска */
-        padding: 2px 4px;
+        font-size: 8px;
+        padding: 2px 6px;
     }
     .bb-vn-targets {
-        flex-direction: column;
-        align-items: stretch;
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
     }
     .bb-vn-target {
-        width: 100%;
-        border-radius: 10px;
-        padding: 6px 8px;
-    }
-    .bb-vn-forecast-hover {
-        position: static; transform: none; opacity: 1; pointer-events: auto;
-        width: 100%; max-width: 100%; margin-top: 6px;
-        box-sizing: border-box;
-    }
-    .bb-vn-option:hover .bb-vn-forecast-hover {
-        transform: none;
+        width: auto;
+        border-radius: 999px;
+        padding: 3px 6px;
+        flex: 0 0 auto;
     }
     .bb-prompt-summary {
         flex-direction: column; align-items: flex-start;
@@ -797,11 +866,27 @@
     /* Заставляем обертку для кнопок "Реролл/Свернуть" переносить их на новые строки,
        чтобы они встали аккуратным столбиком и не вылезали за экран */
     .bb-vn-utility-row {
-        flex-wrap: wrap;
+        grid-column: 2;
+        grid-row: 1;
         gap: 6px !important;
+        position: sticky;
+        top: 4px;
+        align-self: start;
     }
     #bb-vn-btn-reroll, #bb-vn-btn-cancel {
-        padding: 8px !important; /* Делаем служебные кнопки тоньше */
+        width: 40px;
+        min-width: 40px;
+        height: 40px;
+        min-height: 40px;
+    }
+    .bb-vn-option.preview-open .bb-vn-forecast-hover {
+        left: 0;
+        right: 0;
+        top: calc(100% + 6px);
+        bottom: auto;
+        transform: none;
+        width: 100%;
+        max-width: none;
     }
 }
 
