@@ -692,41 +692,15 @@
 .bb-vn-utility-row { flex: 0 0 100%; display:flex; gap:8px; margin-top:2px; }
 .bb-vn-utility-card { text-align: left; }
 .bb-vn-utility-card .bb-vn-op-head { justify-content: flex-start; }
-.bb-vn-expand-btn {
-    margin-top: 1px;
-    border: 1px solid rgba(148, 163, 184, 0.32);
-    background: rgba(15, 23, 42, 0.52);
-    color: #cbd5e1;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.4px;
-    border-radius: 999px;
-    padding: 3px 8px;
-    cursor: pointer;
-    line-height: 1.2;
+.bb-vn-forecast-hover {
+    position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%) translateY(-4px);
+    width: clamp(220px, 32vw, 320px); max-width: calc(100vw - 40px);
+    background: rgba(10, 10, 14, 0.97); border: 1px solid rgba(192, 132, 252, 0.35); border-radius: 10px;
+    box-shadow: 0 12px 24px rgba(0,0,0,0.35); padding: 10px 12px;
+    opacity: 0; pointer-events: none; transition: opacity 0.18s ease, transform 0.18s ease;
+    z-index: 12; white-space: normal;
 }
-.bb-vn-option-extra {
-    display: none;
-    width: 100%;
-    margin-top: 2px;
-    flex-direction: column;
-    gap: 6px;
-}
-.bb-vn-option.expanded .bb-vn-option-extra {
-    display: flex;
-}
-.bb-vn-option.expanded .bb-vn-op-head {
-    -webkit-line-clamp: unset;
-    line-clamp: unset;
-}
-.bb-vn-forecast-inline {
-    width: 100%;
-    background: rgba(10, 10, 14, 0.62);
-    border: 1px solid rgba(192, 132, 252, 0.24);
-    border-radius: 9px;
-    padding: 7px 8px;
-    box-sizing: border-box;
-}
+.bb-vn-option:hover .bb-vn-forecast-hover { opacity: 1; transform: translateX(-50%) translateY(0); }
 .bb-vn-forecast-title { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #c084fc; margin-bottom: 4px; }
 .bb-vn-forecast-text {
     display: block; font-size: 11px; line-height: 1.35; color: #e2e8f0;
@@ -814,9 +788,13 @@
         padding: 3px 6px;
         flex: 0 0 auto;
     }
-    .bb-vn-expand-btn {
-        font-size: 9px;
-        padding: 2px 7px;
+    .bb-vn-forecast-hover {
+        position: static; transform: none; opacity: 1; pointer-events: auto;
+        width: 100%; max-width: 100%; margin-top: 6px;
+        box-sizing: border-box;
+    }
+    .bb-vn-option:hover .bb-vn-forecast-hover {
+        transform: none;
     }
     .bb-prompt-summary {
         flex-direction: column; align-items: flex-start;

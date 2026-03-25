@@ -1434,24 +1434,16 @@ window['renderVNOptionsFromData'] = function(/** @type {VNOption[]} */ parsedOpt
         const targetsText = opt.targets.length > 0
             ? opt.targets.map(target => `<span class="bb-vn-target">${escapeHtml(target)}</span>`).join('')
             : `<span class="bb-vn-target muted">Сцена в целом</span>`;
-        const detailsHtml = useEmotionalChoiceFraming
-            ? `
-                <div class="bb-vn-option-extra">
-                    <div class="bb-vn-targets">${targetsText}</div>
-                    ${opt.forecast ? `<div class="bb-vn-forecast-inline"><div class="bb-vn-forecast-title">Прогноз</div><div class="bb-vn-forecast-text">${escapeHtml(opt.forecast)}</div></div>` : ''}
-                </div>
-            `
-            : '';
-        const expandBtnHtml = useEmotionalChoiceFraming
-            ? `<button type="button" class="bb-vn-expand-btn" aria-expanded="false"><i class="fa-solid fa-chevron-down"></i>&nbsp; Подробнее</button>`
+        const forecastHtml = useEmotionalChoiceFraming && opt.forecast
+            ? `<div class="bb-vn-forecast-hover"><div class="bb-vn-forecast-title">Прогноз</div><div class="bb-vn-forecast-text">${escapeHtml(opt.forecast)}</div></div>`
             : '';
 
         optionsHtml += `
             <div class="bb-vn-option ${riskClass} ${toneClass}" data-intent="${escapeHtml(opt.intent)}" data-message="${encodeURIComponent(opt.message || '')}" data-tone="${escapeHtml(opt.tone || '')}" data-forecast="${escapeHtml(opt.forecast || '')}" data-targets="${encodeURIComponent(JSON.stringify(opt.targets || []))}">
                 <div class="bb-vn-op-topline"><span class="bb-vn-op-index">Сцена</span><div class="bb-vn-op-risk">${useEmotionalChoiceFraming ? 'Тон' : 'Риск'}: ${escapeHtml(metaLabel)}</div></div>
                 <div class="bb-vn-op-head">${escapeHtml(opt.intent)}</div>
-                ${expandBtnHtml}
-                ${detailsHtml}
+                ${useEmotionalChoiceFraming ? `<div class="bb-vn-targets">${targetsText}</div>` : ''}
+                ${forecastHtml}
             </div>
         `;
     });
@@ -1470,18 +1462,6 @@ window['renderVNOptionsFromData'] = function(/** @type {VNOption[]} */ parsedOpt
     `;
 
     $('#bb-vn-options-container').html(optionsHtml);
-
-    $('.bb-vn-expand-btn').off('click').on('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        const card = $(this).closest('.bb-vn-option');
-        const isExpanded = card.toggleClass('expanded').hasClass('expanded');
-        $(this)
-            .attr('aria-expanded', isExpanded ? 'true' : 'false')
-            .html(isExpanded
-                ? '<i class="fa-solid fa-chevron-up"></i>&nbsp; Свернуть'
-                : '<i class="fa-solid fa-chevron-down"></i>&nbsp; Подробнее');
-    });
 
     if (autoOpen) {
         $('#bb-vn-options-container').addClass('active');
