@@ -147,11 +147,11 @@
 
 ### HUD связей / дневник и системный журнал
 
-<img width="1560" height="865" alt="вкладки" src="https://github.com/user-attachments/assets/7bb395ea-9f5d-4cea-aba2-8631e9eb0767" />
+<img width="1173" height="878" alt="el" src="https://github.com/user-attachments/assets/2eca36f6-82c8-40b5-86b7-10d6a3baa98d" />
 
 ### Варианты действий
 
-<img width="941" height="523" alt="варианты действий" src="https://github.com/user-attachments/assets/81363558-7b6a-4573-8785-0a476cea0553" />
+<img width="942" height="533" alt="ответы" src="https://github.com/user-attachments/assets/00b9732b-ca50-421a-994b-4cdf56464bce" />
 
 ### HUD-уведомления
 
