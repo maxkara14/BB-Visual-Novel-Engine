@@ -374,6 +374,40 @@ function getLegacyForecastFromRisk(risk = "") {
     return '';
 }
 
+function buildIntentFallback(tone = "", risk = "") {
+    const t = String(tone || '').toLowerCase();
+    const r = String(risk || '').toLowerCase();
+    if (t.includes('мяг') || t.includes('неж')) return 'Осторожный шаг';
+    if (t.includes('холод') || t.includes('отстр')) return 'Холодный манёвр';
+    if (t.includes('дерз') || t.includes('напор')) return 'Смелый ход';
+    if (t.includes('опас') || r.includes('выс')) return 'Рискованный выбор';
+    return 'Новый ход';
+}
+
+function sanitizeIntentLabel(intent = "", tone = "", risk = "") {
+    const raw = String(intent || '').trim();
+    if (!raw) return buildIntentFallback(tone, risk);
+
+    const cleaned = raw
+        .replace(/[_]+/g, ' ')
+        .replace(/[-]{2,}/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const hasCyrillic = /[а-яё]/i.test(cleaned);
+    const latinChars = (cleaned.match(/[a-z]/gi) || []).length;
+    const cyrillicChars = (cleaned.match(/[а-яё]/gi) || []).length;
+    const looksLikeToken = /^[A-Z0-9_]+$/.test(raw) || /^[a-z0-9_]+$/.test(raw);
+    const tooLatinHeavy = latinChars > 0 && cyrillicChars === 0;
+
+    if (!cleaned || looksLikeToken || tooLatinHeavy || !hasCyrillic) {
+        return buildIntentFallback(tone, risk);
+    }
+
+    const normalized = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    return normalized.slice(0, 64);
+}
+
 /**
  * @param {VNOption} option
  * @returns {VNOption}
@@ -390,6 +424,7 @@ function normalizeOptionData(option = {}) {
 
     return {
         ...option,
+        intent: sanitizeIntentLabel(option.intent || '', tone, legacyRisk),
         tone,
         forecast,
         targets,
@@ -1364,6 +1399,7 @@ CRITICAL RULES FOR EMOTIONAL CHOICE FRAMING:
 2. "forecast": A SHORT Russian hint for what this action may cause. Think in placeholder terms like "SHORT_RUSSIAN_OUTCOME_HINT".
 3. "targets": Array of 1-3 character names that are most affected by this action. If no single character stands out, return an empty array.
 4. "risk": OPTIONAL legacy field for backward compatibility. If you include it, use "Низкий", "Средний", or "Высокий". Do not make it the main focus.
+5. "intent": Must be a natural Russian phrase (2-5 words). Never use placeholders, ALL_CAPS tokens, snake_case, or English-only labels.
 
 CRITICAL JSON AND FORMATTING RULES:
 1. Return STRICTLY a valid JSON array. DO NOT output any conversational text outside the JSON.
