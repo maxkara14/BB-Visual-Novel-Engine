@@ -51,6 +51,10 @@ NO EXCEPTIONS. Even if it's the very first message or a known lore character, if
 2. "status": A 1-3 word label defining WHO {{user}} IS to the character. CRITICAL RULE: DO NOT describe the character's own role.
 Use a short role label that answers: "Who is {{user}} to this character?"
 Think in placeholder terms like: "WHO_USER_IS_TO_THE_CHARACTER".
+The status MUST be user-facing and usually include a relation noun like: "враг", "союзник", "ученик", "соперник", "угроза", "цель", "друг".
+Examples (valid): "проблемный ученик", "опасная соперница", "нежеланный союзник".
+Examples (invalid): "разочарованный наставник", "строгий учитель", "уставший капитан" (these describe the character, not {{user}}).
+CRITICAL: "name" must be a single concrete character. NEVER use groups like classes, teams, factions, "коллектив", or "все".
 3. "delta": Integer representing the shift in the character's feelings towards {{user}}. Use this STRICT scale:
    0 = Neutral interaction (no change in opinion).
    1 to 3 = Mild positive (character appreciates politeness, small help).
@@ -486,6 +490,41 @@ function normalizeStatusLabel(value = "") {
         .trim();
 }
 
+function sanitizeRelationshipStatus(value = "") {
+    const normalized = normalizeStatusLabel(value);
+    if (!normalized) return '';
+    const words = normalized.split(' ').filter(Boolean);
+    return words.slice(0, 3).join(' ');
+}
+
+function isCollectiveEntityName(name = "") {
+    const value = String(name || '').trim().toLowerCase();
+    if (!value) return true;
+    return /(^|\b)(класс|коллектив|группа|отряд|команда|фракция|клан|семья|все|ученики|народ)(\b|$)/i.test(value);
+}
+
+function isLikelySelfRoleStatus(status = "") {
+    const value = normalizeStatusLabel(status).toLowerCase();
+    if (!value) return false;
+
+    const userFacingTokens = /(враг|союзник|ученик|соперник|угроза|цель|друг|пария|изгой|пешка|гость|интерес)/i;
+    if (userFacingTokens.test(value)) return false;
+
+    const selfRoleTokens = /(наставник|учитель|капитан|командир|лидер|хашира|столп|мастер|сенсей|директор)/i;
+    return selfRoleTokens.test(value);
+}
+
+function getFallbackUserFacingStatus(affinity = 0, previousStatus = "") {
+    const prev = sanitizeRelationshipStatus(previousStatus);
+    if (prev) return prev;
+
+    if (affinity <= -40) return 'опасный враг';
+    if (affinity < -10) return 'идеологический враг';
+    if (affinity <= 10) return 'нестабильный контакт';
+    if (affinity <= 50) return 'осторожный союзник';
+    return 'ценный союзник';
+}
+
 function getToneClass(tone = "") {
     const value = String(tone).toLowerCase();
     if (value.includes('неж') || value.includes('тепл') || value.includes('ласк')) return 'tone-gentle';
@@ -764,6 +803,7 @@ function recalculateAllStats(isNewMessage = false) {
             activeUpdates.forEach(update => {
                 const charName = update.name;
                 if (!charName) return;
+                if (isCollectiveEntityName(charName)) return;
 
                 if (chat_metadata['bb_vn_ignored_chars'].includes(charName)) return;
 
@@ -783,7 +823,7 @@ function recalculateAllStats(isNewMessage = false) {
                     currentCalculatedStats[charName] = {
                         affinity: base,
                         history: [],
-                        status: normalizeStatusLabel(update.status || ""),
+                        status: sanitizeRelationshipStatus(update.status || ""),
                         memories: { soft: [], deep: [] }
                     };
                     
@@ -815,8 +855,13 @@ function recalculateAllStats(isNewMessage = false) {
                 currentCalculatedStats[charName].affinity += delta;
                 if (currentCalculatedStats[charName].affinity > 100) currentCalculatedStats[charName].affinity = 100;
                 if (currentCalculatedStats[charName].affinity < -100) currentCalculatedStats[charName].affinity = -100;
-                
-                if (update.status) currentCalculatedStats[charName].status = normalizeStatusLabel(update.status);
+                const incomingStatus = sanitizeRelationshipStatus(update.status || '');
+                const safeStatus = incomingStatus
+                    ? (isLikelySelfRoleStatus(incomingStatus)
+                        ? getFallbackUserFacingStatus(currentCalculatedStats[charName].affinity, previousStatus)
+                        : incomingStatus)
+                    : '';
+                if (safeStatus) currentCalculatedStats[charName].status = safeStatus;
 
                 currentCalculatedStats[charName].history.push({ delta, reason: update.reason || "" });
                 appendCharacterMemory(currentCalculatedStats[charName], delta, update.reason || "");
@@ -833,12 +878,12 @@ function recalculateAllStats(isNewMessage = false) {
                     }));
                 }
 
-                if (update.status && previousStatus && previousStatus !== update.status) {
+                if (safeStatus && previousStatus && previousStatus !== safeStatus) {
                     toastMoment = pickToastMoment(toastMoment, maybeAddStoryMoment({
                         type: 'status-shift',
                         char: charName,
                         title: 'Новый образ в его глазах',
-                        text: `${charName}: теперь вы для него — «${normalizeStatusLabel(update.status)}».`,
+                        text: `${charName}: теперь вы для него — «${safeStatus}».`,
                     }));
                 }
 
