@@ -491,7 +491,9 @@ function normalizeStatusLabel(value = "") {
 }
 
 function sanitizeRelationshipStatus(value = "") {
-    const normalized = normalizeStatusLabel(value);
+    const normalized = normalizeStatusLabel(value)
+        .replace(/[,:;.!?].*$/g, '')
+        .trim();
     if (!normalized) return '';
     const words = normalized.split(' ').filter(Boolean);
     return words.slice(0, 3).join(' ');
@@ -512,6 +514,12 @@ function isLikelySelfRoleStatus(status = "") {
 
     const selfRoleTokens = /(наставник|учитель|капитан|командир|лидер|хашира|столп|мастер|сенсей|директор)/i;
     return selfRoleTokens.test(value);
+}
+
+function hasUserRelationNoun(status = "") {
+    const value = normalizeStatusLabel(status).toLowerCase();
+    if (!value) return false;
+    return /(враг|союзник|ученик|одноклассник|соперник|угроза|цель|друг|пария|изгой|пешка|гость|интерес|партн[её]р)/i.test(value);
 }
 
 function getFallbackUserFacingStatus(affinity = 0, previousStatus = "") {
@@ -857,7 +865,7 @@ function recalculateAllStats(isNewMessage = false) {
                 if (currentCalculatedStats[charName].affinity < -100) currentCalculatedStats[charName].affinity = -100;
                 const incomingStatus = sanitizeRelationshipStatus(update.status || '');
                 const safeStatus = incomingStatus
-                    ? (isLikelySelfRoleStatus(incomingStatus)
+                    ? (isLikelySelfRoleStatus(incomingStatus) || !hasUserRelationNoun(incomingStatus)
                         ? getFallbackUserFacingStatus(currentCalculatedStats[charName].affinity, previousStatus)
                         : incomingStatus)
                     : '';
