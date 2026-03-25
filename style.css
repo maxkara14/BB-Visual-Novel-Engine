@@ -644,8 +644,13 @@
 
 @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); } 50% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.6); } }
 
-#bb-vn-options-container { display: none; gap: 8px; width: 100%; flex-wrap: wrap; overflow: visible; }
-#bb-vn-options-container.active { display: flex; }
+#bb-vn-options-container { display: none; gap: 8px; width: 100%; overflow: visible; }
+#bb-vn-options-container.active {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+    gap: 8px;
+    align-items: start;
+}
 
 .bb-vn-option {
     flex: 1; min-width: 30%; background: linear-gradient(180deg, rgba(19, 24, 38, 0.98), rgba(12, 16, 26, 0.95));
@@ -689,6 +694,15 @@
 .bb-vn-utility-row { flex: 0 0 100%; display:flex; gap:8px; margin-top:2px; }
 .bb-vn-utility-card { text-align: left; }
 .bb-vn-utility-card .bb-vn-op-head { justify-content: flex-start; }
+.bb-vn-utility-row {
+    grid-column: 4;
+    grid-row: 1 / span 4;
+    margin-top: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+}
 .bb-vn-utility-compact {
     flex: 0 0 auto;
     width: 42px;
@@ -788,10 +802,16 @@
 
     /* Делаем основные кнопки более компактными на телефоне */
     .bb-vn-option {
-        flex: 0 0 100% !important;
         min-width: 100% !important;
         padding: 7px 9px !important;
         gap: 5px !important;
+    }
+    #bb-vn-options-container.active {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+    }
+    .bb-vn-option[data-intent] {
+        grid-column: 1;
     }
     .bb-vn-op-head {
         font-size: 12px;
@@ -834,14 +854,27 @@
     /* Заставляем обертку для кнопок "Реролл/Свернуть" переносить их на новые строки,
        чтобы они встали аккуратным столбиком и не вылезали за экран */
     .bb-vn-utility-row {
-        flex-wrap: wrap;
+        grid-column: 2;
+        grid-row: 1 / span 12;
         gap: 6px !important;
+        position: sticky;
+        top: 4px;
+        align-self: start;
     }
     #bb-vn-btn-reroll, #bb-vn-btn-cancel {
         width: 40px;
         min-width: 40px;
         height: 40px;
         min-height: 40px;
+    }
+    .bb-vn-option.preview-open .bb-vn-forecast-hover {
+        left: 0;
+        right: 0;
+        top: calc(100% + 6px);
+        bottom: auto;
+        transform: none;
+        width: 100%;
+        max-width: none;
     }
 }
 
