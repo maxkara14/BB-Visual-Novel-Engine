@@ -1450,13 +1450,13 @@ window['renderVNOptionsFromData'] = function(/** @type {VNOption[]} */ parsedOpt
     
     optionsHtml += `
         <div class="bb-vn-utility-row">
-            <div class="bb-vn-option risk-med bb-vn-utility-card" id="bb-vn-btn-reroll">
-                <div class="bb-vn-op-topline"><span class="bb-vn-op-index">Сервис</span></div>
-                <div class="bb-vn-op-head"><i class="fa-solid fa-rotate-right"></i>&nbsp; Реролл вариантов</div>
+            <div class="bb-vn-option risk-med bb-vn-utility-card bb-vn-utility-compact" id="bb-vn-btn-reroll" title="Реролл вариантов" aria-label="Реролл вариантов">
+                <i class="fa-solid fa-rotate-right"></i>
+                <span class="bb-vn-sr-only">Реролл вариантов</span>
             </div>
-            <div class="bb-vn-option risk-med bb-vn-utility-card" id="bb-vn-btn-cancel">
-                <div class="bb-vn-op-topline"><span class="bb-vn-op-index">Сервис</span></div>
-                <div class="bb-vn-op-head"><i class="fa-solid fa-chevron-up"></i>&nbsp; Свернуть</div>
+            <div class="bb-vn-option risk-med bb-vn-utility-card bb-vn-utility-compact" id="bb-vn-btn-cancel" title="Свернуть варианты" aria-label="Свернуть варианты">
+                <i class="fa-solid fa-chevron-up"></i>
+                <span class="bb-vn-sr-only">Свернуть варианты</span>
             </div>
         </div>
     `;
@@ -1472,6 +1472,16 @@ window['renderVNOptionsFromData'] = function(/** @type {VNOption[]} */ parsedOpt
     }
 
     $('.bb-vn-option[data-intent]').off('click').on('click', function() {
+        const isTouchDevice = window.matchMedia('(hover: none), (pointer: coarse)').matches;
+        const card = $(this);
+        const hasForecast = Boolean(card.attr('data-forecast'));
+        if (isTouchDevice && hasForecast && !card.hasClass('preview-open')) {
+            $('.bb-vn-option.preview-open').removeClass('preview-open');
+            card.addClass('preview-open');
+            return;
+        }
+        $('.bb-vn-option.preview-open').removeClass('preview-open');
+
         const message = decodeURIComponent($(this).attr('data-message') || '');
         const targetsRaw = decodeURIComponent($(this).attr('data-targets') || '[]');
         let parsedTargets = [];
@@ -1503,6 +1513,11 @@ window['renderVNOptionsFromData'] = function(/** @type {VNOption[]} */ parsedOpt
                 if (sendBtn) sendBtn.click();
             }
         }
+    });
+
+    $(document).off('pointerdown.bb-vn-forecast').on('pointerdown.bb-vn-forecast', function(event) {
+        if ($(event.target).closest('.bb-vn-option[data-intent]').length > 0) return;
+        $('.bb-vn-option.preview-open').removeClass('preview-open');
     });
 
     $('#bb-vn-btn-cancel').off('click').on('click', function() {

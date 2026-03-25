@@ -689,6 +689,35 @@
 .bb-vn-utility-row { flex: 0 0 100%; display:flex; gap:8px; margin-top:2px; }
 .bb-vn-utility-card { text-align: left; }
 .bb-vn-utility-card .bb-vn-op-head { justify-content: flex-start; }
+.bb-vn-utility-compact {
+    flex: 0 0 auto;
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    min-height: 42px;
+    padding: 0;
+    border-radius: 12px;
+    justify-content: center;
+    align-items: center;
+    display: inline-flex;
+    margin-left: auto;
+}
+.bb-vn-utility-row #bb-vn-btn-cancel {
+    margin-left: 0;
+}
+.bb-vn-utility-compact i {
+    font-size: 15px;
+}
+.bb-vn-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+}
 .bb-vn-forecast-hover {
     position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%) translateY(-4px);
     width: clamp(220px, 32vw, 320px); max-width: calc(100vw - 40px);
@@ -698,6 +727,10 @@
     z-index: 12; white-space: normal;
 }
 .bb-vn-option:hover .bb-vn-forecast-hover { opacity: 1; transform: translateX(-50%) translateY(0); }
+.bb-vn-option.preview-open .bb-vn-forecast-hover {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
 .bb-vn-forecast-title { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #c084fc; margin-bottom: 4px; }
 .bb-vn-forecast-text {
     display: block; font-size: 11px; line-height: 1.35; color: #e2e8f0;
@@ -805,23 +838,10 @@
         gap: 6px !important;
     }
     #bb-vn-btn-reroll, #bb-vn-btn-cancel {
-        padding: 7px 8px !important;
-    }
-}
-
-@media (hover: none), (pointer: coarse) {
-    .bb-vn-forecast-hover {
-        position: static;
-        transform: none;
-        opacity: 1;
-        pointer-events: auto;
-        width: 100%;
-        max-width: 100%;
-        margin-top: 6px;
-        box-sizing: border-box;
-    }
-    .bb-vn-option:hover .bb-vn-forecast-hover {
-        transform: none;
+        width: 40px;
+        min-width: 40px;
+        height: 40px;
+        min-height: 40px;
     }
 }
 
