@@ -507,8 +507,24 @@ function sanitizeMoodlet(value = "") {
         .replace(/[,:;.!?].*$/g, '')
         .trim();
     if (!normalized) return '';
-    const words = normalized.split(' ').filter(Boolean);
-    return words.slice(0, 2).join(' ');
+    const words = normalized.split(' ').filter(Boolean).slice(0, 3);
+    if (words.length === 0) return '';
+
+    const trailingStopWords = new Set([
+        'и', 'но', 'а', 'или', 'либо', 'что', 'как',
+        'в', 'во', 'на', 'с', 'со', 'к', 'ко', 'о', 'об',
+        'за', 'от', 'до', 'по', 'из', 'у', 'при', 'для', 'без', 'под', 'над', 'между'
+    ]);
+
+    while (words.length > 1 && trailingStopWords.has(words[words.length - 1].toLowerCase())) {
+        words.pop();
+    }
+
+    while (words.length > 1 && trailingStopWords.has(words[0].toLowerCase())) {
+        words.shift();
+    }
+
+    return words.join(' ');
 }
 
 function isCollectiveEntityName(name = "") {
