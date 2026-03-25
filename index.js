@@ -52,6 +52,7 @@ NO EXCEPTIONS. Even if it's the very first message or a known lore character, if
 Use a short role label that answers: "Who is {{user}} to this character?"
 Think in placeholder terms like: "WHO_USER_IS_TO_THE_CHARACTER".
 The status MUST be user-facing and usually include a relation noun like: "враг", "союзник", "ученик", "соперник", "угроза", "цель", "друг".
+You are NOT limited to a fixed dictionary: adapt wording to the current scene, setting, and relationship context.
 Examples (valid): "проблемный ученик", "опасная соперница", "нежеланный союзник".
 Examples (invalid): "разочарованный наставник", "строгий учитель", "уставший капитан" (these describe the character, not {{user}}).
 CRITICAL: "name" must be a single concrete character. NEVER use groups like classes, teams, factions, "коллектив", or "все".
@@ -64,6 +65,7 @@ CRITICAL: "name" must be a single concrete character. NEVER use groups like clas
    -4 to -8 = Strong negative (serious fight, deep offense).
    -9 to -30 = Extreme negative (murder, ultimate betrayal, unforgivable atrocities).
 4. "reason": Short explanation of WHY the character's opinion changed (the delta).
+5. "moodlet": Optional 1-2 word emotional imprint (like a tiny mood tag) that captures the feeling of this interaction.
 
 CRITICAL LANGUAGE RULE: Output the JSON values ENTIRELY IN RUSSIAN.
 
@@ -76,7 +78,8 @@ Use this SHORT JSON SHAPE as a template (placeholders are instructions, not lite
       "base_affinity": STARTING_SCORE_IF_NEW,
       "delta": POSITIVE_OR_NEGATIVE_INTEGER,
       "status": "WHO_USER_IS_TO_THE_CHARACTER",
-      "reason": "SHORT_REASON_FOR_THE_CHANGE"
+      "reason": "SHORT_REASON_FOR_THE_CHANGE",
+      "moodlet": "TWO_WORD_EMOTIONAL_TAG"
     }
   ]
 }
@@ -301,9 +304,9 @@ function showHudToast({ title, text, badge = 'Система', variant = 'system
     window.setTimeout(() => removeToast(toastElement), TOAST_LIFETIME_MS);
 }
 
-function showRelationshipToast(name, delta, reason) {
+function showRelationshipToast(name, delta, reason, moodlet = '') {
     if (delta === 0) return;
-    const shift = getShiftDescriptor(delta);
+    const shift = getShiftDescriptor(delta, moodlet);
     showHudToast({
         title: `${name} · ${shift.short}`,
         text: reason || shift.full,
@@ -499,6 +502,15 @@ function sanitizeRelationshipStatus(value = "") {
     return words.slice(0, 3).join(' ');
 }
 
+function sanitizeMoodlet(value = "") {
+    const normalized = normalizeStatusLabel(value)
+        .replace(/[,:;.!?].*$/g, '')
+        .trim();
+    if (!normalized) return '';
+    const words = normalized.split(' ').filter(Boolean);
+    return words.slice(0, 2).join(' ');
+}
+
 function isCollectiveEntityName(name = "") {
     const value = String(name || '').trim().toLowerCase();
     if (!value) return true;
@@ -516,30 +528,29 @@ function isLikelySelfRoleStatus(status = "") {
     return selfRoleTokens.test(value);
 }
 
-function hasUserRelationNoun(status = "") {
+function isNarrativeStatusLeak(status = "") {
     const value = normalizeStatusLabel(status).toLowerCase();
     if (!value) return false;
-    return /(враг|союзник|ученик|одноклассник|соперник|угроза|цель|друг|пария|изгой|пешка|гость|интерес|партн[её]р)/i.test(value);
+    return /(котор(ый|ая|ое|ые)|меня|мне|мой|моя|моё|мои)\b/i.test(value);
 }
 
-function getFallbackUserFacingStatus(affinity = 0, previousStatus = "", delta = 0) {
-    const prev = sanitizeRelationshipStatus(previousStatus);
-    if (prev && !isLikelySelfRoleStatus(prev) && hasUserRelationNoun(prev)) return prev;
-
-    if (affinity <= -50) return delta < 0 ? 'ненавистный враг' : 'опасный враг';
-    if (affinity < -15) return delta > 0 ? 'напряжённый соперник' : 'принципиальный враг';
-    if (affinity < 15) return delta >= 0 ? 'сомневающийся союзник' : 'настороженный союзник';
-    if (affinity < 60) return delta > 0 ? 'уважаемый союзник' : 'осторожный союзник';
-    return delta > 0 ? 'близкий союзник' : 'ценный союзник';
+function isValidUserFacingStatus(status = "") {
+    const value = sanitizeRelationshipStatus(status);
+    if (!value) return false;
+    if (isLikelySelfRoleStatus(value)) return false;
+    if (isNarrativeStatusLeak(value)) return false;
+    return true;
 }
 
 function coerceUserFacingStatus(candidateStatus = "", affinity = 0, previousStatus = "", delta = 0) {
+    void affinity;
+    void delta;
     const incoming = sanitizeRelationshipStatus(candidateStatus);
-    if (!incoming) return '';
-    if (isLikelySelfRoleStatus(incoming) || !hasUserRelationNoun(incoming)) {
-        return getFallbackUserFacingStatus(affinity, previousStatus, delta);
-    }
-    return incoming;
+    if (isValidUserFacingStatus(incoming)) return incoming;
+
+    const prev = sanitizeRelationshipStatus(previousStatus);
+    if (isValidUserFacingStatus(prev)) return prev;
+    return '';
 }
 
 function getToneClass(tone = "") {
@@ -568,21 +579,24 @@ function getMemoryTone(delta) {
     return 'neutral';
 }
 
-function getShiftDescriptor(delta) {
+function getShiftDescriptor(delta, moodlet = '') {
+    const normalizedMoodlet = sanitizeMoodlet(moodlet);
     const absDelta = Math.abs(delta);
-    if (delta > 0) {
-        if (absDelta >= 9) return { short: 'Сильная связь', full: 'Сильное сближение', color: '#c084fc', logType: 'plus' };
-        if (absDelta >= 4) return { short: 'Сближение', full: 'Сильное сближение', color: '#4ade80', logType: 'plus' };
-        if (absDelta >= 2) return { short: 'Симпатия', full: 'Положительное изменение', color: '#86efac', logType: 'plus' };
-        return { short: 'Лёгкий плюс', full: 'Лёгкое улучшение', color: '#bbf7d0', logType: 'plus' };
+    const color = delta > 0
+        ? (absDelta >= 9 ? '#c084fc' : absDelta >= 4 ? '#4ade80' : '#86efac')
+        : (delta < 0 ? (absDelta >= 9 ? '#fca5a5' : absDelta >= 4 ? '#f87171' : '#fda4af') : '#94a3b8');
+    const logType = delta > 0 ? 'plus' : delta < 0 ? 'minus' : 'system';
+    if (normalizedMoodlet) {
+        return {
+            short: normalizedMoodlet,
+            full: `Эмоциональный сдвиг: ${normalizedMoodlet}`,
+            color,
+            logType,
+        };
     }
-    if (delta < 0) {
-        if (absDelta >= 9) return { short: 'Разрыв', full: 'Глубокая трещина', color: '#fca5a5', logType: 'minus' };
-        if (absDelta >= 4) return { short: 'Конфликт', full: 'Сильное ухудшение', color: '#f87171', logType: 'minus' };
-        if (absDelta >= 2) return { short: 'Напряжение', full: 'Нарастающее напряжение', color: '#fda4af', logType: 'minus' };
-        return { short: 'Лёгкий минус', full: 'Лёгкое ухудшение', color: '#fecdd3', logType: 'minus' };
-    }
-    return { short: 'Без изменений', full: 'Без ощутимых изменений', color: '#94a3b8', logType: 'system' };
+    if (delta === 0) return { short: '0', full: 'Сдвиг отношения 0', color, logType };
+    const points = formatAffinityPoints(delta);
+    return { short: points, full: `Сдвиг отношения ${points}`, color, logType };
 }
 
 function formatAffinityPoints(value) {
@@ -607,68 +621,48 @@ function getUnforgettableImpact(memories = []) {
     const total = memories.reduce((sum, memory) => sum + (parseInt(memory.delta) || 0), 0);
     const hasPositive = memories.some(memory => (parseInt(memory.delta) || 0) > 0);
     const hasNegative = memories.some(memory => (parseInt(memory.delta) || 0) < 0);
+    const moodletPool = memories
+        .map(memory => sanitizeMoodlet(memory.moodlet || ''))
+        .filter(Boolean);
+    const moodlet = moodletPool.length > 0 ? moodletPool[moodletPool.length - 1] : '';
+    const label = moodlet || (hasPositive && hasNegative ? 'Смешанный след' : total >= 0 ? 'Тёплый след' : 'Тяжёлый след');
 
     if (hasPositive && hasNegative) {
         return {
-            label: 'Противоречивый след',
+            label,
             prompt: 'Past unforgettable events create inner conflict: the character is torn between closeness and pain, so reactions should feel emotionally unstable and layered.',
         };
     }
     if (total >= 18) {
         return {
-            label: 'Тянется сквозь всё',
+            label,
             prompt: 'Unforgettable positive events create a powerful pull toward {{user}}. Even in tense scenes, warmth, trust, or longing should leak through.',
         };
     }
     if (total > 0) {
         return {
-            label: 'Глубокое доверие',
+            label,
             prompt: 'Unforgettable positive events still shape the character. Small gestures from {{user}} should be interpreted more softly and personally.',
         };
     }
     if (total <= -18) {
         return {
-            label: 'Шрам не зажил',
+            label,
             prompt: 'Unforgettable negative events still dominate the character’s perception. Suspicion, pain, or guardedness should override calm surface behavior.',
         };
     }
     return {
-        label: 'Подспудная настороженность',
+        label,
         prompt: 'Unforgettable negative events remain unresolved. Even neutral interactions should carry some hesitation, distance, or emotional recoil.',
     };
 }
 
 function getUnforgettableRoleStatus(memories = []) {
-    if (!Array.isArray(memories) || memories.length === 0) return '';
-
-    const total = memories.reduce((sum, memory) => sum + (parseInt(memory.delta) || 0), 0);
-    const hasPositive = memories.some(memory => (parseInt(memory.delta) || 0) > 0);
-    const hasNegative = memories.some(memory => (parseInt(memory.delta) || 0) < 0);
-    const memoryText = memories.map(memory => String(memory.text || '').toLowerCase()).join(' | ');
-
-    const keywordStatusMap = [
-        { pattern: /(спас|защит|выручил|прикрыл|уберег)/i, label: 'Спасший меня' },
-        { pattern: /(тайн|секрет|доверил|доверяю|открылся)/i, label: 'Хранитель тайны' },
-        { pattern: /(поцел|объят|нежн|люб|сердц|забот)/i, label: 'Тронувший сердце' },
-        { pattern: /(опираюсь|поддержал|рядом|не бросил|помог)/i, label: 'Тот, на кого опираюсь' },
-        { pattern: /(предал|обман|солгал|измен|подстав)/i, label: 'Предавший доверие' },
-        { pattern: /(униз|оскорб|отверг|презр|стыд)/i, label: 'Задевший гордость' },
-        { pattern: /(рана|шрам|сломал|разрушил|ударил)/i, label: 'Оставивший шрам' },
-        { pattern: /(ревност|одержим|опасн|искуш)/i, label: 'Опасно близкий' },
-    ];
-
-    for (const candidate of keywordStatusMap) {
-        if (candidate.pattern.test(memoryText)) return candidate.label;
-    }
-
-    if (hasPositive && hasNegative) return 'Болезненно важный';
-    if (total >= 18) return 'Тот, кто изменил меня';
-    if (total > 0) return 'Тот, кому тянусь';
-    if (total <= -18) return 'Тот, кто оставил шрам';
-    return 'Тот, кому не верю';
+    void memories;
+    return '';
 }
 
-function appendCharacterMemory(charStats, delta, reason) {
+function appendCharacterMemory(charStats, delta, reason, moodlet = '') {
     if (!charStats || !reason || delta === 0) return;
     const bucket = getMemoryBucket(delta);
     if (!bucket) return;
@@ -676,6 +670,7 @@ function appendCharacterMemory(charStats, delta, reason) {
         text: reason,
         delta,
         tone: getMemoryTone(delta),
+        moodlet: sanitizeMoodlet(moodlet),
     };
 
     charStats.memories[bucket].push(memory);
@@ -880,8 +875,9 @@ function recalculateAllStats(isNewMessage = false) {
                 );
                 if (safeStatus) currentCalculatedStats[charName].status = safeStatus;
 
-                currentCalculatedStats[charName].history.push({ delta, reason: update.reason || "" });
-                appendCharacterMemory(currentCalculatedStats[charName], delta, update.reason || "");
+                const moodlet = sanitizeMoodlet(update.moodlet || '');
+                currentCalculatedStats[charName].history.push({ delta, reason: update.reason || "", moodlet });
+                appendCharacterMemory(currentCalculatedStats[charName], delta, update.reason || "", moodlet);
 
                 const previousTier = getTierInfo(previousAffinity).label;
                 const newTier = getTierInfo(currentCalculatedStats[charName].affinity).label;
@@ -905,7 +901,7 @@ function recalculateAllStats(isNewMessage = false) {
                 }
 
                 if (Math.abs(delta) >= 2 && update.reason) {
-                    const shift = getShiftDescriptor(delta);
+                    const shift = getShiftDescriptor(delta, moodlet);
                     toastMoment = pickToastMoment(toastMoment, maybeAddStoryMoment({
                         type: delta > 0 ? 'soft-positive' : 'soft-negative',
                         char: charName,
@@ -928,9 +924,9 @@ function recalculateAllStats(isNewMessage = false) {
                     if (toastMoment) {
                         showStoryMomentToast(toastMoment);
                     } else {
-                        showRelationshipToast(charName, delta, update.reason || "");
+                        showRelationshipToast(charName, delta, update.reason || "", moodlet);
                     }
-                    const shift = getShiftDescriptor(delta);
+                    const shift = getShiftDescriptor(delta, moodlet);
                     // Меняем пробелы на перенос строки
                     const formattedName = escapeHtml(charName).replace(/ /g, '<br>');
                     addGlobalLog(shift.logType, `
@@ -1009,7 +1005,7 @@ function renderSocialHud() {
                 let historyHtml = '';
                 const historyArr = currentCalculatedStats[charName].history || [];
                 [...historyArr].reverse().forEach(h => {
-                    const shift = getShiftDescriptor(h.delta);
+                    const shift = getShiftDescriptor(h.delta, h.moodlet || '');
                     if (h.delta !== 0) {
                         historyHtml += `
                             <div class="bb-log-entry">
@@ -1054,7 +1050,7 @@ function renderSocialHud() {
                                 <div class="bb-char-route-meta">
                                     <div class="bb-char-meta-card">
                                         <span class="bb-char-meta-label">Последний сдвиг</span>
-                                        <strong>${lastHistory ? escapeHtml(getShiftDescriptor(lastHistory.delta).full) : 'Пока ровно'}</strong>
+                                        <strong>${lastHistory ? escapeHtml(getShiftDescriptor(lastHistory.delta, lastHistory.moodlet || '').full) : 'Пока ровно'}</strong>
                                     </div>
                                     <div class="bb-char-meta-card">
                                         <span class="bb-char-meta-label">Основа</span>
