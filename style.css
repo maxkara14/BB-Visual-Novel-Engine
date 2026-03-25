@@ -867,7 +867,7 @@
        чтобы они встали аккуратным столбиком и не вылезали за экран */
     .bb-vn-utility-row {
         grid-column: 2;
-        grid-row: 1 / span 12;
+        grid-row: 1;
         gap: 6px !important;
         position: sticky;
         top: 4px;
