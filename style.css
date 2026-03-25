@@ -622,21 +622,24 @@
    ИНТЕРАКТИВНОЕ КИНО (ПАНЕЛЬ НАД ЧАТОМ)
 ========================================= */
 #bb-vn-action-bar {
-    width: 100%; padding: 10px 12px; box-sizing: border-box;
-    display: flex; flex-direction: column; gap: 10px;
+    width: 100%; padding: 8px 10px; box-sizing: border-box;
+    display: flex; flex-direction: column; gap: 8px;
     background: linear-gradient(180deg, rgba(11, 16, 25, 0.9), rgba(20, 14, 29, 0.72));
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 18px 18px 0 0; margin-bottom: 6px;
+    border-radius: 14px 14px 0 0; margin-bottom: 4px;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
-    overflow: visible;
+    overflow-x: visible;
+    overflow-y: auto;
+    max-height: min(46vh, 350px);
+    scrollbar-width: thin;
     box-shadow: 0 -12px 24px rgba(0,0,0,0.12);
 }
 
 .bb-vn-main-btn {
     background: linear-gradient(180deg, rgba(24, 31, 47, 0.96), rgba(34, 21, 46, 0.92)); border: 1px solid rgba(192, 132, 252, 0.44);
     color: #e2e8f0; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px;
-    padding: 14px; border-radius: 16px; text-align: center; cursor: pointer;
+    padding: 10px 12px; border-radius: 13px; text-align: center; cursor: pointer;
     box-shadow: 0 12px 24px rgba(0,0,0,0.22); transition: all 0.2s ease;
 }
 .bb-vn-main-btn:hover { background: linear-gradient(180deg, rgba(34, 39, 56, 0.98), rgba(43, 26, 58, 0.92)); box-shadow: 0 14px 26px rgba(0,0,0,0.24); text-shadow: 0 0 5px #fff; }
@@ -644,13 +647,13 @@
 
 @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); } 50% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.6); } }
 
-#bb-vn-options-container { display: none; gap: 10px; width: 100%; flex-wrap: wrap; overflow: visible; }
+#bb-vn-options-container { display: none; gap: 8px; width: 100%; flex-wrap: wrap; overflow: visible; }
 #bb-vn-options-container.active { display: flex; }
 
 .bb-vn-option {
     flex: 1; min-width: 30%; background: linear-gradient(180deg, rgba(19, 24, 38, 0.98), rgba(12, 16, 26, 0.95));
-    border: 1px solid rgba(255,255,255,0.12); border-radius: 18px;
-    padding: 14px 13px; cursor: pointer; display: flex; flex-direction: column; gap: 9px;
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 14px;
+    padding: 10px 11px; cursor: pointer; display: flex; flex-direction: column; gap: 6px;
     align-items: flex-start; text-align: left; transition: all 0.2s ease;
     height: auto; box-sizing: border-box; position: relative; overflow: visible;
     box-shadow: 0 14px 26px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.03);
@@ -662,26 +665,31 @@
 }
 .bb-vn-op-index {
     display: inline-flex; align-items: center; justify-content: center;
-    padding: 4px 8px; border-radius: 999px; background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.08); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8;
+    padding: 3px 7px; border-radius: 999px; background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08); font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8;
 }
 .bb-vn-op-head {
-    display: flex; align-items: center; justify-content: flex-start; width: 100%;
-    font-size: 16px; font-weight: 800; color: #fff;
-    word-wrap: break-word; white-space: normal; line-height: 1.25;
+    width: 100%;
+    font-size: 13px; font-weight: 800; color: #fff;
+    word-wrap: break-word; white-space: normal; line-height: 1.3;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
 }
-.bb-vn-op-risk { font-size: 10px; text-transform: uppercase; font-weight: 800; padding: 4px 8px; border-radius: 999px; align-self: auto; flex-shrink: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: center; line-height: 1.25; }
-.bb-vn-targets { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px; margin-top: 2px; width: 100%; }
+.bb-vn-op-risk { font-size: 9px; text-transform: uppercase; font-weight: 800; padding: 3px 7px; border-radius: 999px; align-self: auto; flex-shrink: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; line-height: 1.2; }
+.bb-vn-targets { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 4px; margin-top: 1px; width: 100%; }
 .bb-vn-target {
     display: inline-flex; justify-content: center; align-items: center;
-    font-size: 10px; padding: 4px 8px; border-radius: 999px;
+    font-size: 9px; padding: 3px 7px; border-radius: 999px;
     background: rgba(148, 163, 184, 0.16); color: #dbe4f0;
     border: 1px solid rgba(148, 163, 184, 0.18);
-    white-space: normal; text-align: center; line-height: 1.25;
-    word-break: break-word; overflow-wrap: anywhere; max-width: 100%;
+    white-space: nowrap; text-align: center; line-height: 1.2;
+    overflow: hidden; text-overflow: ellipsis; max-width: min(180px, 100%);
 }
 .bb-vn-target.muted { color: #94a3b8; }
-.bb-vn-utility-row { flex: 0 0 100%; display:flex; gap:10px; margin-top:6px; }
+.bb-vn-utility-row { flex: 0 0 100%; display:flex; gap:8px; margin-top:2px; }
 .bb-vn-utility-card { text-align: left; }
 .bb-vn-utility-card .bb-vn-op-head { justify-content: flex-start; }
 .bb-vn-forecast-hover {
@@ -752,26 +760,33 @@
     .bb-vn-option {
         flex: 0 0 100% !important;
         min-width: 100% !important;
-        padding: 8px 10px !important; /* Уменьшили высоту кнопок */
+        padding: 7px 9px !important;
+        gap: 5px !important;
     }
     .bb-vn-op-head {
-        font-size: 14px;
+        font-size: 12px;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
     }
     .bb-vn-op-topline {
         flex-wrap: wrap;
     }
     .bb-vn-op-risk {
-        font-size: 9px; /* Уменьшили ярлычок риска */
-        padding: 2px 4px;
+        font-size: 8px;
+        padding: 2px 6px;
     }
     .bb-vn-targets {
-        flex-direction: column;
-        align-items: stretch;
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
     }
     .bb-vn-target {
-        width: 100%;
-        border-radius: 10px;
-        padding: 6px 8px;
+        width: auto;
+        border-radius: 999px;
+        padding: 3px 6px;
+        flex: 0 0 auto;
     }
     .bb-vn-forecast-hover {
         position: static; transform: none; opacity: 1; pointer-events: auto;
@@ -801,7 +816,7 @@
         gap: 6px !important;
     }
     #bb-vn-btn-reroll, #bb-vn-btn-cancel {
-        padding: 8px !important; /* Делаем служебные кнопки тоньше */
+        padding: 7px 8px !important;
     }
 }
 
