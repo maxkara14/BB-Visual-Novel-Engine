@@ -430,46 +430,56 @@
 .bb-char-meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; }
 .bb-char-meta-card strong { font-size: 13px; color: #f8fafc; line-height: 1.35; }
 .bb-last-shift-stack {
-    display: inline-flex;
-    flex-wrap: wrap;
+    display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
+    width: 100%;
+    min-height: 24px;
 }
 .bb-shift-chip,
 .bb-shift-points {
     display: inline-flex;
     align-items: center;
-    border-radius: 999px;
+    border-radius: 10px;
     font-weight: 900;
     letter-spacing: 0.2px;
 }
 .bb-shift-chip {
     font-size: 11px;
-    padding: 4px 9px;
+    padding: 4px 8px;
     border: 1px solid rgba(148, 163, 184, 0.28);
     background: rgba(148, 163, 184, 0.14);
     color: #e2e8f0;
+    max-width: calc(100% - 56px);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
 }
 .bb-shift-points {
-    font-size: 12px;
-    padding: 4px 8px;
-    border: 1px solid rgba(148, 163, 184, 0.34);
-    background: rgba(15, 23, 42, 0.6);
+    margin-left: auto;
+    font-size: 14px;
+    padding: 0;
+    border: none;
+    background: transparent;
     color: #cbd5e1;
-    min-width: 44px;
+    min-width: 40px;
     justify-content: center;
 }
 .bb-shift-chip.positive,
 .bb-shift-points.positive {
+    color: #86efac;
+}
+.bb-shift-chip.positive {
     border-color: rgba(74, 222, 128, 0.42);
     background: rgba(74, 222, 128, 0.14);
-    color: #86efac;
 }
 .bb-shift-chip.negative,
 .bb-shift-points.negative {
+    color: #fca5a5;
+}
+.bb-shift-chip.negative {
     border-color: rgba(248, 113, 113, 0.44);
     background: rgba(239, 68, 68, 0.14);
-    color: #fca5a5;
 }
 
 .bb-char-tier {
@@ -965,7 +975,7 @@
 }
 .bb-glog-item {
     display: grid; grid-template-columns: 74px 1fr; gap: 12px;
-    padding: 12px 12px 34px; border-radius: 16px;
+    padding: 12px; border-radius: 16px;
     background: linear-gradient(180deg, rgba(6, 12, 17, 0.96), rgba(9, 16, 22, 0.9));
     border: 1px solid rgba(255,255,255,0.06);
     font-size: 13px; line-height: 1.45;
@@ -981,13 +991,25 @@
     padding-top: 2px;
 }
 .bb-glog-text { flex: 1; display: flex; flex-direction: column; gap: 5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.bb-glog-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.bb-glog-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
 .bb-glog-char { font-weight: 900; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.1; }
 .plus .bb-glog-char { color: #4ade80; text-shadow: 0 0 8px rgba(74, 222, 128, 0.3); }
 .minus .bb-glog-char { color: #ef4444; text-shadow: 0 0 8px rgba(239, 68, 68, 0.3); }
 .init .bb-glog-char { color: #c084fc; text-shadow: 0 0 8px rgba(192, 132, 252, 0.3); }
 .system .bb-glog-text { color: #fbbf24; font-weight: 700; }
-.bb-glog-delta { font-weight: 900; font-size: 14px; white-space: normal; flex-shrink: 0; text-align: right; }
+.bb-glog-delta {
+    font-weight: 900;
+    font-size: 11px;
+    line-height: 1.2;
+    flex-shrink: 1;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    background: rgba(148, 163, 184, 0.12);
+    color: #dbe4f0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
 .plus .bb-glog-delta { color: #4ade80; }
 .minus .bb-glog-delta { color: #ef4444; }
 .bb-glog-reason {
@@ -997,9 +1019,10 @@
 .minus .bb-glog-reason { color: #fca5a5; }
 .init .bb-glog-reason { color: #d8b4fe; }
 .bb-glog-points {
-    position: absolute;
-    left: 12px;
-    bottom: 8px;
+    position: static;
+    display: inline-flex;
+    align-self: flex-start;
+    margin-top: 6px;
     min-width: 46px;
     padding: 3px 8px;
     border-radius: 999px;
