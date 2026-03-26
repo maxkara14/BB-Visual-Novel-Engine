@@ -486,8 +486,18 @@ function dedupeOptions(options = []) {
 
 function extractJsonStringMatches(input = "", field = "") {
     const escapedField = String(field || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // Умный и агрессивный парсер специально для текста сообщения.
+    // Читает ВООБЩЕ ВСЁ (игнорируя кавычки и абзацы внутри), пока не упрется в конец JSON-блока "}
+    if (field === 'message') {
+        const robustRegex = new RegExp(`"${escapedField}"\\s*:\\s*"([\\s\\S]*?)"\\s*,?\\s*\\}(?=\\s*(?:,|\\]|$))`, 'gi');
+        const matches = [...String(input || '').matchAll(robustRegex)].map(match => match[1] || '');
+        if (matches.length > 0) return matches;
+    }
+
+    // Стандартный безопасный парсер для коротких полей (intent, tone, forecast)
     const regex = new RegExp(`"${escapedField}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, 'gi');
-    return [...String(input || '').matchAll(regex)].map(match => match[1] || '');
+    return[...String(input || '').matchAll(regex)].map(match => match[1] || '');
 }
 
 function normalizeStatusLabel(value = "") {
