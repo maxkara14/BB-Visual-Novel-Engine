@@ -250,13 +250,23 @@
     backdrop-filter: blur(6px);
     opacity: 0.62;
     transition: background 0.2s, color 0.2s, transform 0.2s, opacity 0.2s;
+    overflow: hidden;
+}
+#bb-social-hud-toggle::after {
+    content: '';
+    position: absolute;
+    top: -1px;
+    bottom: -1px;
+    right: -1px;
+    width: 2px;
+    background: inherit;
 }
 #bb-social-hud-toggle:hover,
 #bb-social-hud-toggle:focus-visible {
     background: linear-gradient(180deg, rgba(22, 30, 46, 0.9), rgba(46, 30, 62, 0.88));
     color: #fff;
     opacity: 0.95;
-    transform: translateX(-2px);
+    transform: none;
 }
 #bb-social-hud-toggle.bb-toggle-idle:not(:hover):not(:focus-visible) {
     opacity: 0.35;
