@@ -768,7 +768,7 @@ function addGlobalLog(type, text) {
 function scanAndCleanMessage(msg, messageId) {
     if (!msg || msg.is_user) return false;
     let modified = false;
-    const jsonRegex = /```json\s*({[\s\S]*?"social_updates"[\s\S]*?})\s*```/;
+    const jsonRegex = /(?:```json\s*|<!--\s*)({[\s\S]*?"social_updates"[\s\S]*?})(?:\s*```|\s*-->)/;
     const match = msg.mes.match(jsonRegex);
     const swipeId = msg.swipe_id || 0;
 
