@@ -844,6 +844,30 @@ function tryParseSocialUpdates(rawText) {
         }
     }
 
+    const keywordIndex = tailWindow.indexOf('"social_updates"');
+    if (keywordIndex !== -1) {
+        let start = keywordIndex;
+        while (start >= 0 && tailWindow[start] !== '{') start--;
+        if (start >= 0) {
+            let depth = 0;
+            let end = -1;
+            for (let i = start; i < tailWindow.length; i++) {
+                const ch = tailWindow[i];
+                if (ch === '{') depth++;
+                if (ch === '}') {
+                    depth--;
+                    if (depth === 0) {
+                        end = i;
+                        break;
+                    }
+                }
+            }
+            if (end > start) {
+                candidates.push({ json: tailWindow.slice(start, end + 1), source: tailWindow.slice(start, end + 1) });
+            }
+        }
+    }
+
     for (const candidate of candidates) {
         try {
             const parsed = JSON.parse(candidate.json.trim());
@@ -867,13 +891,14 @@ function scanAndCleanMessage(msg) {
             const parsed = parsedPayload.parsed;
             if (!msg.extra) msg.extra = {};
             if (!msg.extra.bb_social_swipes) msg.extra.bb_social_swipes = {};
-
-            msg.extra.bb_social_swipes[swipeId] = parsed.social_updates;
-            msg.mes = msg.mes.replace(parsedPayload.source, '').trim();
-            if (msg.swipes && msg.swipes[swipeId] !== undefined) {
-                msg.swipes[swipeId] = msg.mes; 
+            const previous = msg.extra.bb_social_swipes[swipeId];
+            const next = parsed.social_updates;
+            const prevSerialized = JSON.stringify(previous || []);
+            const nextSerialized = JSON.stringify(next || []);
+            if (prevSerialized !== nextSerialized) {
+                msg.extra.bb_social_swipes[swipeId] = next;
+                modified = true;
             }
-            modified = true;
         } catch(e) {}
     }
     return modified;
