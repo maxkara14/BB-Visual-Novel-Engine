@@ -737,7 +737,21 @@ function buildChoiceContextPrompt() {
         ? choiceContext.targets.join(', ')
         : 'не указаны';
 
-    return `\n\n[LAST PLAYER CHOICE VECTOR]:\n- intent: ${choiceContext.intent}\n- tone: ${choiceContext.tone || 'не указан'}\n- forecast: ${choiceContext.forecast || 'не указан'}\n- targets: ${targets}\nCRITICAL: Reflect the emotional direction of this choice in the next response. If the listed targets are present in the scene, they must react to it more strongly than bystanders.\nCRITICAL CONTINUITY: Treat forecast as a hard scene-direction constraint for the IMMEDIATELY NEXT assistant reply.\nIf forecast implies movement/transition (example: "переход в столовую вместе с Юи"), you MUST explicitly show that transition and place the scene in the new location within that very reply.\nDo NOT keep the old location if forecast indicates movement.`;
+    const forecast = String(choiceContext.forecast || '');
+    const movementHintRegex = /(переход|перейти|ид[её]м|идти|вернут[ья]|возвращени|поехал|поехать|приехал|прийти|в\s+[а-яё\w-]+|к\s+[а-яё\w-]+)/i;
+    const urgentForecastRegex = /(быстр|сразу|немедлен|без останов|напрямую|коротк(ий|ое))/i;
+    const hasMovementHint = movementHintRegex.test(forecast);
+    const hasUrgency = urgentForecastRegex.test(forecast);
+
+    let continuityRule = `CRITICAL CONTINUITY: Treat forecast as a hard scene-direction constraint for the IMMEDIATELY NEXT assistant reply.`;
+    if (hasMovementHint) {
+        continuityRule += `\nIf forecast implies movement/transition, show 1-2 short transition beats first (no hard teleport), but finish this same reply with the scene already anchored in the destination location.`;
+    }
+    if (hasUrgency) {
+        continuityRule += `\nIf forecast indicates speed/urgency ("быстро", "сразу", etc.), arrival must happen by the END of this very reply, not in a later turn.`;
+    }
+
+    return `\n\n[LAST PLAYER CHOICE VECTOR]:\n- intent: ${choiceContext.intent}\n- tone: ${choiceContext.tone || 'не указан'}\n- forecast: ${choiceContext.forecast || 'не указан'}\n- targets: ${targets}\nCRITICAL: Reflect the emotional direction of this choice in the next response. If the listed targets are present in the scene, they must react to it more strongly than bystanders.\n${continuityRule}`;
 }
 
 function maybeAddStoryMoment(moment) {
