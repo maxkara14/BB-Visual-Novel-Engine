@@ -48,7 +48,7 @@ Look at the [CURRENT RELATIONSHIP STATUS] block below.
 - Is the character's name missing from that block? -> YOU MUST OUTPUT "base_affinity".
 - Is the character already listed in that block? -> DO NOT output "base_affinity".
 NO EXCEPTIONS. Even if it's the very first message or a known lore character, if they aren't physically printed in the list below, you MUST provide this score.
-2. "status": A 1-3 word label defining WHO {{user}} IS to the character. CRITICAL RULE: DO NOT describe the character's own role.
+2. "status": A 1-2 word label defining WHO {{user}} IS to the character. CRITICAL RULE: DO NOT describe the character's own role.
 Use a short role label that answers: "Who is {{user}} to this character?"
 Think in placeholder terms like: "WHO_USER_IS_TO_THE_CHARACTER".
 The status MUST be user-facing and usually include a relation noun like: "враг", "союзник", "ученик", "соперник", "угроза", "цель", "друг".
@@ -74,6 +74,11 @@ Never merge people into one update.
 CRITICAL LANGUAGE RULE: Output the JSON values ENTIRELY IN RUSSIAN.
 
 Use this SHORT JSON SHAPE as a template (placeholders are instructions, not literal text; include "base_affinity" ONLY for new characters):
+\nCRITICAL WRAPPER RULE: Put the final JSON inside this exact hidden wrapper so tools can parse it safely:
+\`<!-- BB_VNE_SOCIAL_START
+{ ...json... }
+BB_VNE_SOCIAL_END -->\`
+\nDo not place this JSON in any other visible format.
 \`\`\`json
 {
   "social_updates": [
@@ -512,8 +517,24 @@ function sanitizeRelationshipStatus(value = "") {
         .replace(/[,:;.!?].*$/g, '')
         .trim();
     if (!normalized) return '';
-    const words = normalized.split(' ').filter(Boolean);
-    return words.slice(0, 3).join(' ');
+    const words = normalized.split(' ').filter(Boolean).slice(0, 2);
+    if (words.length === 0) return '';
+
+    const trailingStopWords = new Set([
+        'и', 'но', 'а', 'или', 'либо', 'что', 'как',
+        'в', 'во', 'на', 'с', 'со', 'к', 'ко', 'о', 'об',
+        'за', 'от', 'до', 'по', 'из', 'у', 'при', 'для', 'без', 'под', 'над', 'между'
+    ]);
+
+    while (words.length > 1 && trailingStopWords.has(words[words.length - 1].toLowerCase())) {
+        words.pop();
+    }
+
+    while (words.length > 1 && trailingStopWords.has(words[0].toLowerCase())) {
+        words.shift();
+    }
+
+    return words.join(' ');
 }
 
 function sanitizeMoodlet(value = "") {
@@ -721,7 +742,21 @@ function buildChoiceContextPrompt() {
         ? choiceContext.targets.join(', ')
         : 'не указаны';
 
-    return `\n\n[LAST PLAYER CHOICE VECTOR]:\n- intent: ${choiceContext.intent}\n- tone: ${choiceContext.tone || 'не указан'}\n- forecast: ${choiceContext.forecast || 'не указан'}\n- targets: ${targets}\nCRITICAL: Reflect the emotional direction of this choice in the next response. If the listed targets are present in the scene, they must react to it more strongly than bystanders.`;
+    const forecast = String(choiceContext.forecast || '');
+    const movementHintRegex = /(переход|перейти|ид[её]м|идти|вернут[ья]|возвращени|поехал|поехать|приехал|прийти|в\s+[а-яё\w-]+|к\s+[а-яё\w-]+)/i;
+    const urgentForecastRegex = /(быстр|сразу|немедлен|без останов|напрямую|коротк(ий|ое))/i;
+    const hasMovementHint = movementHintRegex.test(forecast);
+    const hasUrgency = urgentForecastRegex.test(forecast);
+
+    let continuityRule = `CRITICAL CONTINUITY: Treat forecast as a hard scene-direction constraint for the IMMEDIATELY NEXT assistant reply.`;
+    if (hasMovementHint) {
+        continuityRule += `\nIf forecast implies movement/transition, show 1-2 short transition beats first (no hard teleport), but finish this same reply with the scene already anchored in the destination location.`;
+    }
+    if (hasUrgency) {
+        continuityRule += `\nIf forecast indicates speed/urgency ("быстро", "сразу", etc.), arrival must happen by the END of this very reply, not in a later turn.`;
+    }
+
+    return `\n\n[LAST PLAYER CHOICE VECTOR]:\n- intent: ${choiceContext.intent}\n- tone: ${choiceContext.tone || 'не указан'}\n- forecast: ${choiceContext.forecast || 'не указан'}\n- targets: ${targets}\nCRITICAL: Reflect the emotional direction of this choice in the next response. If the listed targets are present in the scene, they must react to it more strongly than bystanders.\n${continuityRule}`;
 }
 
 function maybeAddStoryMoment(moment) {
@@ -775,29 +810,94 @@ function addGlobalLog(type, text) {
     if (chat_metadata['bb_vn_global_log'].length > 50) chat_metadata['bb_vn_global_log'].shift();
 }
 
-function scanAndCleanMessage(msg, messageId) {
+function tryParseSocialUpdates(rawText) {
+    const text = String(rawText || '');
+    if (!text.trim()) return null;
+    const osEndIndex = text.lastIndexOf('::OS_END::');
+    const parseRegion = osEndIndex >= 0 ? text.slice(osEndIndex + '::OS_END::'.length) : text;
+    const tailWindow = parseRegion.slice(-2600);
+
+    /** @type {{json: string, source: string}[]} */
+    const candidates = [];
+
+    const markerRegex = /<!--\s*BB_VNE_SOCIAL_START\s*([\s\S]*?)\s*BB_VNE_SOCIAL_END\s*-->/gi;
+    let markerMatch;
+    while ((markerMatch = markerRegex.exec(tailWindow)) !== null) {
+        if (markerMatch[1] && markerMatch[1].includes('social_updates')) {
+            candidates.push({ json: markerMatch[1], source: markerMatch[0] });
+        }
+    }
+
+    const fenceRegex = /```(?:json|JSON|jsonc|JSONC|js|JS)?\s*([\s\S]*?)\s*```/g;
+    let fenceMatch;
+    while ((fenceMatch = fenceRegex.exec(tailWindow)) !== null) {
+        if (fenceMatch[1] && fenceMatch[1].includes('social_updates')) {
+            candidates.push({ json: fenceMatch[1], source: fenceMatch[0] });
+        }
+    }
+
+    const htmlCommentRegex = /<!--\s*([\s\S]*?)\s*-->/g;
+    let htmlMatch;
+    while ((htmlMatch = htmlCommentRegex.exec(tailWindow)) !== null) {
+        if (htmlMatch[1] && htmlMatch[1].includes('social_updates')) {
+            candidates.push({ json: htmlMatch[1], source: htmlMatch[0] });
+        }
+    }
+
+    const keywordIndex = tailWindow.indexOf('"social_updates"');
+    if (keywordIndex !== -1) {
+        let start = keywordIndex;
+        while (start >= 0 && tailWindow[start] !== '{') start--;
+        if (start >= 0) {
+            let depth = 0;
+            let end = -1;
+            for (let i = start; i < tailWindow.length; i++) {
+                const ch = tailWindow[i];
+                if (ch === '{') depth++;
+                if (ch === '}') {
+                    depth--;
+                    if (depth === 0) {
+                        end = i;
+                        break;
+                    }
+                }
+            }
+            if (end > start) {
+                candidates.push({ json: tailWindow.slice(start, end + 1), source: tailWindow.slice(start, end + 1) });
+            }
+        }
+    }
+
+    for (const candidate of candidates) {
+        try {
+            const parsed = JSON.parse(candidate.json.trim());
+            if (Array.isArray(parsed?.social_updates)) {
+                return { parsed, source: candidate.source };
+            }
+        } catch (e) {}
+    }
+
+    return null;
+}
+
+function scanAndCleanMessage(msg) {
     if (!msg || msg.is_user) return false;
     let modified = false;
-    const jsonRegex = /(?:```json\s*|<!--\s*)({[\s\S]*?"social_updates"[\s\S]*?})(?:\s*```|\s*-->)/;
-    const match = msg.mes.match(jsonRegex);
     const swipeId = msg.swipe_id || 0;
+    const parsedPayload = tryParseSocialUpdates(msg.mes);
 
-    if (match) {
+    if (parsedPayload) {
         try {
-            const parsed = JSON.parse(match[1]);
+            const parsed = parsedPayload.parsed;
             if (!msg.extra) msg.extra = {};
             if (!msg.extra.bb_social_swipes) msg.extra.bb_social_swipes = {};
-
-            msg.extra.bb_social_swipes[swipeId] = parsed.social_updates;
-            msg.mes = msg.mes.replace(match[0], '').trim();
-            if (msg.swipes && msg.swipes[swipeId] !== undefined) {
-                msg.swipes[swipeId] = msg.mes; 
-            }
-            modified = true;
-            
-            if (messageId !== undefined) {
-                const msgElement = document.querySelector(`.mes[mesid="${messageId}"] .mes_text`);
-                if (msgElement) msgElement.innerHTML = SillyTavern.getContext().markdownToHtml(msg.mes);
+            const previous = msg.extra.bb_social_swipes[swipeId];
+            const next = parsed.social_updates;
+            const prevSerialized = JSON.stringify(previous || []);
+            const nextSerialized = JSON.stringify(next || []);
+            if (prevSerialized !== nextSerialized) {
+                msg.extra.bb_social_swipes[swipeId] = next;
+                modified = true;
             }
         } catch(e) {}
     }
@@ -828,7 +928,7 @@ function recalculateAllStats(isNewMessage = false) {
             latestChoiceContext = msg.extra.bb_vn_choice_context;
         }
 
-        if (scanAndCleanMessage(msg, idx)) needsSave = true;
+        if (scanAndCleanMessage(msg)) needsSave = true;
 
         const swipeId = msg.swipe_id || 0;
         let activeUpdates = msg.extra?.bb_social_swipes?.[swipeId];
