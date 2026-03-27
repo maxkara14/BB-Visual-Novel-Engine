@@ -41,49 +41,47 @@ const SOCIAL_PROMPT = `[SYSTEM INSTRUCTION: VISUAL NOVEL ENGINE]
 You are tracking how the characters feel about {{user}}. 
 At the VERY END of your response, you MUST generate a hidden JSON block evaluating how {{user}}'s last action affected each character's attitude, trust, and affection towards {{user}}.
 
-CRITICAL RULES FOR JSON:
-1. "base_affinity": INITIAL STARTING SCORE (-100 to 100). You MUST use this mechanical check:
-Look at the [CURRENT RELATIONSHIP STATUS] block below.
-- Is the block EMPTY or missing? -> YOU MUST OUTPUT "base_affinity".
-- Is the character's name missing from that block? -> YOU MUST OUTPUT "base_affinity".
-- Is the character already listed in that block? -> DO NOT output "base_affinity".
-NO EXCEPTIONS. Even if it's the very first message or a known lore character, if they aren't physically printed in the list below, you MUST provide this score.
-2. "status": A 1-2 word label defining WHO {{user}} IS to the character. CRITICAL RULE: DO NOT describe the character's own role.
-Use a short role label that answers: "Who is {{user}} to this character?"
-Think in placeholder terms like: "WHO_USER_IS_TO_THE_CHARACTER".
-The status MUST be user-facing and usually include a relation noun like: "враг", "союзник", "ученик", "соперник", "угроза", "цель", "друг".
-You are NOT limited to a fixed dictionary: adapt wording to the current scene, setting, and relationship context.
-Examples (valid): "проблемный ученик", "опасная соперница", "нежеланный союзник".
-Examples (invalid): "разочарованный наставник", "строгий учитель", "уставший капитан" (these describe the character, not {{user}}).
-CRITICAL: "name" must be a single concrete character and should look like a personal name.
-GOOD examples: "Кёджуро Ренгоку", "Аой Канзаки", "Хироси Симадзу".
-GOOD format: one person, singular, specific identity.
-If multiple people react, split into separate entries (one per person).
-Never merge people into one update.
-3. "delta": Integer representing the shift in the character's feelings towards {{user}}. Use this STRICT scale:
-   0 = Neutral interaction (no change in opinion).
-   1 to 3 = Mild positive (character appreciates politeness, small help).
+CRITICAL RULES FOR JSON KEYS:
+Keep JSON keys EXACTLY as written in English. Translate ONLY the values into Russian.
+
+1. "name": (String) A single, concrete character name. 
+GOOD: "Alex", "Dr. Smith", "Sarah". 
+BAD/FORBIDDEN: Collective nouns like "класс", "ученики", "стража". If multiple people react, split them into separate objects.
+
+2. "base_affinity": (Integer: -100 to 100) INITIAL STARTING SCORE.
+MECHANICAL CHECK: Look at the [CURRENT RELATIONSHIP STATUS] block below.
+- Is the character physically missing from that list? -> YOU MUST OUTPUT "base_affinity".
+- Is the character already listed there? -> DO NOT output "base_affinity". NO EXCEPTIONS.
+
+3. "status": (String) A 1-2 word label defining WHO {{user}} IS to the character. 
+CRITICAL: Do NOT describe the character's own role/mood. Describe {{user}}'s role.
+- VALID (who {{user}} is to them): "враг", "союзник", "проблемный ученик", "нежеланный гость".
+- INVALID (describes the character instead): "строгий наставник", "уставший капитан", "разочарованный".
+
+4. "delta": (Integer) The shift in feelings towards {{user}}. Use this STRICT scale:
+   0 = Neutral interaction (no change).
+   1 to 3 = Mild positive (appreciates politeness, small help).
    4 to 8 = Strong positive (deep bonding, major gift).
-   9 to 30 = Extreme positive (heroic sacrifice, saving a life, profound revelation).
-   -1 to -3 = Mild negative (character is annoyed, slight disagreement).
+   9 to 30 = Extreme positive (heroic sacrifice, profound revelation).
+   -1 to -3 = Mild negative (annoyed, slight disagreement).
    -4 to -8 = Strong negative (serious fight, deep offense).
-   -9 to -30 = Extreme negative (murder, ultimate betrayal, unforgivable atrocities).
-4. "reason": Short explanation of WHY the character's opinion changed (the delta).
-5. "moodlet": Optional 1-2 word emotional imprint (like a tiny mood tag) that captures the feeling of this interaction.
+   -9 to -30 = Extreme negative (murder, ultimate betrayal).
 
-CRITICAL LANGUAGE RULE: Output the JSON values ENTIRELY IN RUSSIAN.
+5. "reason": (String) A short explanation in Russian of WHY the delta changed.
 
-Use this SHORT JSON SHAPE as a template (placeholders are instructions, not literal text; include "base_affinity" ONLY for new characters):
+6. "moodlet": (String) Optional 1-2 word emotional imprint in Russian (e.g., "лёгкая тревога", "теплота").
+
+Use this STRICT JSON SHAPE template. Replace string placeholders with Russian text, and replace 0 with actual integers.
 \`\`\`json
 {
-  "social_updates": [
+  "social_updates":[
     {
       "name": "CHARACTER_NAME",
-      "base_affinity": STARTING_SCORE_IF_NEW,
-      "delta": POSITIVE_OR_NEGATIVE_INTEGER,
-      "status": "WHO_USER_IS_TO_THE_CHARACTER",
-      "reason": "SHORT_REASON_FOR_THE_CHANGE",
-      "moodlet": "TWO_WORD_EMOTIONAL_TAG"
+      "base_affinity": 0,
+      "delta": 0,
+      "status": "ОТНОШЕНИЕ_К_USER",
+      "reason": "Краткая причина изменения",
+      "moodlet": "эмоция"
     }
   ]
 }
