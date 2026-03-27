@@ -808,12 +808,13 @@ function addGlobalLog(type, text) {
 function tryParseSocialUpdates(rawText) {
     const text = String(rawText || '');
     if (!text.trim()) return null;
+    const tailWindow = text.slice(-2600);
 
     const candidates = [];
 
     const fenceRegex = /```(?:json|JSON|jsonc|JSONC|js|JS)?\s*([\s\S]*?)\s*```/g;
     let fenceMatch;
-    while ((fenceMatch = fenceRegex.exec(text)) !== null) {
+    while ((fenceMatch = fenceRegex.exec(tailWindow)) !== null) {
         if (fenceMatch[1] && fenceMatch[1].includes('social_updates')) {
             candidates.push(fenceMatch[1]);
         }
@@ -821,21 +822,21 @@ function tryParseSocialUpdates(rawText) {
 
     const htmlCommentRegex = /<!--\s*([\s\S]*?)\s*-->/g;
     let htmlMatch;
-    while ((htmlMatch = htmlCommentRegex.exec(text)) !== null) {
+    while ((htmlMatch = htmlCommentRegex.exec(tailWindow)) !== null) {
         if (htmlMatch[1] && htmlMatch[1].includes('social_updates')) {
             candidates.push(htmlMatch[1]);
         }
     }
 
-    const keywordIndex = text.indexOf('"social_updates"');
+    const keywordIndex = tailWindow.indexOf('"social_updates"');
     if (keywordIndex !== -1) {
         let start = keywordIndex;
-        while (start >= 0 && text[start] !== '{') start--;
+        while (start >= 0 && tailWindow[start] !== '{') start--;
         if (start >= 0) {
             let depth = 0;
             let end = -1;
-            for (let i = start; i < text.length; i++) {
-                const ch = text[i];
+            for (let i = start; i < tailWindow.length; i++) {
+                const ch = tailWindow[i];
                 if (ch === '{') depth++;
                 if (ch === '}') {
                     depth--;
@@ -846,7 +847,7 @@ function tryParseSocialUpdates(rawText) {
                 }
             }
             if (end > start) {
-                candidates.push(text.slice(start, end + 1));
+                candidates.push(tailWindow.slice(start, end + 1));
             }
         }
     }
@@ -863,7 +864,7 @@ function tryParseSocialUpdates(rawText) {
     return null;
 }
 
-function scanAndCleanMessage(msg, messageId) {
+function scanAndCleanMessage(msg) {
     if (!msg || msg.is_user) return false;
     let modified = false;
     const swipeId = msg.swipe_id || 0;
@@ -882,11 +883,6 @@ function scanAndCleanMessage(msg, messageId) {
                 msg.swipes[swipeId] = msg.mes; 
             }
             modified = true;
-            
-            if (messageId !== undefined) {
-                const msgElement = document.querySelector(`.mes[mesid="${messageId}"] .mes_text`);
-                if (msgElement) msgElement.innerHTML = SillyTavern.getContext().markdownToHtml(msg.mes);
-            }
         } catch(e) {}
     }
     return modified;
@@ -916,7 +912,7 @@ function recalculateAllStats(isNewMessage = false) {
             latestChoiceContext = msg.extra.bb_vn_choice_context;
         }
 
-        if (scanAndCleanMessage(msg, idx)) needsSave = true;
+        if (scanAndCleanMessage(msg)) needsSave = true;
 
         const swipeId = msg.swipe_id || 0;
         let activeUpdates = msg.extra?.bb_social_swipes?.[swipeId];
