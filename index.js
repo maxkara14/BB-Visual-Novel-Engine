@@ -48,7 +48,7 @@ Look at the [CURRENT RELATIONSHIP STATUS] block below.
 - Is the character's name missing from that block? -> YOU MUST OUTPUT "base_affinity".
 - Is the character already listed in that block? -> DO NOT output "base_affinity".
 NO EXCEPTIONS. Even if it's the very first message or a known lore character, if they aren't physically printed in the list below, you MUST provide this score.
-2. "status": A 1-3 word label defining WHO {{user}} IS to the character. CRITICAL RULE: DO NOT describe the character's own role.
+2. "status": A 1-2 word label defining WHO {{user}} IS to the character. CRITICAL RULE: DO NOT describe the character's own role.
 Use a short role label that answers: "Who is {{user}} to this character?"
 Think in placeholder terms like: "WHO_USER_IS_TO_THE_CHARACTER".
 The status MUST be user-facing and usually include a relation noun like: "враг", "союзник", "ученик", "соперник", "угроза", "цель", "друг".
@@ -512,8 +512,24 @@ function sanitizeRelationshipStatus(value = "") {
         .replace(/[,:;.!?].*$/g, '')
         .trim();
     if (!normalized) return '';
-    const words = normalized.split(' ').filter(Boolean);
-    return words.slice(0, 3).join(' ');
+    const words = normalized.split(' ').filter(Boolean).slice(0, 2);
+    if (words.length === 0) return '';
+
+    const trailingStopWords = new Set([
+        'и', 'но', 'а', 'или', 'либо', 'что', 'как',
+        'в', 'во', 'на', 'с', 'со', 'к', 'ко', 'о', 'об',
+        'за', 'от', 'до', 'по', 'из', 'у', 'при', 'для', 'без', 'под', 'над', 'между'
+    ]);
+
+    while (words.length > 1 && trailingStopWords.has(words[words.length - 1].toLowerCase())) {
+        words.pop();
+    }
+
+    while (words.length > 1 && trailingStopWords.has(words[0].toLowerCase())) {
+        words.shift();
+    }
+
+    return words.join(' ');
 }
 
 function sanitizeMoodlet(value = "") {
