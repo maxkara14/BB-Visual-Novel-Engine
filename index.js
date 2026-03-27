@@ -74,6 +74,11 @@ Never merge people into one update.
 CRITICAL LANGUAGE RULE: Output the JSON values ENTIRELY IN RUSSIAN.
 
 Use this SHORT JSON SHAPE as a template (placeholders are instructions, not literal text; include "base_affinity" ONLY for new characters):
+\nCRITICAL WRAPPER RULE: Put the final JSON inside this exact hidden wrapper so tools can parse it safely:
+\`<!-- BB_VNE_SOCIAL_START
+{ ...json... }
+BB_VNE_SOCIAL_END -->\`
+\nDo not place this JSON in any other visible format.
 \`\`\`json
 {
   "social_updates": [
@@ -812,13 +817,22 @@ function tryParseSocialUpdates(rawText) {
     const parseRegion = osEndIndex >= 0 ? text.slice(osEndIndex + '::OS_END::'.length) : text;
     const tailWindow = parseRegion.slice(-2600);
 
+    /** @type {{json: string, source: string}[]} */
     const candidates = [];
+
+    const markerRegex = /<!--\s*BB_VNE_SOCIAL_START\s*([\s\S]*?)\s*BB_VNE_SOCIAL_END\s*-->/gi;
+    let markerMatch;
+    while ((markerMatch = markerRegex.exec(tailWindow)) !== null) {
+        if (markerMatch[1] && markerMatch[1].includes('social_updates')) {
+            candidates.push({ json: markerMatch[1], source: markerMatch[0] });
+        }
+    }
 
     const fenceRegex = /```(?:json|JSON|jsonc|JSONC|js|JS)?\s*([\s\S]*?)\s*```/g;
     let fenceMatch;
     while ((fenceMatch = fenceRegex.exec(tailWindow)) !== null) {
         if (fenceMatch[1] && fenceMatch[1].includes('social_updates')) {
-            candidates.push(fenceMatch[1]);
+            candidates.push({ json: fenceMatch[1], source: fenceMatch[0] });
         }
     }
 
@@ -826,39 +840,15 @@ function tryParseSocialUpdates(rawText) {
     let htmlMatch;
     while ((htmlMatch = htmlCommentRegex.exec(tailWindow)) !== null) {
         if (htmlMatch[1] && htmlMatch[1].includes('social_updates')) {
-            candidates.push(htmlMatch[1]);
-        }
-    }
-
-    const keywordIndex = tailWindow.indexOf('"social_updates"');
-    if (keywordIndex !== -1) {
-        let start = keywordIndex;
-        while (start >= 0 && tailWindow[start] !== '{') start--;
-        if (start >= 0) {
-            let depth = 0;
-            let end = -1;
-            for (let i = start; i < tailWindow.length; i++) {
-                const ch = tailWindow[i];
-                if (ch === '{') depth++;
-                if (ch === '}') {
-                    depth--;
-                    if (depth === 0) {
-                        end = i;
-                        break;
-                    }
-                }
-            }
-            if (end > start) {
-                candidates.push(tailWindow.slice(start, end + 1));
-            }
+            candidates.push({ json: htmlMatch[1], source: htmlMatch[0] });
         }
     }
 
     for (const candidate of candidates) {
         try {
-            const parsed = JSON.parse(candidate.trim());
+            const parsed = JSON.parse(candidate.json.trim());
             if (Array.isArray(parsed?.social_updates)) {
-                return { parsed, source: candidate };
+                return { parsed, source: candidate.source };
             }
         } catch (e) {}
     }
@@ -880,7 +870,6 @@ function scanAndCleanMessage(msg) {
 
             msg.extra.bb_social_swipes[swipeId] = parsed.social_updates;
             msg.mes = msg.mes.replace(parsedPayload.source, '').trim();
-            msg.mes = msg.mes.replace(/```(?:json|JSON|jsonc|JSONC|js|JS)?\s*```/g, '').trim();
             if (msg.swipes && msg.swipes[swipeId] !== undefined) {
                 msg.swipes[swipeId] = msg.mes; 
             }
