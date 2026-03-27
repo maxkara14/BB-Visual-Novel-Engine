@@ -808,7 +808,9 @@ function addGlobalLog(type, text) {
 function tryParseSocialUpdates(rawText) {
     const text = String(rawText || '');
     if (!text.trim()) return null;
-    const tailWindow = text.slice(-2600);
+    const osEndIndex = text.lastIndexOf('::OS_END::');
+    const parseRegion = osEndIndex >= 0 ? text.slice(osEndIndex + '::OS_END::'.length) : text;
+    const tailWindow = parseRegion.slice(-2600);
 
     const candidates = [];
 
