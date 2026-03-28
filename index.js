@@ -1703,13 +1703,20 @@ window['renderVNOptionsFromData'] = function(/** @type {VNOption[]} */ parsedOpt
         const targetsText = opt.targets.length > 0
             ? opt.targets.map(target => `<span class="bb-vn-target">${escapeHtml(target)}</span>`).join('')
             : `<span class="bb-vn-target muted">Сцена в целом</span>`;
+        
         const forecastHtml = useEmotionalChoiceFraming && opt.forecast
             ? `<div class="bb-vn-forecast-hover"><div class="bb-vn-forecast-title">Прогноз</div><div class="bb-vn-forecast-text">${escapeHtml(opt.forecast)}</div></div>`
             : '';
 
+        const infoBtnHtml = `<div class="bb-vn-op-info-btn" title="Подробнее"><i class="fa-solid fa-info"></i></div>`;
+
         optionsHtml += `
-            <div class="bb-vn-option ${riskClass} ${toneClass}" data-intent="${escapeHtml(opt.intent)}" data-message="${encodeURIComponent(opt.message || '')}" data-tone="${escapeHtml(opt.tone || '')}" data-forecast="${escapeHtml(opt.forecast || '')}" data-targets="${encodeURIComponent(JSON.stringify(opt.targets || []))}">
-                <div class="bb-vn-op-topline"><span class="bb-vn-op-index">Сцена</span><div class="bb-vn-op-risk">${useEmotionalChoiceFraming ? 'Тон' : 'Риск'}: ${escapeHtml(metaLabel)}</div></div>
+            <div class="bb-vn-option ${riskClass} ${toneClass}" data-intent="${escapeHtml(opt.intent)}" data-message="${encodeURIComponent(opt.message || '')}" data-tone="${escapeHtml(opt.tone || '')}" data-forecast="${escapeHtml(opt.forecast || '')}" data-targets="${encodeURIComponent(JSON.stringify(opt.targets ||[]))}">
+                <div class="bb-vn-op-topline">
+                    <span class="bb-vn-op-index">Сцена</span>
+                    <div class="bb-vn-op-risk">${useEmotionalChoiceFraming ? 'Тон' : 'Риск'}: ${escapeHtml(metaLabel)}</div>
+                    ${infoBtnHtml}
+                </div>
                 <div class="bb-vn-op-head">${escapeHtml(opt.intent)}</div>
                 ${useEmotionalChoiceFraming ? `<div class="bb-vn-targets">${targetsText}</div>` : ''}
                 ${forecastHtml}
@@ -1740,20 +1747,14 @@ window['renderVNOptionsFromData'] = function(/** @type {VNOption[]} */ parsedOpt
         $('#bb-vn-btn-generate').removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> VN · сохранено').show();
     }
 
-    $('.bb-vn-option[data-intent]').off('click').on('click', function() {
-        const isTouchDevice = window.matchMedia('(hover: none), (pointer: coarse)').matches;
-        const card = $(this);
-        const hasForecast = Boolean(card.attr('data-forecast'));
-        if (isTouchDevice && hasForecast && !card.hasClass('preview-open')) {
-            $('.bb-vn-option.preview-open').removeClass('preview-open');
-            card.addClass('preview-open');
-            return;
-        }
-        $('.bb-vn-option.preview-open').removeClass('preview-open');
+    // Клик по самой карточке: МОМЕНТАЛЬНАЯ ОТПРАВКА
+    $('.bb-vn-option[data-intent]').off('click').on('click', function(e) {
+        // Если кликнули по кнопке [i], останавливаем выполнение (не отправляем текст)
+        if ($(e.target).closest('.bb-vn-op-info-btn').length > 0) return;
 
         const message = decodeURIComponent($(this).attr('data-message') || '');
         const targetsRaw = decodeURIComponent($(this).attr('data-targets') || '[]');
-        let parsedTargets = [];
+        let parsedTargets =[];
         try {
             parsedTargets = JSON.parse(targetsRaw);
         } catch (e) {}
@@ -1761,7 +1762,7 @@ window['renderVNOptionsFromData'] = function(/** @type {VNOption[]} */ parsedOpt
             intent: $(this).attr('data-intent') || '',
             tone: $(this).attr('data-tone') || '',
             forecast: $(this).attr('data-forecast') || '',
-            targets: Array.isArray(parsedTargets) ? parsedTargets : [],
+            targets: Array.isArray(parsedTargets) ? parsedTargets :[],
             at: Date.now(),
             messagePreview: message.slice(0, 140),
         };
@@ -1769,6 +1770,7 @@ window['renderVNOptionsFromData'] = function(/** @type {VNOption[]} */ parsedOpt
         chat_metadata['bb_vn_pending_choice_context'] = choiceContext;
         saveChatDebounced();
         injectCombinedSocialPrompt();
+        
         const textarea = document.querySelector('#send_textarea');
         if (textarea && message) {
             // @ts-ignore
@@ -1784,25 +1786,26 @@ window['renderVNOptionsFromData'] = function(/** @type {VNOption[]} */ parsedOpt
         }
     });
 
-    $(document).off('pointerdown.bb-vn-forecast').on('pointerdown.bb-vn-forecast', function(event) {
-        if ($(event.target).closest('.bb-vn-option[data-intent]').length > 0) return;
-        $('.bb-vn-option.preview-open').removeClass('preview-open');
-        $('.bb-vn-option.text-expanded').removeClass('text-expanded');
-    });
-
-    $('.bb-vn-op-head, .bb-vn-op-risk').off('click.bb-vn-text').on('click.bb-vn-text', function(event) {
-        const isTouchDevice = window.matchMedia('(hover: none), (pointer: coarse)').matches;
-        if (!isTouchDevice) return;
-        const card = $(this).closest('.bb-vn-option[data-intent]');
-        if (!card.length) return;
-        event.preventDefault();
-        event.stopPropagation();
-        card.toggleClass('text-expanded');
+    // Клик по кнопке [ i ]: РАЗВОРАЧИВАЕТ ГАРМОШКУ
+    $('.bb-vn-op-info-btn').off('click').on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const card = $(this).closest('.bb-vn-option');
+        const wasExpanded = card.hasClass('info-expanded');
+        
+        // Закрываем все открытые гармошки (по желанию, но так аккуратнее)
+        $('.bb-vn-option').removeClass('info-expanded');
+        
+        // Если текущая была закрыта — открываем
+        if (!wasExpanded) {
+            card.addClass('info-expanded');
+        }
     });
 
     $('#bb-vn-btn-cancel').off('click').on('click', function() {
         $('#bb-vn-options-container').removeClass('active');
-        $('#bb-vn-btn-generate').show().html('<i class="fa-solid fa-clapperboard"></i> VN · сохранено');
+        $('#bb-vn-btn-generate').show().html('<i class="fa-solid fa-clapperboard"></i> Действия VN');
     });
 
     $('#bb-vn-btn-reroll').off('click').on('click', async function() {
