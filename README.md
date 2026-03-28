@@ -182,6 +182,6 @@
 
 **Автор:** 
 
-**[BruniikBron: Lo-Fi & Mods 🌙](https://maxkara14.github.io/BruniikBron/)**
+**[BruniikBron: Lo-Fi & Mods 🌙](https://bblofi.online/)**
 
 **[TG](t.me/Brun11kBr0n)**
