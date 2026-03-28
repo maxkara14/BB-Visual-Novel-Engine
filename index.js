@@ -90,42 +90,44 @@ Use this STRICT JSON SHAPE template. Replace string placeholders with Russian te
 function getCombinedSocial() {
     let combinedStr = SOCIAL_PROMPT;
     const characters = Object.keys(currentCalculatedStats);
-    const unforgettableLines = [];
-    const unforgettableImpactLines = [];
+    
     if (characters.length > 0) {
-        combinedStr += `\n\n[CURRENT RELATIONSHIP STATUS WITH {{user}}]:\n`;
+        combinedStr += `\n\n[CURRENT RELATIONSHIP STATUS]:\n`;
+        
+        const impactInstructions = [];
+
         characters.forEach(char => {
-            const tierLabel = getTierInfo(currentCalculatedStats[char].affinity).label;
-            const softMemories = currentCalculatedStats[char].memories?.soft || [];
-            const deepMemories = currentCalculatedStats[char].memories?.deep || [];
-            const derivedRoleStatus = getUnforgettableRoleStatus(deepMemories);
-            const statusLabel = currentCalculatedStats[char].status || derivedRoleStatus || tierLabel;
-            const relationshipState = getAffinityNarrative(currentCalculatedStats[char].affinity);
-            const unforgettableImpact = getUnforgettableImpact(deepMemories);
-            const softLine = softMemories.length > 0
-                ? ` | recent_memory: ${softMemories.map(m => m.text).join('; ')}`
-                : '';
-            const deepLine = deepMemories.length > 0
-                ? ` | unforgettable: ${deepMemories.map(m => m.text).join('; ')}`
-                : '';
+            const stats = currentCalculatedStats[char];
+            const tier = getTierInfo(stats.affinity).label;
+            const status = stats.status || getUnforgettableRoleStatus(stats.memories?.deep) || tier;
+            
+            // 1. Берем мягкую память
+            const recent = (stats.memories?.soft || []).map(m => m.text).join('; ');
+            // 2. Берем глубокую память
+            const unforgettable = (stats.memories?.deep || []).map(m => m.text).join('; ');
 
-            if (deepMemories.length > 0) {
-                unforgettableLines.push(`- ${char}: ${deepMemories.map(m => m.text).join('; ')}`);
-                if (unforgettableImpact.prompt) {
-                    unforgettableImpactLines.push(`- ${char}: impact=${unforgettableImpact.label} | role_pressure=${derivedRoleStatus || 'нет'} | direction=${unforgettableImpact.prompt}`);
-                }
+            // ФОРМИРУЕМ СТРОКУ (Добавили [Unforgettable] сюда!)
+            combinedStr += `- ${char}: [Status: ${status}] [Tier: ${tier}] [State: ${getAffinityNarrative(stats.affinity)}]`;
+            if (recent) combinedStr += ` [Recent: ${recent}]`;
+            if (unforgettable) combinedStr += ` [Unforgettable: ${unforgettable}]`; // ВОТ ЭТОГО НЕ ХВАТАЛО
+            combinedStr += `\n`;
+
+            const impact = getUnforgettableImpact(stats.memories?.deep || []);
+            if (impact.prompt) {
+                impactInstructions.push(`### ${char} BEHAVIOR GUIDE:\n- Current Focus: ${impact.label}\n- Core Directive: ${impact.prompt}`);
             }
-
-            combinedStr += `- ${char}: role_status=${statusLabel} | relationship_tier=${tierLabel} | relationship_state=${relationshipState}${softLine}${deepLine}${deepMemories.length > 0 ? ` | unforgettable_impact=${unforgettableImpact.label}` : ''}\n`;
         });
-        combinedStr += "CRITICAL: Strictly align the characters' behavior, trust level, and dialogue towards {{user}} with these current relationship tiers, statuses, and emotional states.";
+
+        combinedStr += `\n[NARRATIVE DIRECTIVES]:\n`;
+        combinedStr += `1. Behavior: Dialogue and actions must strictly match the Status and Relationship Tier.\n`;
+        combinedStr += `2. Memory: Characters must act based on 'Recent' (short-term mood) and 'Unforgettable' (permanent emotional anchor) memories.`;
+
+        if (impactInstructions.length > 0) {
+            combinedStr += `\n\n[UNFORGETTABLE IMPACT LOGIC]:\n${impactInstructions.join('\n')}\n`;
+            combinedStr += `\nCRITICAL: Unforgettable memory directives override temporary scene moods.`;
+        }
     }
-    if (unforgettableLines.length > 0) {
-        combinedStr += `\n\n[UNFORGETTABLE EVENTS]:\n${unforgettableLines.join('\n')}\nCRITICAL: These are persistent emotional anchors. Characters must continue to remember them across scenes, even when the recent interaction is calm.`;
-    }
-    if (unforgettableImpactLines.length > 0) {
-        combinedStr += `\n\n[UNFORGETTABLE EVENTS IMPACT]:\n${unforgettableImpactLines.join('\n')}\nCRITICAL: Unforgettable events must outweigh small recent mood shifts when the scene is ambiguous.`;
-    }
+
     combinedStr += buildChoiceContextPrompt();
     return combinedStr;
 }
@@ -733,9 +735,21 @@ function buildChoiceContextPrompt() {
 
     const targets = Array.isArray(choiceContext.targets) && choiceContext.targets.length > 0
         ? choiceContext.targets.join(', ')
-        : 'не указаны';
+        : 'general scene';
 
-    return `\n\n[LAST PLAYER CHOICE VECTOR]:\n- intent: ${choiceContext.intent}\n- tone: ${choiceContext.tone || 'не указан'}\n- forecast: ${choiceContext.forecast || 'не указан'}\n- targets: ${targets}\nCRITICAL: Reflect the emotional direction of this choice in the next response. If the listed targets are present in the scene, they must react to it more strongly than bystanders.\nCRITICAL CONTINUITY: Treat forecast as a hard scene-direction constraint for the IMMEDIATELY NEXT assistant reply.\nIf forecast implies movement/transition (example: "переход в столовую вместе с Юи"), you MUST explicitly show that transition and place the scene in the new location within that very reply.\nDo NOT keep the old location if forecast indicates movement.`;
+    return `
+[IMMEDIATE NARRATIVE VECTOR]:
+- Player Intent: ${choiceContext.intent}
+- Emotional Tone: ${choiceContext.tone || 'neutral'}
+- Forced Outcome/Forecast: ${choiceContext.forecast || 'none'}
+- Affected Targets: ${targets}
+
+CRITICAL EXECUTION RULES:
+1. RESPONSE FOCUS: Your very next response must be strictly driven by the "Player Intent" and "Emotional Tone" above.
+2. TARGET REACTIONS: The characters listed in "Affected Targets" must react immediately and with higher priority than others.
+3. SCENE TRANSITION: If "Forced Outcome/Forecast" implies a change in location, time, or state (e.g., "moving to the kitchen"), you MUST narrate this transition in the FIRST paragraph and set the rest of the scene in the new location. 
+4. NO STALLING: Do not repeat the player's action. Progress the story immediately according to the Forecast.
+`.trim();
 }
 
 function maybeAddStoryMoment(moment) {
