@@ -149,9 +149,17 @@
 
 <img width="1173" height="878" alt="el" src="https://github.com/user-attachments/assets/2eca36f6-82c8-40b5-86b7-10d6a3baa98d" />
 
-### Варианты действий
+### Варианты действий на разных устройствах
 
-<img width="942" height="533" alt="ответы" src="https://github.com/user-attachments/assets/00b9732b-ca50-421a-994b-4cdf56464bce" />
+<img width="961" height="239" alt="1234" src="https://github.com/user-attachments/assets/1b462351-37ed-43cc-b53b-8171354a3c46" />
+
+---
+
+![photo_2026-03-29_02-45-07](https://github.com/user-attachments/assets/044a65b2-593b-4ca3-a1c9-1316b5a4a9ac)
+
+---
+
+![photo_2026-03-29_02-45-07 (2)](https://github.com/user-attachments/assets/ec317555-bc76-41d2-ab78-997911a1f3d7)
 
 ### HUD-уведомления
 
