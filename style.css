@@ -180,22 +180,24 @@
     backdrop-filter: blur(20px);
     border-left: 1px solid rgba(148, 163, 184, 0.12);
     box-shadow: -24px 0 50px rgba(0,0,0,0.34);
-    z-index: 1500; /* ФИКС: На ПК прячем HUD под верхнюю панель Таверны */
+    z-index: 890; /* В ЗАКРЫТОМ ВИДЕ СЛАБЕЕ ПАНЕЛИ ТАВЕРНЫ */
     transform: translateX(100%);
     transition: transform 0.34s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex; flex-direction: column;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     box-sizing: border-box; 
-    padding-top: 48px; /* ФИКС: Увеличили отступ, чтобы шапка Таверны не перекрыла текст "VNE" */
+    padding-top: 48px; 
     overflow: visible;
 }
-#bb-social-hud.open { transform: translateX(0); }
+#bb-social-hud.open { 
+    transform: translateX(0); 
+}
 
 #bb-social-hud-backdrop {
     position: fixed; inset: 0; border: 0; padding: 0; margin: 0;
     opacity: 0; pointer-events: none;
     background: rgba(2, 6, 23, 0.4); backdrop-filter: blur(4px);
-    z-index: 1490; /* ФИКС: Подложка тоже уходит под шапку Таверны */
+    z-index: 890; /* ФИКС: Подложка тоже уходит под шапку Таверны */
     transition: opacity 0.24s ease;
 }
 #bb-social-hud-backdrop.open { opacity: 1; pointer-events: auto; }
@@ -234,7 +236,7 @@
 }
 
 #bb-social-hud-toggle {
-    position: absolute; left: -50px; 
+    position: fixed; left: -50px; 
     top: 130px; /* ФИКС: Спускаем язычок на уровень "Связей" */
     width: 50px;
     background: linear-gradient(180deg, rgba(10, 14, 23, 0.62), rgba(28, 19, 37, 0.56));
@@ -248,7 +250,7 @@
 }
 #bb-social-hud-toggle::after {
     content: '';
-    position: absolute;
+    position: fixed;
     top: -1px;
     bottom: -1px;
     right: -1px;
@@ -529,121 +531,6 @@
 .bb-editor-hint { font-size: 11px; color: #94a3b8; line-height: 1.45; margin-bottom: 10px; }
 .bb-editor-actions { display: flex; gap: 8px; }
 .bb-btn-hide-char { background: rgba(239,68,68,0.15) !important; color: #f87171 !important; border-color: rgba(239,68,68,0.35) !important; }
-
-#bb-hide-char-confirm {
-    position: fixed;
-    inset: 0;
-    height: 100dvh;
-    display: grid;
-    place-items: center;
-    padding: 18px;
-    padding-top: max(18px, env(safe-area-inset-top, 0px));
-    padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
-    z-index: 32000;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s ease;
-    box-sizing: border-box;
-}
-#bb-hide-char-confirm.open {
-    opacity: 1;
-    pointer-events: auto;
-}
-.bb-hide-confirm-backdrop {
-    position: absolute;
-    inset: 0;
-    border: 0;
-    background: rgba(2, 6, 23, 0.68);
-    backdrop-filter: blur(6px);
-}
-.bb-hide-confirm-card {
-    position: relative;
-    width: min(460px, 100%);
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 18px;
-    border-radius: 20px;
-    border: 1px solid rgba(239, 68, 68, 0.28);
-    background:
-        radial-gradient(circle at top right, rgba(239, 68, 68, 0.2), transparent 54%),
-        linear-gradient(180deg, rgba(10, 14, 23, 0.97), rgba(20, 14, 29, 0.96));
-    box-shadow:
-        0 24px 48px rgba(0, 0, 0, 0.4),
-        inset 0 1px 0 rgba(255,255,255,0.08);
-    margin: auto;
-    max-height: calc(100dvh - max(36px, env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px) + 24px));
-    overflow-y: auto;
-}
-.bb-hide-confirm-icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 14px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: #fca5a5;
-    font-size: 17px;
-    border: 1px solid rgba(248, 113, 113, 0.4);
-    background: rgba(127, 29, 29, 0.35);
-}
-.bb-hide-confirm-content { display: flex; flex-direction: column; gap: 8px; }
-.bb-hide-confirm-title {
-    margin: 0;
-    font-size: 18px;
-    line-height: 1.25;
-    color: #fff;
-}
-.bb-hide-confirm-text {
-    margin: 0;
-    font-size: 13px;
-    line-height: 1.5;
-    color: #cbd5e1;
-}
-.bb-hide-confirm-text strong { color: #fff; }
-.bb-hide-confirm-actions {
-    display: flex;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-.bb-hide-confirm-cancel {
-    background: rgba(148, 163, 184, 0.16) !important;
-    color: #e2e8f0 !important;
-    border-color: rgba(148, 163, 184, 0.36) !important;
-}
-.bb-hide-confirm-approve {
-    background: rgba(239, 68, 68, 0.18) !important;
-    color: #fca5a5 !important;
-    border-color: rgba(248, 113, 113, 0.45) !important;
-}
-
-@media (max-width: 760px) {
-    #bb-hide-char-confirm {
-        padding: 12px;
-        padding-top: max(12px, env(safe-area-inset-top, 0px));
-        padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
-    }
-    .bb-hide-confirm-card {
-        width: min(460px, 100%);
-        max-width: 460px;
-        border-radius: 18px;
-        padding: 16px;
-        gap: 10px;
-    }
-    .bb-hide-confirm-title { font-size: 16px; }
-    .bb-hide-confirm-text { font-size: 12px; }
-    .bb-hide-confirm-actions {
-        justify-content: flex-end;
-        flex-direction: row;
-        align-items: center;
-    }
-    .bb-hide-confirm-actions .menu_button {
-        width: auto;
-        flex: 1;
-        min-height: 40px;
-    }
-}
 
 .bb-char-log {
     display: none; padding: 0 16px 16px;
@@ -1146,11 +1033,6 @@
         touch-action: none;
     }
     
-    /* Добавляем подложку поверх всего для мобилок */
-    #bb-social-hud-backdrop {
-        z-index: 9998; 
-    }
-
     #bb-social-hud {
         --bb-hud-tab-width: 48px;
         width: calc(100vw - var(--bb-hud-tab-width));
@@ -1160,27 +1042,18 @@
         box-shadow: none;
         padding-top: 0;
         overflow: visible;
-        z-index: 9999; /* ФИКС: На телефонах возвращаем HUD поверх всех панелей! */
+        z-index: 890; /* В закрытом виде язычок прячется под системные кнопки */
+    }
+    
+    #bb-social-hud.open {
+        z-index: 9999; /* ТОЛЬКО на мобилке открытая панель перекрывает всё */
     }
 
-    #bb-social-hud-toggle {
-        display: flex;
-        left: -48px;
-        top: 130px; 
-        width: 48px;
-        min-height: 0;
-        height: auto;
-        border-radius: 14px 0 0 14px;
-        padding: 8px 6px;
-        gap: 4px;
-        justify-content: center;
-        touch-action: manipulation;
-        z-index: 3;
-    }
-
-    #bb-social-hud-toggle .bb-toggle-label {
+    /* === ФИКС: Прячем надпись VNE на мобильном язычке === */
+    .bb-toggle-label {
         display: none;
     }
+
     #bb-social-hud-mobile-launcher {
         display: none !important;
         opacity: 0;
@@ -1188,7 +1061,6 @@
         transform: translateY(8px);
     }
     .bb-hud-header {
-        /* ФИКС: Чуть больше отступа сверху на телефоне, чтобы текст точно не срезало */
         padding: calc(32px + env(safe-area-inset-top, 0px)) 16px 14px;
     }
     .bb-hud-header-top {
@@ -1222,6 +1094,48 @@
         width: auto;
     }
 }
+
+/* === КРИСТАЛЛИЗАЦИЯ (ТРЕКЕР) === */
+.bb-crystal-tracker {
+    display: flex; flex-direction: column; gap: 6px; margin-top: 10px;
+    padding-top: 10px; border-top: 1px dashed rgba(255,255,255,0.06);
+}
+.bb-crystal-row-static, .bb-crystal-row-btn {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 12px; border-radius: 12px;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 800;
+}
+.bb-crystal-row-static { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.04); }
+.bb-crystal-row-btn { 
+    cursor: pointer; width: 100%; border: 1px solid; 
+    transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+.bb-crystal-row-btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
+
+.bb-cr-gems { display: flex; gap: 5px; font-size: 12px; }
+
+/* Positive (Светлые) */
+.bb-crystal-row-static.positive .bb-cr-gems { color: rgba(74, 222, 128, 0.25); }
+.bb-crystal-row-static.positive .fa-solid { color: #4ade80; text-shadow: 0 0 8px rgba(74,222,128,0.5); }
+.bb-crystal-row-static.positive .bb-cr-text { color: #64748b; }
+
+.bb-crystal-row-btn.positive {
+    background: linear-gradient(180deg, rgba(74, 222, 128, 0.15), rgba(22, 163, 74, 0.1));
+    border-color: rgba(74, 222, 128, 0.4); color: #86efac;
+}
+.bb-crystal-row-btn.positive .bb-cr-gems { color: #4ade80; text-shadow: 0 0 10px rgba(74,222,128,0.8); }
+
+/* Negative (Мрачные) */
+.bb-crystal-row-static.negative .bb-cr-gems { color: rgba(251, 113, 133, 0.25); }
+.bb-crystal-row-static.negative .fa-solid { color: #fb7185; text-shadow: 0 0 8px rgba(251,113,133,0.5); }
+.bb-crystal-row-static.negative .bb-cr-text { color: #64748b; }
+
+.bb-crystal-row-btn.negative {
+    background: linear-gradient(180deg, rgba(244, 63, 94, 0.15), rgba(225, 29, 72, 0.1));
+    border-color: rgba(251, 113, 133, 0.4); color: #fca5a5;
+}
+.bb-crystal-row-btn.negative .bb-cr-gems { color: #fb7185; text-shadow: 0 0 10px rgba(251,113,133,0.8); }
+
 .bb-moment-card.deep-positive { border-left: 3px solid #4ade80; }
 .bb-moment-card.deep-negative { border-left: 3px solid #ef4444; }
 .bb-moment-card.soft-positive { border-left: 3px solid #86efac; }
