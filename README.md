@@ -127,7 +127,7 @@
 1. Откройте **SillyTavern**.
 2. Перейдите в раздел **Extensions / Расширения**.
 3. Выберите установку расширения по репозиторию.
-4. Укажите URL этого репозитория:  ```[https://github.com/maxkara14/BB-Visual-Novel-Engine](https://github.com/maxkara14/BB-Visual-Novel-Engine)```
+4. Укажите URL этого репозитория:  ```text https://github.com/maxkara14/BB-Visual-Novel-Engine```
 5. Перезагрузите страницу SillyTavern.
 6. Откройте настройки расширения, здесь вы можете настроить параметры автоматизации.
 
