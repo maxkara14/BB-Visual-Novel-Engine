@@ -91,7 +91,7 @@ function getCombinedSocial() {
             const recent = (stats.memories?.soft || []).map(m => m.text).join('; ');
             // 2. УМНЫЙ ИНЖЕКТ: Берем только 3 САМЫХ ПОСЛЕДНИХ глубоких следа
             const deepMemories = stats.memories?.deep || [];
-            const recentDeep = deepMemories.slice(-3); 
+            const recentDeep = deepMemories.slice(-5); 
             const unforgettable = recentDeep.map(m => m.text).join('; ');
             // 3. КРИСТАЛЛИЗОВАННЫЕ ЧЕРТЫ
             const coreTraits = stats.core_traits || []; // Теперь берем из истории, а не из глобальной меты
