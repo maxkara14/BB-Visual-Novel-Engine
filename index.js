@@ -125,7 +125,8 @@ function getCombinedSocial() {
 
         combinedStr += `\n[NARRATIVE DIRECTIVES]:\n`;
         combinedStr += `1. Behavior: Dialogue and actions must strictly match the Status and Relationship Tier.\n`;
-        combinedStr += `2. Memory: Characters must act based on 'Recent' (short-term mood) and 'Unforgettable' (permanent emotional anchor) memories.`;
+        combinedStr += `2. Memory: Characters must act based on 'Recent' (short-term mood) and 'Unforgettable' (permanent emotional anchor) memories.\n`;
+        combinedStr += `3. Name Consistency: When evaluating existing characters, use EXACTLY these names: ${characters.join(', ')}.`;
 
         if (impactInstructions.length > 0) {
             combinedStr += `\n\n[UNFORGETTABLE IMPACT LOGIC]:\n${impactInstructions.join('\n')}\n`;
@@ -2279,6 +2280,16 @@ function setupExtensionSettings() {
                             <button id="bb-dbg-add-trait-neg" class="menu_button" style="color:#fca5a5; border-color:rgba(251,113,133,0.3);">💎 Мрачная черта</button>
                         </div>
                         <button id="bb-dbg-set-status" class="menu_button" style="color:#93c5fd; border-color:rgba(147,197,253,0.3);">🔄 Изменить статус к вам</button>
+                        
+                        <hr style="border-color: rgba(255,255,255,0.05); margin: 4px 0;">
+                        <span style="font-size: 11px; color: #cbd5e1; font-weight:bold;">🧬 Слияние дубликатов:</span>
+                        <div style="display: flex; gap: 6px;">
+                            <input type="text" id="bb-dbg-merge-from" class="text_pole" placeholder="Кого (с опечаткой)" style="flex:1;">
+                            <input type="text" id="bb-dbg-merge-to" class="text_pole" placeholder="В кого (правильное)" style="flex:1;">
+                        </div>
+                        <button id="bb-dbg-btn-merge" class="menu_button" style="color:#c084fc; border-color:rgba(192, 132, 252, 0.3);"><i class="fa-solid fa-code-merge"></i> Слить в одного</button>
+                        <hr style="border-color: rgba(255,255,255,0.05); margin: 4px 0;">
+
                         <button id="bb-dbg-reset-char" class="menu_button" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: #ef4444;">💀 Полностью обнулить персонажа</button>
                         <button id="bb-dbg-toast" class="menu_button"><i class="fa-solid fa-bell"></i>&ensp; Рандомное уведомление</button>
                     </div>
@@ -2469,6 +2480,61 @@ function setupExtensionSettings() {
         saveChatDebounced();
         recalculateAllStats(false); 
         notifySuccess(`Статус изменен на: ${newStatus}`);
+    });
+
+    $('#bb-dbg-btn-merge').on('click', function() {
+        const fromName = String($('#bb-dbg-merge-from').val() || "").trim();
+        const toName = String($('#bb-dbg-merge-to').val() || "").trim();
+        if(!fromName || !toName) return notifyError("Укажите оба имени!");
+        if(fromName === toName) return notifyError("Имена одинаковые!");
+
+        const chat = SillyTavern.getContext().chat;
+        let mergedCount = 0;
+
+        if (chat) {
+            chat.forEach(msg => {
+                // Переносим очки отношений и историю
+                if (msg.extra && msg.extra.bb_social_swipes) {
+                    for (const sId in msg.extra.bb_social_swipes) {
+                        if (Array.isArray(msg.extra.bb_social_swipes[sId])) {
+                            msg.extra.bb_social_swipes[sId].forEach(u => {
+                                if (u.name === fromName) {
+                                    u.name = toName;
+                                    mergedCount++;
+                                }
+                            });
+                        }
+                    }
+                }
+                // Переносим черты характера
+                if (msg.extra && msg.extra.bb_vn_char_traits_swipes) {
+                    for (const sId in msg.extra.bb_vn_char_traits_swipes) {
+                        if (Array.isArray(msg.extra.bb_vn_char_traits_swipes[sId])) {
+                            msg.extra.bb_vn_char_traits_swipes[sId].forEach(t => {
+                                if (t.charName === fromName) {
+                                    t.charName = toName;
+                                }
+                            });
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Удаляем базовое отношение клона, если оно было
+        if (chat_metadata['bb_vn_char_bases'] && chat_metadata['bb_vn_char_bases'][fromName] !== undefined) {
+            delete chat_metadata['bb_vn_char_bases'][fromName];
+        }
+
+        if (mergedCount > 0) {
+            saveChatDebounced();
+            recalculateAllStats(false);
+            notifySuccess(`Слияние успешно! Перенесено записей: ${mergedCount}`);
+            $('#bb-dbg-merge-from').val('');
+            $('#bb-dbg-merge-to').val('');
+        } else {
+            notifyError(`Персонаж "${fromName}" не найден в истории.`);
+        }
     });
 
     $('#bb-dbg-reset-char').on('click', function() {
