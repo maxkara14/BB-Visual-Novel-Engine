@@ -593,7 +593,8 @@
     box-shadow: 0 12px 24px rgba(0,0,0,0.22); transition: all 0.2s ease;
 }
 .bb-vn-main-btn:hover { background: linear-gradient(180deg, rgba(23, 31, 46, 0.96), rgba(16, 23, 36, 0.94)); box-shadow: 0 14px 26px rgba(0,0,0,0.24); }
-.bb-vn-main-btn.loading { border-color: #f59e0b; color: #f59e0b; pointer-events: none; animation: pulseGlow 1.5s infinite; }
+.bb-vn-main-btn.loading { border-color: #f59e0b; color: #f59e0b; animation: pulseGlow 1.5s infinite; cursor: pointer; }
+.bb-vn-main-btn.loading:hover { border-color: #ef4444; color: #ef4444; animation: none; box-shadow: 0 0 15px rgba(239, 68, 68, 0.3); }
 
 @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); } 50% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.6); } }
 
