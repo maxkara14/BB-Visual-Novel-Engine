@@ -22,6 +22,8 @@ extension_settings[MODULE_NAME] = {
 
 let currentCalculatedStats = {};
 let currentStoryMoments = [];
+let vnGenerationAbortController = null; // Контроллер для прерывания fetch
+let isVnGenerationCancelled = false; // Флаг отмены
 
 /**
  * @typedef {Object} VNOption
@@ -1828,11 +1830,13 @@ async function generateFastPrompt(promptText) {
     const s = extension_settings[MODULE_NAME];
     if (s.useCustomApi && s.customApiUrl && s.customApiModel) {
         try {
+            vnGenerationAbortController = new AbortController();
             const baseUrl = s.customApiUrl.replace(/\/$/, '');
             const endpoint = baseUrl + '/chat/completions';
             
             const response = await fetch(endpoint, {
                 method: 'POST',
+                signal: vnGenerationAbortController.signal,
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${s.customApiKey || ''}`
@@ -1856,8 +1860,11 @@ async function generateFastPrompt(promptText) {
             if (!content.trim()) throw new Error("Прокси вернул пустой текст (Сработал фильтр).");
             return content;
         } catch (e) {
+            if (e.name === 'AbortError') throw new Error("Отменено пользователем");
             console.warn(`[BB VN] Ошибка кастомного API (${e.message}), перехват на основной API...`);
             return await runMainGen(promptText);
+        } finally {
+            vnGenerationAbortController = null;
         }
     } else {
         return await runMainGen(promptText);
@@ -1997,10 +2004,20 @@ window['renderVNOptionsFromData'] = function(/** @type {VNOption[]} */ parsedOpt
 
 window['bbVnGenerateOptionsFlow'] = async function(excludedIntents = []) {
     const btn = $('#bb-vn-btn-generate');
-    if (btn.hasClass('loading')) return;
+    
+    // ЕСЛИ КНОПКА КРУТИТСЯ И МЫ НАЖАЛИ ЕЁ — ЭТО ОТМЕНА!
+    if (btn.hasClass('loading')) {
+        isVnGenerationCancelled = true;
+        if (vnGenerationAbortController) vnGenerationAbortController.abort();
+        btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия VN').show();
+        notifyInfo("Генерация вариантов отменена");
+        return;
+    }
 
-    // Классический надежный визуальный лоадер на кнопке
-    btn.show().addClass('loading').html('<i class="fa-solid fa-spinner fa-spin"></i> Сценарий в обработке...');
+    isVnGenerationCancelled = false;
+
+    // Классический надежный визуальный лоадер на кнопке (теперь с крестиком)
+    btn.show().addClass('loading').html('<i class="fa-solid fa-spinner fa-spin"></i> Сценарий в обработке... <i class="fa-solid fa-xmark" style="margin-left: 6px; color: #ef4444;" title="Отменить"></i>');
     $('#bb-vn-options-container').removeClass('active').empty();
 
     try {
@@ -2029,12 +2046,14 @@ window['bbVnGenerateOptionsFlow'] = async function(excludedIntents = []) {
             const sceneVibe = window['bbGetSceneDirectorPrompt']();
             if (sceneVibe) {
                 console.log("[BB VNE] 🎬 Успешно подхватили стиль Режиссёра:\n", sceneVibe);
-                
                 prompt = sceneVibe + "\n\n" + prompt;
             }
         }
 
         const result = await generateFastPrompt(prompt);
+
+        // ПРОВЕРКА ПОСЛЕ ГЕНЕРАЦИИ: Если успели нажать отмену, выбрасываем результат
+        if (isVnGenerationCancelled) throw new Error("Отменено пользователем");
 
         let cleanResult = String(result || "").trim();
         cleanResult = cleanResult.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
@@ -2091,10 +2110,12 @@ window['bbVnGenerateOptionsFlow'] = async function(excludedIntents = []) {
         } else { throw new Error("Ответ пуст"); }
 
     } catch (e) {
-        console.error("[BB VN] Ошибка генерации:", e);
-        // @ts-ignore
-        notifyError("Не удалось сгенерировать варианты");
-        btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия VN').show();
+        if (e.message !== "Отменено пользователем") {
+            console.error("[BB VN] Ошибка генерации:", e);
+            // @ts-ignore
+            notifyError("Не удалось сгенерировать варианты");
+            btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия VN').show();
+        }
     }
 };
 
