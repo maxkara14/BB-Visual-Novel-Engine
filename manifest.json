@@ -2,7 +2,7 @@
     "name": "BB-Visual-Novel",
     "display_name": "BB Visual Novel Engine",
     "description": "Cистема отношений, визуальная новелла и генерация ответов.",
-    "version": "2.0.0",
+    "version": "3.0.0 ALPHA",
     "author": "BruniikBron",
     "js": "index.js",
     "css": "style.css",
