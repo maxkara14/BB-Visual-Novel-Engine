@@ -53,15 +53,9 @@ At the VERY END of your response, you MUST generate a hidden JSON block evaluati
 CRITICAL RULES:
 1. ONLY evaluate characters actively present or directly reacting in this specific turn.
 2. Keep JSON keys EXACTLY as written in English. Translate ONLY the values into Russian.
+3. To prevent breaking the chat UI, you MUST wrap your JSON inside a hidden HTML block exactly like this:
 
-JSON KEYS:
-- "name": (String) Concrete character name. (e.g., "Alex"). No collective nouns.
-- "friendship_impact": (String) Choose strictly from: "none", "minor_positive", "major_positive", "life_changing", "minor_negative", "major_negative", "unforgivable". Evaluates trust, respect, and camaraderie.
-- "romance_impact": (String) Same scale as above. STRICT RULE: Keep "none" for casual/combat/platonic scenes. ONLY change during vulnerable, flirty, deeply caring, or jealous moments.
-- "role_dynamic": (String) 1-2 words describing {{user}}'s CURRENT role to them right now (e.g., "опасный союзник", "скрытая угроза", "надежный друг").
-- "reason": (String) Short Russian explanation of WHY the impact happened.
-- "emotion": (String) 1-2 words describing the character's internal emotional state. If using two nouns, separate with a comma (e.g., "шок, обида", "радость").
-
+<div style="display: none;" class="bb-vn-data">
 \`\`\`json
 {
   "social_updates":[
@@ -75,7 +69,16 @@ JSON KEYS:
     }
   ]
 }
-\`\`\``;
+\`\`\`
+</div>
+
+JSON KEYS:
+- "name": (String) Concrete character name. (e.g., "Alex"). No collective nouns.
+- "friendship_impact": (String) Choose strictly from: "none", "minor_positive", "major_positive", "life_changing", "minor_negative", "major_negative", "unforgivable". Evaluates trust, respect, and camaraderie.
+- "romance_impact": (String) Same scale as above. STRICT RULE: Keep "none" for casual/combat/platonic scenes. ONLY change during vulnerable, flirty, deeply caring, or jealous moments.
+- "role_dynamic": (String) 1-2 words describing {{user}}'s CURRENT role to them right now (e.g., "опасный союзник", "скрытая угроза", "надежный друг").
+- "reason": (String) Short Russian explanation of WHY the impact happened.
+- "emotion": (String) 1-2 words describing the character's internal emotional state. If using two nouns, separate with a comma (e.g., "шок, обида", "радость").`;
 
 function getCombinedSocial() {
     let combinedStr = SOCIAL_PROMPT;
@@ -747,7 +750,16 @@ function tryParseSocialUpdates(rawText) {
     const candidates = [];
     const bt = String.fromCharCode(96, 96, 96); 
 
-    // 1. Поиск JSON в бэктиках
+    // 1. Поиск скрытого DIV (Идея твоей подруги - пуленепробиваемый вариант)
+    const divRegex = /(<div[^>]*>([\s\S]*?)<\/div>)/gi;
+    let divMatch;
+    while ((divMatch = divRegex.exec(text)) !== null) {
+        if (divMatch[2] && divMatch[2].includes('social_updates')) {
+            candidates.push({ inner: divMatch[2], full: divMatch[1] });
+        }
+    }
+
+    // 2. Поиск JSON в бэктиках (Фолбэк)
     const fenceRegex = new RegExp('(' + bt + '(?:json|JSON|jsonc|JSONC|js|JS)?([\\s\\S]*?)' + bt + ')', 'g');
     let fenceMatch;
     while ((fenceMatch = fenceRegex.exec(text)) !== null) {
@@ -756,11 +768,10 @@ function tryParseSocialUpdates(rawText) {
         }
     }
 
-    // 2. Поиск в HTML-комментариях (СОБРАНО ИЗ КУСОЧКОВ, ЧТОБЫ ИНТЕРФЕЙСЫ НЕ ПРЯТАЛИ ТЕГ)
+    // 3. Поиск в HTML-комментариях (Собрано по частям, чтобы не сломать парсеры)
     const hStart = '<' + '!--';
     const hEnd = '--' + '>';
     const htmlCommentRegex = new RegExp('(' + hStart + '([\\s\\S]*?)' + hEnd + ')', 'g');
-    
     let htmlMatch;
     while ((htmlMatch = htmlCommentRegex.exec(text)) !== null) {
         if (htmlMatch[2] && htmlMatch[2].includes('social_updates')) {
@@ -768,7 +779,7 @@ function tryParseSocialUpdates(rawText) {
         }
     }
 
-    // 3. Фолбэк: поиск по скобкам
+    // 4. Фолбэк: поиск по скобкам
     const keywordIndex = text.indexOf('"social_updates"');
     if (keywordIndex !== -1) {
         let start = keywordIndex;
@@ -849,6 +860,7 @@ function scanAndCleanMessage(msg, messageId) {
     
     currentMes = currentMes.replace(emptyBlockRegex, '');
     currentMes = currentMes.replace(trailingBlockRegex, '');
+    currentMes = currentMes.replace(/<div[^>]*>\s*<\/div>/gi, ''); // Вычищаем пустые дивы, если они остались
     
     // Проверяем: если текст реально поменялся
     if (originalMes !== currentMes) {
