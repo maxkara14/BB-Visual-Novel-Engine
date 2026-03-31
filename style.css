@@ -1145,3 +1145,12 @@
 .bb-moment-card.status-shift { border-left: 3px solid #f59e0b; }
 .bb-moment-card.intro { border-left: 3px solid #c084fc; }
 .bb-moment-card.choice-vector { border-left: 3px solid #f59e0b; }
+.bb-moment-card.romance-positive { border-left: 3px solid #f472b6; }
+.bb-moment-card.romance-negative { border-left: 3px solid #e11d48; }
+/* Специальный класс для идеальной центровки центральной метки шкалы */
+.bb-progress-wrapper-romance .bb-progress-labels > span.bb-label-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
