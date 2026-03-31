@@ -750,8 +750,8 @@ function tryParseSocialUpdates(rawText) {
     const candidates = [];
     const bt = String.fromCharCode(96, 96, 96); 
 
-    // 1. Поиск скрытого DIV (Ищем строго наш класс. Закрывающий </div> теперь опционален!)
-    const divRegex = /(<div[^>]*bb-vn-data[^>]*>([\s\S]*?)(?:<\/div>|$))/gi;
+    // 1. Поиск скрытого DIV (Идея твоей подруги - пуленепробиваемый вариант)
+    const divRegex = /(<div[^>]*>([\s\S]*?)<\/div>)/gi;
     let divMatch;
     while ((divMatch = divRegex.exec(text)) !== null) {
         if (divMatch[2] && divMatch[2].includes('social_updates')) {
@@ -768,7 +768,7 @@ function tryParseSocialUpdates(rawText) {
         }
     }
 
-    // 3. Поиск в HTML-комментариях
+    // 3. Поиск в HTML-комментариях (Собрано по частям, чтобы не сломать парсеры)
     const hStart = '<' + '!--';
     const hEnd = '--' + '>';
     const htmlCommentRegex = new RegExp('(' + hStart + '([\\s\\S]*?)' + hEnd + ')', 'g');
@@ -2753,27 +2753,12 @@ jQuery(async () => {
         injectVNActionsUI();
         updateHudVisibility();
 
-        // --- НОВЫЙ ДЕБАУНСЕР (ОЖИДАНИЕ СОХРАНЕНИЯ ЧАТА) ---
-        // Это спасет от рассинхрона при стриминге ответов от ИИ
-        let recalcTimer = null;
-        let pendingIsNew = false;
-        function debouncedRecalculate(isNew = false) {
-            if (isNew) pendingIsNew = true;
-            clearTimeout(recalcTimer);
-            recalcTimer = setTimeout(() => {
-                const passIsNew = pendingIsNew;
-                pendingIsNew = false;
-                recalculateAllStats(passIsNew);
-            }, 800); // Ждем 800мс, чтобы Таверна точно успела записать текст в память
-        }
-        // --------------------------------------------------
-
         eventSource.on(event_types.APP_READY, () => {
             setupExtensionSettings();
             injectCombinedSocialPrompt();
             ensureHudContainer();
             injectVNActionsUI();
-            debouncedRecalculate(); 
+            recalculateAllStats(); 
             updateHudVisibility();
         });
         
@@ -2781,16 +2766,16 @@ jQuery(async () => {
             window['restoreVNOptions'](false);
             injectCombinedSocialPrompt();
             injectVNActionsUI();
-            debouncedRecalculate(); 
+            recalculateAllStats(); 
             updateHudVisibility();
         });
 
-        // ПРИ СВАЙПЕ ИЛИ НОВОМ СООБЩЕНИИ ИСПОЛЬЗУЕМ ДЕБАУНСЕР
-        eventSource.on(event_types.MESSAGE_RECEIVED, () => { window['restoreVNOptions'](false); debouncedRecalculate(true); }); 
-        eventSource.on(event_types.MESSAGE_DELETED, () => { window['restoreVNOptions'](false); debouncedRecalculate(); });
-        eventSource.on(event_types.MESSAGE_SWIPED, () => { window['restoreVNOptions'](false); debouncedRecalculate(); });
-        eventSource.on(event_types.MESSAGE_UPDATED, () => { debouncedRecalculate(); });
-        eventSource.on(event_types.GENERATION_STOPPED, () => { debouncedRecalculate(); });
+        // ПРИ СВАЙПЕ ИЛИ НОВОМ СООБЩЕНИИ ПЫТАЕМСЯ ВОССТАНОВИТЬ КЭШ КНОПОК
+        eventSource.on(event_types.MESSAGE_RECEIVED, () => { window['restoreVNOptions'](false); recalculateAllStats(true); }); 
+        eventSource.on(event_types.MESSAGE_DELETED, () => { window['restoreVNOptions'](false); recalculateAllStats(); });
+        eventSource.on(event_types.MESSAGE_SWIPED, () => { window['restoreVNOptions'](false); recalculateAllStats(); });
+        eventSource.on(event_types.MESSAGE_UPDATED, () => { recalculateAllStats(); });
+        eventSource.on(event_types.GENERATION_STOPPED, () => { recalculateAllStats(); });
 
         eventSource.on(event_types.MESSAGE_RECEIVED, () => {
             if (extension_settings[MODULE_NAME].autoGen) {
