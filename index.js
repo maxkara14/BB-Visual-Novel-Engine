@@ -745,84 +745,54 @@ function addGlobalLog(type, text, timeString) {
 
 function tryParseSocialUpdates(rawText) {
     const text = String(rawText || '');
-    if (!text.trim()) return null;
+    const keyword = '"social_updates"';
+    const keywordIdx = text.lastIndexOf(keyword);
+    if (keywordIdx === -1) return null;
 
-    const candidates = [];
-    const bt = String.fromCharCode(96, 96, 96); 
-
-    // 1. Поиск скрытого DIV (Идея твоей подруги - пуленепробиваемый вариант)
-    const divRegex = /(<div[^>]*>([\s\S]*?)<\/div>)/gi;
-    let divMatch;
-    while ((divMatch = divRegex.exec(text)) !== null) {
-        if (divMatch[2] && divMatch[2].includes('social_updates')) {
-            candidates.push({ inner: divMatch[2], full: divMatch[1] });
-        }
+    let openBraceIdx = -1;
+    for (let i = keywordIdx; i >= 0; i--) {
+        if (text[i] === '{') { openBraceIdx = i; break; }
     }
+    if (openBraceIdx === -1) return null;
 
-    // 2. Поиск JSON в бэктиках (Фолбэк)
-    const fenceRegex = new RegExp('(' + bt + '(?:json|JSON|jsonc|JSONC|js|JS)?([\\s\\S]*?)' + bt + ')', 'g');
-    let fenceMatch;
-    while ((fenceMatch = fenceRegex.exec(text)) !== null) {
-        if (fenceMatch[2] && fenceMatch[2].includes('social_updates')) {
-            candidates.push({ inner: fenceMatch[2], full: fenceMatch[1] });
-        }
-    }
+    let depth = 0;
+    let closeBraceIdx = -1;
+    let inString = false;
+    let escapeNext = false;
 
-    // 3. Поиск в HTML-комментариях (Собрано по частям, чтобы не сломать парсеры)
-    const hStart = '<' + '!--';
-    const hEnd = '--' + '>';
-    const htmlCommentRegex = new RegExp('(' + hStart + '([\\s\\S]*?)' + hEnd + ')', 'g');
-    let htmlMatch;
-    while ((htmlMatch = htmlCommentRegex.exec(text)) !== null) {
-        if (htmlMatch[2] && htmlMatch[2].includes('social_updates')) {
-            candidates.push({ inner: htmlMatch[2], full: htmlMatch[1] });
-        }
-    }
-
-    // 4. Фолбэк: поиск по скобкам
-    const keywordIndex = text.indexOf('"social_updates"');
-    if (keywordIndex !== -1) {
-        let start = keywordIndex;
-        while (start >= 0 && text[start] !== '{') start--;
-        if (start >= 0) {
-            let depth = 0;
-            let end = -1;
-            for (let i = start; i < text.length; i++) {
-                const ch = text[i];
-                if (ch === '{') depth++;
-                if (ch === '}') {
-                    depth--;
-                    if (depth === 0) {
-                        end = i;
-                        break;
-                    }
-                }
-            }
-            if (end > start) {
-                const jsonStr = text.slice(start, end + 1);
-                candidates.push({ inner: jsonStr, full: jsonStr });
+    for (let i = openBraceIdx; i < text.length; i++) {
+        const char = text[i];
+        if (escapeNext) { escapeNext = false; continue; }
+        if (char === '\\') { escapeNext = true; continue; }
+        if (char === '"') { inString = !inString; }
+        
+        if (!inString) {
+            if (char === '{') depth++;
+            else if (char === '}') {
+                depth--;
+                if (depth === 0) { closeBraceIdx = i; break; }
             }
         }
     }
 
-    for (const candidate of candidates) {
+    if (closeBraceIdx !== -1) {
+        let jsonStr = text.substring(openBraceIdx, closeBraceIdx + 1);
         try {
-            let jsonToParse = candidate.inner.trim();
-            const firstBrace = jsonToParse.indexOf('{');
-            const lastBrace = jsonToParse.lastIndexOf('}');
-            if (firstBrace !== -1 && lastBrace !== -1) {
-                jsonToParse = jsonToParse.slice(firstBrace, lastBrace + 1);
-            }
-            
-            const parsed = JSON.parse(jsonToParse);
+            const parsed = JSON.parse(jsonStr);
             if (parsed && Array.isArray(parsed.social_updates)) {
-                return { parsed, source: candidate.full };
+                return { parsed, source: jsonStr };
             }
-        } catch (e) {
-            // Игнорируем битые куски
+        } catch(e) {
+            // Фолбэк: если ИИ вставил реальные переносы строк внутрь текста (частая ошибка)
+            try {
+                const safeJsonStr = jsonStr.replace(/\n/g, '\\n').replace(/\r/g, '');
+                const parsed = JSON.parse(safeJsonStr);
+                if (parsed && Array.isArray(parsed.social_updates)) {
+                    return { parsed, source: text.substring(openBraceIdx, closeBraceIdx + 1) };
+                }
+            } catch(err) {}
         }
     }
-
     return null;
 }
 
@@ -832,14 +802,11 @@ function scanAndCleanMessage(msg, messageId) {
     const swipeId = msg.swipe_id || 0;
     
     const originalMes = msg.mes;
-    let currentMes = String(msg.mes || '');
-
-    // 0. Выжигаем невидимые символы джейлбрейков (ZWS)
-    currentMes = currentMes.replace(/[\u200B-\u200D\uFEFF]/g, '');
+    // Очищаем невидимые символы джейлбрейков сразу
+    let currentMes = String(msg.mes || '').replace(/[\u200B-\u200D\uFEFF]/g, '');
 
     const parsedPayload = tryParseSocialUpdates(currentMes);
 
-    // 1. Пытаемся распарсить и сохранить данные
     if (parsedPayload) {
         try {
             const parsed = parsedPayload.parsed;
@@ -848,30 +815,33 @@ function scanAndCleanMessage(msg, messageId) {
 
             msg.extra.bb_social_swipes[swipeId] = parsed.social_updates;
             
-            // Вырезаем сам кусок кода из текста БЕЗ trim()
+            // Вырезаем только сам JSON
             currentMes = currentMes.replace(parsedPayload.source, '');
         } catch(e) {}
     }
     
-    // 2. Железобетонная зачистка мусора
+    // Вычищаем пустые бэктики и скрытые дивы
     const bt = String.fromCharCode(96, 96, 96);
-    const emptyBlockRegex = new RegExp(bt + '[a-zA-Z0-9_-]*\\s*' + bt, 'gi');
-    const trailingBlockRegex = new RegExp(bt + '[a-zA-Z0-9_-]*\\s*$', 'gi');
-    
+    const emptyBlockRegex = new RegExp(bt + '{1,3}[a-zA-Z0-9_-]*\\s*' + bt + '{1,3}', 'gi');
     currentMes = currentMes.replace(emptyBlockRegex, '');
+    currentMes = currentMes.replace(/<div[^>]*>\s*<\/div>/gi, '');
+    const trailingBlockRegex = new RegExp(bt + '{1,3}[a-zA-Z0-9_-]*\\s*$', 'gi');
     currentMes = currentMes.replace(trailingBlockRegex, '');
-    currentMes = currentMes.replace(/<div[^>]*>\s*<\/div>/gi, ''); // Вычищаем пустые дивы, если они остались
     
-    // Проверяем: если текст реально поменялся
     if (originalMes !== currentMes) {
         msg.mes = currentMes.trim(); 
         modified = true;
+        
+        // ЖЕЛЕЗОБЕТОННЫЙ ФИКС ПЕРВОГО СООБЩЕНИЯ
         if (msg.swipes && msg.swipes[swipeId] !== undefined) {
             msg.swipes[swipeId] = msg.mes; 
+        } else if (msg.swipes && msg.swipes.length > 0) {
+            msg.swipes[0] = msg.mes; 
+        } else {
+            msg.swipes = [msg.mes]; // Принудительно создаем кэш свайпов
         }
     }
     
-    // 3. Если текст изменился, обновляем его визуально в чате
     if (modified && messageId !== undefined) {
         const msgElement = document.querySelector(`.mes[mesid="${messageId}"] .mes_text`);
         if (msgElement) msgElement.innerHTML = SillyTavern.getContext().markdownToHtml(msg.mes);
@@ -2770,12 +2740,17 @@ jQuery(async () => {
             updateHudVisibility();
         });
 
-        // ПРИ СВАЙПЕ ИЛИ НОВОМ СООБЩЕНИИ ПЫТАЕМСЯ ВОССТАНОВИТЬ КЭШ КНОПОК
+        // === МГНОВЕННЫЕ ТРИГГЕРЫ (Таймер удален) ===
         eventSource.on(event_types.MESSAGE_RECEIVED, () => { window['restoreVNOptions'](false); recalculateAllStats(true); }); 
         eventSource.on(event_types.MESSAGE_DELETED, () => { window['restoreVNOptions'](false); recalculateAllStats(); });
         eventSource.on(event_types.MESSAGE_SWIPED, () => { window['restoreVNOptions'](false); recalculateAllStats(); });
         eventSource.on(event_types.MESSAGE_UPDATED, () => { recalculateAllStats(); });
         eventSource.on(event_types.GENERATION_STOPPED, () => { recalculateAllStats(); });
+        
+        // Страховка: срабатывает, когда текст физически отрисован в чате
+        if (event_types.CHARACTER_MESSAGE_RENDERED) {
+            eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, () => { recalculateAllStats(); });
+        }
 
         eventSource.on(event_types.MESSAGE_RECEIVED, () => {
             if (extension_settings[MODULE_NAME].autoGen) {
