@@ -53,15 +53,9 @@ At the VERY END of your response, you MUST generate a hidden JSON block evaluati
 CRITICAL RULES:
 1. ONLY evaluate characters actively present or directly reacting in this specific turn.
 2. Keep JSON keys EXACTLY as written in English. Translate ONLY the values into Russian.
+3. To prevent breaking the chat UI, you MUST wrap your JSON inside a hidden HTML block exactly like this:
 
-JSON KEYS:
-- "name": (String) Concrete character name. (e.g., "Alex"). No collective nouns.
-- "friendship_impact": (String) Choose strictly from: "none", "minor_positive", "major_positive", "life_changing", "minor_negative", "major_negative", "unforgivable". Evaluates trust, respect, and camaraderie.
-- "romance_impact": (String) Same scale as above. STRICT RULE: Keep "none" for casual/combat/platonic scenes. ONLY change during vulnerable, flirty, deeply caring, or jealous moments.
-- "role_dynamic": (String) 1-2 words describing {{user}}'s CURRENT role to them right now (e.g., "опасный союзник", "скрытая угроза", "надежный друг").
-- "reason": (String) Short Russian explanation of WHY the impact happened.
-- "emotion": (String) 1-2 words describing the character's internal emotional state. If using two nouns, separate with a comma (e.g., "шок, обида", "радость").
-
+<div style="display: none;" class="bb-vn-data">
 \`\`\`json
 {
   "social_updates":[
@@ -75,7 +69,16 @@ JSON KEYS:
     }
   ]
 }
-\`\`\``;
+\`\`\`
+</div>
+
+JSON KEYS:
+- "name": (String) Concrete character name. (e.g., "Alex"). No collective nouns.
+- "friendship_impact": (String) Choose strictly from: "none", "minor_positive", "major_positive", "life_changing", "minor_negative", "major_negative", "unforgivable". Evaluates trust, respect, and camaraderie.
+- "romance_impact": (String) Same scale as above. STRICT RULE: Keep "none" for casual/combat/platonic scenes. ONLY change during vulnerable, flirty, deeply caring, or jealous moments.
+- "role_dynamic": (String) 1-2 words describing {{user}}'s CURRENT role to them right now (e.g., "опасный союзник", "скрытая угроза", "надежный друг").
+- "reason": (String) Short Russian explanation of WHY the impact happened.
+- "emotion": (String) 1-2 words describing the character's internal emotional state. If using two nouns, separate with a comma (e.g., "шок, обида", "радость").`;
 
 function getCombinedSocial() {
     let combinedStr = SOCIAL_PROMPT;
@@ -742,59 +745,54 @@ function addGlobalLog(type, text, timeString) {
 
 function tryParseSocialUpdates(rawText) {
     const text = String(rawText || '');
-    if (!text.trim()) return null;
+    const keyword = '"social_updates"';
+    const keywordIdx = text.lastIndexOf(keyword);
+    if (keywordIdx === -1) return null;
 
-    const candidates = [];
-
-    const fenceRegex = /```(?:json|JSON|jsonc|JSONC|js|JS)?\s*([\s\S]*?)\s*```/g;
-    let fenceMatch;
-    while ((fenceMatch = fenceRegex.exec(text)) !== null) {
-        if (fenceMatch[1] && fenceMatch[1].includes('social_updates')) {
-            candidates.push(fenceMatch[1]);
-        }
+    let openBraceIdx = -1;
+    for (let i = keywordIdx; i >= 0; i--) {
+        if (text[i] === '{') { openBraceIdx = i; break; }
     }
+    if (openBraceIdx === -1) return null;
 
-    const htmlCommentRegex = /<!--\s*([\s\S]*?)\s*-->/g;
-    let htmlMatch;
-    while ((htmlMatch = htmlCommentRegex.exec(text)) !== null) {
-        if (htmlMatch[1] && htmlMatch[1].includes('social_updates')) {
-            candidates.push(htmlMatch[1]);
-        }
-    }
+    let depth = 0;
+    let closeBraceIdx = -1;
+    let inString = false;
+    let escapeNext = false;
 
-    const keywordIndex = text.indexOf('"social_updates"');
-    if (keywordIndex !== -1) {
-        let start = keywordIndex;
-        while (start >= 0 && text[start] !== '{') start--;
-        if (start >= 0) {
-            let depth = 0;
-            let end = -1;
-            for (let i = start; i < text.length; i++) {
-                const ch = text[i];
-                if (ch === '{') depth++;
-                if (ch === '}') {
-                    depth--;
-                    if (depth === 0) {
-                        end = i;
-                        break;
-                    }
-                }
-            }
-            if (end > start) {
-                candidates.push(text.slice(start, end + 1));
+    for (let i = openBraceIdx; i < text.length; i++) {
+        const char = text[i];
+        if (escapeNext) { escapeNext = false; continue; }
+        if (char === '\\') { escapeNext = true; continue; }
+        if (char === '"') { inString = !inString; }
+        
+        if (!inString) {
+            if (char === '{') depth++;
+            else if (char === '}') {
+                depth--;
+                if (depth === 0) { closeBraceIdx = i; break; }
             }
         }
     }
 
-    for (const candidate of candidates) {
+    if (closeBraceIdx !== -1) {
+        let jsonStr = text.substring(openBraceIdx, closeBraceIdx + 1);
         try {
-            const parsed = JSON.parse(candidate.trim());
-            if (Array.isArray(parsed?.social_updates)) {
-                return { parsed, source: candidate };
+            const parsed = JSON.parse(jsonStr);
+            if (parsed && Array.isArray(parsed.social_updates)) {
+                return { parsed, source: jsonStr };
             }
-        } catch (e) {}
+        } catch(e) {
+            // Фолбэк: если ИИ вставил реальные переносы строк внутрь текста (частая ошибка)
+            try {
+                const safeJsonStr = jsonStr.replace(/\n/g, '\\n').replace(/\r/g, '');
+                const parsed = JSON.parse(safeJsonStr);
+                if (parsed && Array.isArray(parsed.social_updates)) {
+                    return { parsed, source: text.substring(openBraceIdx, closeBraceIdx + 1) };
+                }
+            } catch(err) {}
+        }
     }
-
     return null;
 }
 
@@ -803,9 +801,12 @@ function scanAndCleanMessage(msg, messageId) {
     let modified = false;
     const swipeId = msg.swipe_id || 0;
     
-    const parsedPayload = tryParseSocialUpdates(msg.mes);
+    const originalMes = msg.mes;
+    // Очищаем невидимые символы джейлбрейков сразу
+    let currentMes = String(msg.mes || '').replace(/[\u200B-\u200D\uFEFF]/g, '');
 
-    // 1. Пытаемся распарсить и сохранить данные (если ИИ их сгенерировал)
+    const parsedPayload = tryParseSocialUpdates(currentMes);
+
     if (parsedPayload) {
         try {
             const parsed = parsedPayload.parsed;
@@ -813,30 +814,34 @@ function scanAndCleanMessage(msg, messageId) {
             if (!msg.extra.bb_social_swipes) msg.extra.bb_social_swipes = {};
 
             msg.extra.bb_social_swipes[swipeId] = parsed.social_updates;
-            // Вырезаем сам кусок кода из текста
-            msg.mes = msg.mes.replace(parsedPayload.source, '').trim();
-            modified = true;
+            
+            // Вырезаем только сам JSON
+            currentMes = currentMes.replace(parsedPayload.source, '');
         } catch(e) {}
     }
     
-    // === 2. ЖЕЛЕЗОБЕТОННАЯ ЗАЧИСТКА МУСОРА ===
-    // Выполняется ВСЕГДА, даже если ИИ оборвался из-за лимита токенов
-    const oldMes = msg.mes;
+    // Вычищаем пустые бэктики и скрытые дивы
+    const bt = String.fromCharCode(96, 96, 96);
+    const emptyBlockRegex = new RegExp(bt + '{1,3}[a-zA-Z0-9_-]*\\s*' + bt + '{1,3}', 'gi');
+    currentMes = currentMes.replace(emptyBlockRegex, '');
+    currentMes = currentMes.replace(/<div[^>]*>\s*<\/div>/gi, '');
+    const trailingBlockRegex = new RegExp(bt + '{1,3}[a-zA-Z0-9_-]*\\s*$', 'gi');
+    currentMes = currentMes.replace(trailingBlockRegex, '');
     
-    // Убираем пустые блоки (если ИИ закрыл скобки, но внутри пусто)
-    msg.mes = msg.mes.replace(/```[a-zA-Z0-9_]*\s*```/gi, '').trim();
-    
-    // Убираем висящие открывающие бэктики СТРОГО В САМОМ КОНЦЕ сообщения
-    msg.mes = msg.mes.replace(/```[a-zA-Z0-9_]*\s*$/gi, '').trim();
-    
-    if (oldMes !== msg.mes) {
+    if (originalMes !== currentMes) {
+        msg.mes = currentMes.trim(); 
         modified = true;
+        
+        // ЖЕЛЕЗОБЕТОННЫЙ ФИКС ПЕРВОГО СООБЩЕНИЯ
         if (msg.swipes && msg.swipes[swipeId] !== undefined) {
             msg.swipes[swipeId] = msg.mes; 
+        } else if (msg.swipes && msg.swipes.length > 0) {
+            msg.swipes[0] = msg.mes; 
+        } else {
+            msg.swipes = [msg.mes]; // Принудительно создаем кэш свайпов
         }
     }
     
-    // 3. Если текст изменился, обновляем его визуально в чате
     if (modified && messageId !== undefined) {
         const msgElement = document.querySelector(`.mes[mesid="${messageId}"] .mes_text`);
         if (msgElement) msgElement.innerHTML = SillyTavern.getContext().markdownToHtml(msg.mes);
@@ -2735,12 +2740,17 @@ jQuery(async () => {
             updateHudVisibility();
         });
 
-        // ПРИ СВАЙПЕ ИЛИ НОВОМ СООБЩЕНИИ ПЫТАЕМСЯ ВОССТАНОВИТЬ КЭШ КНОПОК
+        // === МГНОВЕННЫЕ ТРИГГЕРЫ (Таймер удален) ===
         eventSource.on(event_types.MESSAGE_RECEIVED, () => { window['restoreVNOptions'](false); recalculateAllStats(true); }); 
         eventSource.on(event_types.MESSAGE_DELETED, () => { window['restoreVNOptions'](false); recalculateAllStats(); });
         eventSource.on(event_types.MESSAGE_SWIPED, () => { window['restoreVNOptions'](false); recalculateAllStats(); });
         eventSource.on(event_types.MESSAGE_UPDATED, () => { recalculateAllStats(); });
         eventSource.on(event_types.GENERATION_STOPPED, () => { recalculateAllStats(); });
+        
+        // Страховка: срабатывает, когда текст физически отрисован в чате
+        if (event_types.CHARACTER_MESSAGE_RENDERED) {
+            eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, () => { recalculateAllStats(); });
+        }
 
         eventSource.on(event_types.MESSAGE_RECEIVED, () => {
             if (extension_settings[MODULE_NAME].autoGen) {
