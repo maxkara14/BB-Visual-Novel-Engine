@@ -246,12 +246,7 @@ export function scanAndCleanMessage(msg, messageId, trackDebug = false) {
         if (trackDebug) setSocialParseDebug('missing', 'В ответе нет social_updates');
     }
     
-    const bt = String.fromCharCode(96, 96, 96);
-    const emptyBlockRegex = new RegExp(bt + '{1,3}[a-zA-Z0-9_-]*\\s*' + bt + '{1,3}', 'gi');
-    currentMes = currentMes.replace(emptyBlockRegex, '');
     currentMes = currentMes.replace(/<div[^>]*>\s*<\/div>/gi, '');
-    const trailingBlockRegex = new RegExp(bt + '{1,3}[a-zA-Z0-9_-]*\\s*$', 'gi');
-    currentMes = currentMes.replace(trailingBlockRegex, '');
     
     if (originalMes !== currentMes) {
         msg.mes = currentMes.trim(); 
