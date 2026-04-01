@@ -16,7 +16,7 @@ At the VERY END of your response, you MUST generate a hidden HTML block evaluati
 
 CRITICAL RULES:
 1. ONLY evaluate characters actively present or directly reacting in this specific turn.
-2. Keep JSON keys EXACTLY as written in English. Translate ONLY the values into Russian.
+2. Keep tag names EXACTLY as written in English. Translate ONLY the values into Russian.
 3. To prevent conflicts with other JSON in messages, you MUST wrap updates inside a hidden HTML block exactly like this:
 
 <div style="display: none;" class="bb-vn-data">
@@ -32,7 +32,7 @@ CRITICAL RULES:
   </bb-social-updates>
 </div>
 
-HTML TAG FIELDS:
+HTML TAG FIELDS (STRICT):
 - <name> Concrete character name. (e.g., "Alex"). No collective nouns.
 - <friendship_impact> Choose strictly from: "none", "minor_positive", "major_positive", "life_changing", "minor_negative", "major_negative", "unforgivable".
 - <romance_impact> Same scale as above. STRICT RULE: Keep "none" for casual/combat/platonic scenes.
