@@ -16,7 +16,8 @@ import {
     getShiftDescriptor,
     formatAffinityPoints,
     escapeHtml,
-    sanitizeRelationshipStatus
+    sanitizeRelationshipStatus,
+    sanitizeTraitOutput
 } from './utils.js';
 import { showStoryMomentToast, notifySuccess, notifyInfo, notifyError, pickToastMoment } from './toasts.js';
 import { buildChoiceContextPrompt } from './generator.js';
@@ -351,15 +352,18 @@ export function recalculateAllStats(isNewMessage = false) {
             msgTraits.forEach(t => {
                 const cName = t.charName;
                 if (!cName || chat_metadata['bb_vn_ignored_chars'].includes(cName)) return;
-                
-                if (t.trait && (t.trait.includes('```') || t.trait.includes('trait_type'))) {
-                    const nameMatch = t.trait.match(/trait_type[\s"']*:[\s"']*([^,}\n"']+)/i);
-                    const descMatch = t.trait.match(/description[\s"']*:[\s"']*([^}\n]+)/i);
-                    let extractedName = nameMatch ? nameMatch[1].trim() : '';
-                    let extractedDesc = descMatch ? descMatch[1].replace(/["']/g, '').trim() : '';
-                    if (extractedName && extractedDesc) t.trait = `${extractedName}: ${extractedDesc}`;
-                    else t.trait = t.trait.replace(/`{3}json|`{3}/gi, '').replace(/[{}]/g, '').replace(/(trait_type|description)\s*:/gi, '').replace(/["']/g, '').trim();
+
+                if (t.trait) {
+                    const before = String(t.trait);
+                    t.trait = sanitizeTraitOutput(t.trait);
+                    if (t.trait !== before) {
+                        needsSave = true;
+                    }
+                }
+
+                if (!t.trait || t.trait.length > 240) {
                     needsSave = true;
+                    return;
                 }
                 
                 if (!newStats[cName]) {

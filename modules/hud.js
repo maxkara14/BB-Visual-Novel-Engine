@@ -8,7 +8,8 @@ import {
     getToneClass, 
     formatAffinityPoints, 
     getShiftDescriptor,
-    getAffinityNarrative
+    getAffinityNarrative,
+    sanitizeTraitOutput
 } from './utils.js';
 import { syncToastContainerWithHud, notifySuccess, notifyInfo, notifyError } from './toasts.js';
 import { 
@@ -232,10 +233,10 @@ export function renderSocialHud() {
                 btn.html('<i class="fa-solid fa-spinner fa-spin"></i> Анализ воспоминаний...').css('pointer-events', 'none');
                 const memoriesToCompress = targetMemories.slice(0, 5).map(m => m.text).join('; ');
                 const userName = SillyTavern.getContext().substituteParams('{{user}}');
-                const prompt = `Вот 5 незабываемых событий, произошедших между ${charName} и ${userName}:\n${memoriesToCompress}\n\nПроанализируй их и создай ОДНУ ${isPositive ? "ПОЛОЖИТЕЛЬНУЮ" : "НЕГАТИВНУЮ"} перманентную черту характера, которая сформировалась у ${charName} по отношению к ${userName} из-за этого.\n\nПРАВИЛА ВЫВОДА: ВЕРНИ ТОЛЬКО ОДНУ СТРОКУ в формате "Название: Описание".`;
+                const prompt = `Вот 5 незабываемых событий, произошедших между ${charName} и ${userName}:\n${memoriesToCompress}\n\nПроанализируй их и создай ОДНУ ${isPositive ? "ПОЛОЖИТЕЛЬНУЮ" : "НЕГАТИВНУЮ"} перманентную черту характера, которая сформировалась у ${charName} по отношению к ${userName} из-за этого.\n\nПРАВИЛА ВЫВОДА:\n1) Верни ТОЛЬКО 1 строку в формате "Название: Описание".\n2) Не добавляй префиксы вроде "TRAIT:", "Черта:" и т.п.\n3) Не возвращай JSON и не цитируй исходные сообщения.`;
                 try {
-                    let result = await generateFastPrompt(prompt);
-                    result = String(result).replace(/["']/g, '').trim();
+                    let result = await generateFastPrompt(prompt, { responseFormat: 'text' });
+                    result = sanitizeTraitOutput(result);
                     if (result) {
                         const chat = SillyTavern.getContext().chat;
                         const lastMsg = chat[chat.length - 1];

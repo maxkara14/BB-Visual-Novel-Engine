@@ -60,6 +60,49 @@ export function normalizeGeneratedMessage(message = "") {
         .trim();
 }
 
+export function sanitizeTraitOutput(raw = "") {
+    let text = String(raw || '').trim();
+    if (!text) return '';
+
+    text = text
+        .replace(/`{3}json/gi, '')
+        .replace(/`{3}/g, '')
+        .replace(/^\s*trait\s*:\s*/i, '')
+        .replace(/^\s*черта\s*:\s*/i, '')
+        .trim();
+
+    if ((text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))) {
+        try {
+            const parsed = JSON.parse(text);
+            if (parsed && typeof parsed === 'object') {
+                const traitName = parsed.trait_type || parsed.trait || parsed.name || parsed.title || '';
+                const traitDesc = parsed.description || parsed.desc || parsed.text || '';
+                if (traitName && traitDesc) {
+                    return `${String(traitName).trim()}: ${String(traitDesc).trim()}`;
+                }
+                if (traitName) return String(traitName).trim();
+            }
+        } catch (e) {
+            void e;
+        }
+    }
+
+    const keyedName = text.match(/trait_type[\s"']*:[\s"']*([^,}\n"']+)/i);
+    const keyedDesc = text.match(/description[\s"']*:[\s"']*([^}\n]+)/i);
+    if (keyedName && keyedDesc) {
+        return `${keyedName[1].trim()}: ${keyedDesc[1].replace(/["']/g, '').trim()}`;
+    }
+
+    const singleLine = text.split('\n').map(line => line.trim()).filter(Boolean).join(' ');
+    const cleaned = singleLine
+        .replace(/^\s*[-*]\s*/, '')
+        .replace(/^\s*(trait|черта)\s*[-:]\s*/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    return cleaned;
+}
+
 export function getLegacyToneFromRisk(risk = "") {
     const value = String(risk).toLowerCase();
     if (value.includes('низк') || value.includes('low')) return 'нежно';
@@ -135,12 +178,15 @@ export function extractJsonStringMatches(input = "", field = "") {
     const fieldRegex = field.includes('|') ? field : String(field || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
     if (isMessage) {
-        const regex = new RegExp(`"(?:${fieldRegex})"\\s*:\\s*"([\\s\\S]*?)"?(?=\\s*\\}|\\s*,\\s*"|$)`, 'gi');
-        return [...String(input || '').matchAll(regex)].map(match => {
+        const strictRegex = new RegExp(`"(?:${fieldRegex})"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, 'gi');
+        const strictMatches = [...String(input || '').matchAll(strictRegex)].map(match => match[1] || '');
+        if (strictMatches.length > 0) return strictMatches;
+
+        const looseRegex = new RegExp(`"(?:${fieldRegex})"\\s*:\\s*"([\\s\\S]*?)"?(?=\\s*\\}|\\s*,\\s*"|$)`, 'gi');
+        return [...String(input || '').matchAll(looseRegex)].map(match => {
             let val = match[1] || '';
             const badTail = val.search(/["']?\s*\}[\s,]*\{/);
             if (badTail !== -1) val = val.substring(0, badTail);
-            val = val.replace(/["']+\s*$/, '');
             return val.trim();
         });
     }

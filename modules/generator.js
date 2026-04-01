@@ -27,7 +27,8 @@ export async function runMainGen(promptText) {
     }
 }
 
-export async function generateFastPrompt(promptText) {
+export async function generateFastPrompt(promptText, options = {}) {
+    const responseFormat = options.responseFormat === 'text' ? 'text' : 'json';
     const s = extension_settings[MODULE_NAME];
     if (s.useCustomApi && s.customApiUrl && s.customApiModel) {
         try {
@@ -46,7 +47,12 @@ export async function generateFastPrompt(promptText) {
                 body: JSON.stringify({
                     model: s.customApiModel,
                     messages: [
-                        { role: 'system', content: 'You are an internal JSON generator. You MUST output ONLY valid JSON format. No conversational text.' },
+                        {
+                            role: 'system',
+                            content: responseFormat === 'text'
+                                ? 'You are an internal text generator. Return only the requested final result without extra explanations or wrappers.'
+                                : 'You are an internal JSON generator. You MUST output ONLY valid JSON format. No conversational text.'
+                        },
                         { role: 'user', content: promptText }
                     ],
                     temperature: 0.7,
@@ -167,7 +173,7 @@ export async function bbVnGenerateOptionsFlow(excludedIntents = []) {
             }
         }
 
-        const result = await generateFastPrompt(prompt);
+        const result = await generateFastPrompt(prompt, { responseFormat: 'json' });
 
         if (isVnGenerationCancelled) throw new Error("Отменено пользователем");
 

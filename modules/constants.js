@@ -60,7 +60,7 @@ CRITICAL RULES FOR EMOTIONAL CHOICE FRAMING:
 CRITICAL JSON AND FORMATTING RULES:
 1. Return STRICTLY a valid JSON array. DO NOT output any conversational text outside the JSON.
 2. INSIDE the "message" field, you MUST use standard roleplay formatting: asterisks for *actions/thoughts* and quotes for dialogue.
-3. NEVER use standard double quotes (") inside the "message" text! Use ONLY guillemets (« ») or single quotes (' ') for dialogue and thoughts to avoid breaking the JSON.
+3. If you need literal double quotes inside "message", ALWAYS escape them as \\".
 4. To create paragraphs, use escaped newlines (\\n\\n) inside the "message" string. DO NOT use actual line breaks in the string, or it will break the JSON.
 5. Each option must be clearly different in intent from the others. Never output near-duplicates with only wording changes.
 
