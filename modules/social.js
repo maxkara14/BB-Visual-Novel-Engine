@@ -178,53 +178,76 @@ export function addGlobalLog(type, text, timeString) {
 
 export function tryParseSocialUpdates(rawText) {
     const text = String(rawText || '');
-    const keyword = '"social_updates"';
-    const keywordIdx = text.lastIndexOf(keyword);
-    if (keywordIdx === -1) return null;
+    if (!text.includes('social_updates')) return null;
 
-    let openBraceIdx = -1;
-    for (let i = keywordIdx; i >= 0; i--) {
-        if (text[i] === '{') { openBraceIdx = i; break; }
+    const candidates = [];
+
+    const hiddenBlockMatch = text.match(/<div[^>]*class=["'][^"']*bb-vn-data[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
+    if (hiddenBlockMatch?.[1]) {
+        candidates.push(hiddenBlockMatch[1]);
     }
-    if (openBraceIdx === -1) return null;
 
-    let depth = 0;
-    let closeBraceIdx = -1;
-    let inString = false;
-    let escapeNext = false;
+    const fencedBlocks = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map(match => match[1]).filter(Boolean);
+    candidates.push(...fencedBlocks);
+    candidates.push(text);
 
-    for (let i = openBraceIdx; i < text.length; i++) {
-        const char = text[i];
-        if (escapeNext) { escapeNext = false; continue; }
-        if (char === '\\') { escapeNext = true; continue; }
-        if (char === '"') { inString = !inString; }
-        
-        if (!inString) {
-            if (char === '{') depth++;
-            else if (char === '}') {
-                depth--;
-                if (depth === 0) { closeBraceIdx = i; break; }
-            }
+    const parseObjectContainingSocialUpdates = (sourceText) => {
+        const keyword = '"social_updates"';
+        const keywordIdx = sourceText.lastIndexOf(keyword);
+        if (keywordIdx === -1) return null;
+
+        let openBraceIdx = -1;
+        for (let i = keywordIdx; i >= 0; i--) {
+            if (sourceText[i] === '{') { openBraceIdx = i; break; }
         }
-    }
+        if (openBraceIdx === -1) return null;
 
-    if (closeBraceIdx !== -1) {
-        let jsonStr = text.substring(openBraceIdx, closeBraceIdx + 1);
-        try {
-            const parsed = JSON.parse(jsonStr);
-            if (parsed && Array.isArray(parsed.social_updates)) {
-                return { parsed, source: jsonStr };
-            }
-        } catch(e) {
-            try {
-                const safeJsonStr = jsonStr.replace(/\n/g, '\\n').replace(/\r/g, '');
-                const parsed = JSON.parse(safeJsonStr);
-                if (parsed && Array.isArray(parsed.social_updates)) {
-                    return { parsed, source: text.substring(openBraceIdx, closeBraceIdx + 1) };
+        let depth = 0;
+        let closeBraceIdx = -1;
+        let inString = false;
+        let escapeNext = false;
+
+        for (let i = openBraceIdx; i < sourceText.length; i++) {
+            const char = sourceText[i];
+            if (escapeNext) { escapeNext = false; continue; }
+            if (char === '\\') { escapeNext = true; continue; }
+            if (char === '"') { inString = !inString; }
+
+            if (!inString) {
+                if (char === '{') depth++;
+                else if (char === '}') {
+                    depth--;
+                    if (depth === 0) { closeBraceIdx = i; break; }
                 }
-            } catch(err) {}
+            }
         }
+
+        if (closeBraceIdx === -1) return null;
+
+        const jsonStr = sourceText.substring(openBraceIdx, closeBraceIdx + 1).trim();
+        const parsers = [
+            jsonStr,
+            jsonStr.replace(/\n/g, '\\n').replace(/\r/g, ''),
+        ];
+
+        for (const candidate of parsers) {
+            try {
+                const parsed = JSON.parse(candidate);
+                if (parsed && Array.isArray(parsed.social_updates)) {
+                    return { parsed, source: jsonStr };
+                }
+            } catch (e) {
+                void e;
+            }
+        }
+        return null;
+    };
+
+    for (const candidate of candidates) {
+        const parsedCandidate = parseObjectContainingSocialUpdates(String(candidate || ''));
+        if (parsedCandidate) return parsedCandidate;
     }
+
     return null;
 }
 
