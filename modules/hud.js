@@ -82,18 +82,20 @@ export function renderSocialHud() {
                 }
 
                 const romanceHtml = romance !== 0 ? `
-                    <div class="bb-progress-wrapper bb-progress-wrapper-romance">
-                        <div class="bb-progress-labels" style="color:#f472b6; position: relative;">
-                            <span>Отторжение</span>
-                            <span class="bb-label-center">Влечение <i class="fa-solid fa-heart" style="font-size:8px;"></i></span>
-                            <span>Одержимость</span>
-                        </div>
-                        <div class="bb-progress-bg">
-                            <div class="bb-progress-center-line"></div>
-                            <div class="bb-progress-fill" style="${romanceBarStyle}"></div>
-                        </div>
-                    </div>
-                ` : '';
+    <div class="bb-progress-wrapper bb-progress-wrapper-romance">
+        <div class="bb-progress-labels" style="color:#f472b6; position: relative; display: flex; justify-content: space-between; align-items: center;">
+            <span>Неприязнь</span>
+            <span class="bb-label-center" style="position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; white-space: nowrap;">
+                <i class="fa-solid fa-heart" style="font-size:12px; margin-right: 4px;"></i>Влечение
+            </span>
+            <span>Любовь</span>
+        </div>
+        <div class="bb-progress-bg">
+            <div class="bb-progress-center-line"></div>
+            <div class="bb-progress-fill" style="${romanceBarStyle}"></div>
+        </div>
+    </div>
+` : '';
 
                 const baseRomance = chat_metadata['bb_vn_char_bases_romance']?.[charName] ?? 0;
                 const isPlatonic = (chat_metadata['bb_vn_platonic_chars'] || []).includes(charName);
@@ -171,7 +173,7 @@ export function renderSocialHud() {
                                 </div>
                             </div>
                             <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 6px; min-height: 30px;">
-                                <div class="bb-progress-wrapper"><div class="bb-progress-labels"><span>Вражда</span><span>Доверие</span><span>Братство</span></div><div class="bb-progress-bg"><div class="bb-progress-center-line"></div><div class="bb-progress-fill" style="${barStyle}"></div></div></div>
+                                <div class="bb-progress-wrapper"><div class="bb-progress-labels" style="position: relative; display: flex; justify-content: space-between; align-items: center;"><span>Ненависть</span><span style="position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap;">Равнодушие</span><span>Семья</span></div><div class="bb-progress-bg"><div class="bb-progress-center-line"></div><div class="bb-progress-fill" style="${barStyle}"></div></div></div>
                                 ${romanceHtml}
                             </div>
                             <div class="bb-char-insight-grid" style="margin-top: 6px;">
