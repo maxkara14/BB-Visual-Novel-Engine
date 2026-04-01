@@ -175,34 +175,51 @@ export function addGlobalLog(type, text, timeString) {
 
 export function tryParseSocialUpdates(rawText) {
     const text = String(rawText || '');
+    const readUpdatesFromBlock = (block) => {
+        const updateMatches = [...block.matchAll(/<bb-social-update>([\s\S]*?)<\/bb-social-update>/gi)];
+        const updates = updateMatches.map(match => {
+            const item = match[1] || '';
+            const readTag = (tag) => {
+                const found = item.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+                return found ? String(found[1]).replace(/<[^>]+>/g, '').trim() : '';
+            };
+            return {
+                name: readTag('name'),
+                friendship_impact: readTag('friendship_impact'),
+                romance_impact: readTag('romance_impact'),
+                role_dynamic: readTag('role_dynamic'),
+                reason: readTag('reason'),
+                emotion: readTag('emotion'),
+            };
+        }).filter(u => u.name && u.friendship_impact);
 
-    const hiddenHtmlMatch = text.match(/<div[^>]*class=["'][^"']*bb-vn-data[^"']*["'][^>]*>[\s\S]*?<\/div>/i);
+        return updates;
+    };
+
+    const directBlockMatches = [...text.matchAll(/<bb-social-updates>[\s\S]*?<\/bb-social-updates>/gi)];
+    for (const match of directBlockMatches) {
+        const block = match[0];
+        const updates = readUpdatesFromBlock(block);
+        if (updates.length > 0) {
+            return {
+                parsed: { social_updates: updates },
+                source: block,
+            };
+        }
+    }
+
+    const hiddenHtmlMatch = text.match(/<div[^>]*(?:class=["'][^"']*bb-vn-data[^"']*["']|style=["'][^"']*display\s*:\s*none[^"']*["'])[^>]*>[\s\S]*?<\/div>/i);
     if (hiddenHtmlMatch) {
         const hiddenHtml = hiddenHtmlMatch[0];
         const updatesBlockMatch = hiddenHtml.match(/<bb-social-updates>[\s\S]*?<\/bb-social-updates>/i);
         if (updatesBlockMatch) {
             const block = updatesBlockMatch[0];
-            const updateMatches = [...block.matchAll(/<bb-social-update>([\s\S]*?)<\/bb-social-update>/gi)];
-            const updates = updateMatches.map(match => {
-                const item = match[1] || '';
-                const readTag = (tag) => {
-                    const found = item.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i'));
-                    return found ? String(found[1]).replace(/<[^>]+>/g, '').trim() : '';
-                };
-                return {
-                    name: readTag('name'),
-                    friendship_impact: readTag('friendship_impact'),
-                    romance_impact: readTag('romance_impact'),
-                    role_dynamic: readTag('role_dynamic'),
-                    reason: readTag('reason'),
-                    emotion: readTag('emotion'),
-                };
-            }).filter(u => u.name && u.friendship_impact);
+            const updates = readUpdatesFromBlock(block);
 
             if (updates.length > 0) {
                 return {
                     parsed: { social_updates: updates },
-                    source: hiddenHtml,
+                    source: updatesBlockMatch[0],
                 };
             }
         }
@@ -246,7 +263,9 @@ export function scanAndCleanMessage(msg, messageId, trackDebug = false) {
         if (trackDebug) setSocialParseDebug('missing', 'В ответе нет social_updates');
     }
     
-    currentMes = currentMes.replace(/<div[^>]*>\s*<\/div>/gi, '');
+    currentMes = currentMes
+        .replace(/<div[^>]*>\s*<\/div>/gi, '')
+        .replace(/\n{3,}/g, '\n\n');
     
     if (originalMes !== currentMes) {
         msg.mes = currentMes.trim(); 

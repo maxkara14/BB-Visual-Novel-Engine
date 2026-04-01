@@ -32,6 +32,9 @@ CRITICAL RULES:
   </bb-social-updates>
 </div>
 
+4. NEVER wrap any other part of the assistant reply in hidden HTML. Only the social block above can be hidden.
+5. Do not hide, alter, or rewrite user-provided regex, code, JSON, or text fragments.
+
 HTML TAG FIELDS (STRICT):
 - <name> Concrete character name. (e.g., "Alex"). No collective nouns.
 - <friendship_impact> Choose strictly from: "none", "minor_positive", "major_positive", "life_changing", "minor_negative", "major_negative", "unforgivable".

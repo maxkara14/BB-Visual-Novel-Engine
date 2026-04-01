@@ -148,7 +148,7 @@ export function renderSocialHud() {
                             <div class="bb-char-hero">
                                 <div class="bb-char-identity" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
                                     <div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0;">
-                                        <div class="bb-char-name" style="font-size: 16px; line-height: 1.15; display: flex; flex-direction: column; word-wrap: break-word;">${escapeHtml(charName).split(' ').join('<br>')}</div>
+                                        <div class="bb-char-name" style="font-size: 16px; line-height: 1.15; word-break: keep-all; overflow-wrap: break-word;">${escapeHtml(charName)}</div>
                                         <div style="display: flex; align-items: baseline; gap: 12px; margin-top: 2px; flex-wrap: wrap;">
                                             <span class="bb-char-score" style="color:${tier.color}; line-height: 1; font-size: 20px;">${affinity > 0 ? '+' : ''}${affinity}</span>
                                             ${romance !== 0 ? `<span style="font-size: 13px; font-weight: 700; color: #f472b6; display: flex; align-items: center; gap: 4px;"><i class="fa-solid fa-heart" style="font-size:10px;"></i>${romance > 0 ? '+' : ''}${romance}</span>` : ''}
@@ -244,17 +244,20 @@ export function renderSocialHud() {
                 try {
                     let result = await generateFastPrompt(prompt, { responseFormat: 'text' });
                     result = sanitizeTraitOutput(result);
-                    if (result) {
-                        const chat = SillyTavern.getContext().chat;
-                        const lastMsg = chat[chat.length - 1];
-                        const sId = lastMsg.swipe_id || 0;
-                        if (!lastMsg.extra) lastMsg.extra = {};
-                        if (!lastMsg.extra.bb_vn_char_traits_swipes) lastMsg.extra.bb_vn_char_traits_swipes = {};
-                        if (!lastMsg.extra.bb_vn_char_traits_swipes[sId]) lastMsg.extra.bb_vn_char_traits_swipes[sId] = [];
-                        lastMsg.extra.bb_vn_char_traits_swipes[sId].push({ charName: charName, trait: result, type: isPositive ? 'positive' : 'negative' });
-                        saveChatDebounced(); recalculateAllStats(); notifySuccess(`Черта характера кристаллизована!`);
-                    }
-                } catch (e) { notifyError("Не удалось кристаллизовать память."); btn.html(originalHtml).css('pointer-events', 'auto'); }
+                    if (!result || result.length > 240) throw new Error('INVALID_TRAIT_OUTPUT');
+                    const chat = SillyTavern.getContext().chat;
+                    const lastMsg = chat[chat.length - 1];
+                    const sId = lastMsg.swipe_id || 0;
+                    if (!lastMsg.extra) lastMsg.extra = {};
+                    if (!lastMsg.extra.bb_vn_char_traits_swipes) lastMsg.extra.bb_vn_char_traits_swipes = {};
+                    if (!lastMsg.extra.bb_vn_char_traits_swipes[sId]) lastMsg.extra.bb_vn_char_traits_swipes[sId] = [];
+                    lastMsg.extra.bb_vn_char_traits_swipes[sId].push({ charName: charName, trait: result, type: isPositive ? 'positive' : 'negative' });
+                    saveChatDebounced(); recalculateAllStats(); notifySuccess(`Черта характера кристаллизована!`);
+                } catch (e) {
+                    notifyError("Не удалось кристаллизовать память.");
+                } finally {
+                    btn.html(originalHtml).css('pointer-events', 'auto');
+                }
             });
 
             jQuery('.bb-btn-hide-char').off('click').on('click', async function() {
