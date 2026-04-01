@@ -177,13 +177,42 @@ export async function bbVnGenerateOptionsFlow(excludedIntents = []) {
 
         if (isVnGenerationCancelled) throw new Error("Отменено пользователем");
 
+        const extractTopLevelJsonArray = (rawText = '') => {
+            const source = String(rawText || '');
+            let start = -1;
+            let depth = 0;
+            let inString = false;
+            let escapeNext = false;
+
+            for (let i = 0; i < source.length; i++) {
+                const ch = source[i];
+                if (escapeNext) { escapeNext = false; continue; }
+                if (ch === '\\') { escapeNext = true; continue; }
+                if (ch === '"') { inString = !inString; continue; }
+                if (inString) continue;
+
+                if (ch === '[') {
+                    if (start === -1) start = i;
+                    depth++;
+                    continue;
+                }
+
+                if (ch === ']') {
+                    if (depth > 0) depth--;
+                    if (start !== -1 && depth === 0) {
+                        return source.substring(start, i + 1);
+                    }
+                }
+            }
+            return '';
+        };
+
         let cleanResult = String(result || "").trim();
         cleanResult = cleanResult.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
-        
-        const start = cleanResult.indexOf('[');
-        const end = cleanResult.lastIndexOf(']');
-        if (start !== -1 && end !== -1) {
-            cleanResult = cleanResult.substring(start, end + 1);
+
+        const extractedArray = extractTopLevelJsonArray(cleanResult);
+        if (extractedArray) {
+            cleanResult = extractedArray;
         } else {
             cleanResult = '[' + cleanResult.replace(/}\s*{/g, '},{') + ']';
         }

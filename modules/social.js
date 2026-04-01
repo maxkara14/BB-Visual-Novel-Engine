@@ -178,7 +178,7 @@ export function addGlobalLog(type, text, timeString) {
 
 export function tryParseSocialUpdates(rawText) {
     const text = String(rawText || '');
-    if (!text.includes('social_updates')) return null;
+    if (!/social_updates/i.test(text)) return null;
 
     const candidates = [];
 
@@ -192,9 +192,10 @@ export function tryParseSocialUpdates(rawText) {
     candidates.push(text);
 
     const parseObjectContainingSocialUpdates = (sourceText) => {
-        const keyword = '"social_updates"';
-        const keywordIdx = sourceText.lastIndexOf(keyword);
-        if (keywordIdx === -1) return null;
+        const keywordMatch = [...sourceText.matchAll(/(["']?)social_updates\1\s*:/gi)].pop();
+        if (!keywordMatch) return null;
+        const keywordIdx = keywordMatch.index ?? -1;
+        if (keywordIdx < 0) return null;
 
         let openBraceIdx = -1;
         for (let i = keywordIdx; i >= 0; i--) {
@@ -225,9 +226,18 @@ export function tryParseSocialUpdates(rawText) {
         if (closeBraceIdx === -1) return null;
 
         const jsonStr = sourceText.substring(openBraceIdx, closeBraceIdx + 1).trim();
+        const normalizedQuotes = jsonStr
+            .replace(/[“”]/g, '"')
+            .replace(/[‘’]/g, "'");
+
+        const quotedKeys = normalizedQuotes.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)/g, '$1"$2"$3');
+
         const parsers = [
             jsonStr,
             jsonStr.replace(/\n/g, '\\n').replace(/\r/g, ''),
+            normalizedQuotes,
+            quotedKeys,
+            quotedKeys.replace(/\n/g, '\\n').replace(/\r/g, ''),
         ];
 
         for (const candidate of parsers) {
