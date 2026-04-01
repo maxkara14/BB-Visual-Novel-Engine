@@ -4,7 +4,8 @@ import { extension_settings } from '../../../../extensions.js';
 import { 
     currentCalculatedStats, 
     currentStoryMoments, 
-    setCurrentCalculatedStats 
+    setCurrentCalculatedStats,
+    setSocialParseDebug
 } from './state.js';
 import { MODULE_NAME, SOCIAL_PROMPT } from './constants.js';
 import { 
@@ -275,7 +276,10 @@ export function scanAndCleanMessage(msg, messageId) {
 
             msg.extra.bb_social_swipes[swipeId] = parsed.social_updates;
             currentMes = currentMes.replace(parsedPayload.source, '');
+            setSocialParseDebug('parsed', `social_updates: ${parsed.social_updates.length}`);
         } catch(e) {}
+    } else if (String(currentMes || '').trim()) {
+        setSocialParseDebug('missing', 'В ответе нет social_updates');
     }
     
     const bt = String.fromCharCode(96, 96, 96);
@@ -342,6 +346,7 @@ export function recalculateAllStats(isNewMessage = false) {
     
     if (!chat_metadata['bb_vn_char_bases']) chat_metadata['bb_vn_char_bases'] = {};
     if (!chat_metadata['bb_vn_ignored_chars']) chat_metadata['bb_vn_ignored_chars'] = [];
+    setSocialParseDebug('idle', 'Ожидание ответа модели');
 
     let needsSave = false;
 
