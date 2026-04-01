@@ -420,7 +420,17 @@
 .bb-char-name { font-weight: 900; color: #f8fafc; font-size: 22px; line-height: 1.05; }
 .bb-char-score { font-size: 24px; font-weight: 900; line-height: 1; }
 .bb-char-subtitle { display: flex; flex-direction: column; gap: 7px; }
-.bb-char-direction { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 6px; }
+.bb-char-direction {
+    font-size: 10px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    word-break: normal;
+    overflow-wrap: normal;
+}
 .bb-char-signals { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .bb-unforgettable-impact {
     font-size: 10px; padding: 4px 8px; border-radius: 999px;
@@ -492,7 +502,7 @@
 
 .bb-char-tier {
     font-size: 10px; padding: 4px 8px; border-radius: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;
-    white-space: normal; text-align: center; word-wrap: break-word;
+    white-space: normal; text-align: center; word-break: normal; overflow-wrap: break-word;
 }
 .tier-enemy { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
 .tier-neutral { background: rgba(161, 161, 170, 0.2); color: #a1a1aa; border: 1px solid rgba(161, 161, 170, 0.3); }
@@ -1038,16 +1048,20 @@
         --bb-hud-tab-width: 48px;
         width: calc(100vw - var(--bb-hud-tab-width));
         height: 100dvh;
+        min-height: -webkit-fill-available;
         max-width: calc(100vw - var(--bb-hud-tab-width));
         border-left: none;
         box-shadow: none;
         padding-top: 0;
         overflow: visible;
-        z-index: 890; /* В закрытом виде язычок прячется под системные кнопки */
+        z-index: 890; 
+        /* ФИКС: Плавный z-index, чтобы панель не прыгала под бар при закрытии */
+        transition: transform 0.34s cubic-bezier(0.4, 0, 0.2, 1), z-index 0s 0.34s;
     }
     
     #bb-social-hud.open {
-        z-index: 9999; /* ТОЛЬКО на мобилке открытая панель перекрывает всё */
+        z-index: 9999; 
+        transition: transform 0.34s cubic-bezier(0.4, 0, 0.2, 1), z-index 0s;
     }
 
     /* === ФИКС: Прячем надпись VNE на мобильном язычке === */
@@ -1145,3 +1159,12 @@
 .bb-moment-card.status-shift { border-left: 3px solid #f59e0b; }
 .bb-moment-card.intro { border-left: 3px solid #c084fc; }
 .bb-moment-card.choice-vector { border-left: 3px solid #f59e0b; }
+.bb-moment-card.romance-positive { border-left: 3px solid #f472b6; }
+.bb-moment-card.romance-negative { border-left: 3px solid #e11d48; }
+/* Специальный класс для идеальной центровки центральной метки шкалы */
+.bb-progress-wrapper-romance .bb-progress-labels > span.bb-label-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
