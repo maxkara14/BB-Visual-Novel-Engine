@@ -262,6 +262,7 @@ export function scanAndCleanMessage(msg, messageId) {
     if (!msg || msg.is_user) return false;
     let modified = false;
     const swipeId = msg.swipe_id || 0;
+    const existingUpdates = msg.extra?.bb_social_swipes?.[swipeId];
     
     const originalMes = msg.mes;
     let currentMes = String(msg.mes || '').replace(/[\u200B-\u200D\uFEFF]/g, '');
@@ -278,6 +279,8 @@ export function scanAndCleanMessage(msg, messageId) {
             currentMes = currentMes.replace(parsedPayload.source, '');
             setSocialParseDebug('parsed', `social_updates: ${parsed.social_updates.length}`);
         } catch(e) {}
+    } else if (Array.isArray(existingUpdates) && existingUpdates.length > 0) {
+        setSocialParseDebug('parsed', `social_updates (stored): ${existingUpdates.length}`);
     } else if (String(currentMes || '').trim()) {
         setSocialParseDebug('missing', 'В ответе нет social_updates');
     }
