@@ -258,7 +258,7 @@ export function tryParseSocialUpdates(rawText) {
     return null;
 }
 
-export function scanAndCleanMessage(msg, messageId) {
+export function scanAndCleanMessage(msg, messageId, trackDebug = false) {
     if (!msg || msg.is_user) return false;
     let modified = false;
     const swipeId = msg.swipe_id || 0;
@@ -277,12 +277,12 @@ export function scanAndCleanMessage(msg, messageId) {
 
             msg.extra.bb_social_swipes[swipeId] = parsed.social_updates;
             currentMes = currentMes.replace(parsedPayload.source, '');
-            setSocialParseDebug('parsed', `social_updates: ${parsed.social_updates.length}`);
+            if (trackDebug) setSocialParseDebug('parsed', `social_updates: ${parsed.social_updates.length}`);
         } catch(e) {}
     } else if (Array.isArray(existingUpdates) && existingUpdates.length > 0) {
-        setSocialParseDebug('parsed', `social_updates (stored): ${existingUpdates.length}`);
+        if (trackDebug) setSocialParseDebug('parsed', `social_updates (stored): ${existingUpdates.length}`);
     } else if (String(currentMes || '').trim()) {
-        setSocialParseDebug('missing', 'В ответе нет social_updates');
+        if (trackDebug) setSocialParseDebug('missing', 'В ответе нет social_updates');
     }
     
     const bt = String.fromCharCode(96, 96, 96);
@@ -350,6 +350,9 @@ export function recalculateAllStats(isNewMessage = false) {
     if (!chat_metadata['bb_vn_char_bases']) chat_metadata['bb_vn_char_bases'] = {};
     if (!chat_metadata['bb_vn_ignored_chars']) chat_metadata['bb_vn_ignored_chars'] = [];
     setSocialParseDebug('idle', 'Ожидание ответа модели');
+    const lastAssistantIndex = Array.isArray(chat)
+        ? [...chat].map((msg, idx) => ({ msg, idx })).reverse().find(item => item.msg && !item.msg.is_user)?.idx ?? -1
+        : -1;
 
     let needsSave = false;
 
@@ -380,7 +383,7 @@ export function recalculateAllStats(isNewMessage = false) {
             latestChoiceContext = msg.extra.bb_vn_choice_context;
         }
 
-        if (scanAndCleanMessage(msg, idx)) needsSave = true;
+        if (scanAndCleanMessage(msg, idx, idx === lastAssistantIndex)) needsSave = true;
 
         const swipeId = msg.swipe_id || 0;
 
