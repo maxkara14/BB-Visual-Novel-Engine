@@ -1038,16 +1038,20 @@
         --bb-hud-tab-width: 48px;
         width: calc(100vw - var(--bb-hud-tab-width));
         height: 100dvh;
+        min-height: -webkit-fill-available;
         max-width: calc(100vw - var(--bb-hud-tab-width));
         border-left: none;
         box-shadow: none;
         padding-top: 0;
         overflow: visible;
-        z-index: 890; /* В закрытом виде язычок прячется под системные кнопки */
+        z-index: 890; 
+        /* ФИКС: Плавный z-index, чтобы панель не прыгала под бар при закрытии */
+        transition: transform 0.34s cubic-bezier(0.4, 0, 0.2, 1), z-index 0s 0.34s;
     }
     
     #bb-social-hud.open {
-        z-index: 9999; /* ТОЛЬКО на мобилке открытая панель перекрывает всё */
+        z-index: 9999; 
+        transition: transform 0.34s cubic-bezier(0.4, 0, 0.2, 1), z-index 0s;
     }
 
     /* === ФИКС: Прячем надпись VNE на мобильном язычке === */
