@@ -85,12 +85,8 @@ export function getCombinedSocial() {
 
 export function injectCombinedSocialPrompt() {
     try {
-        if (extension_settings[MODULE_NAME].useMacro) {
-            setExtensionPrompt('bb_social_injector', '', extension_prompt_types.IN_CHAT, 1, false, extension_prompt_roles.SYSTEM);
-        } else {
-            const promptText = getCombinedSocial();
-            setExtensionPrompt('bb_social_injector', promptText, extension_prompt_types.IN_CHAT, 1, false, extension_prompt_roles.SYSTEM);
-        }
+        const promptText = getCombinedSocial();
+        setExtensionPrompt('bb_social_injector', promptText, extension_prompt_types.IN_CHAT, 1, false, extension_prompt_roles.SYSTEM);
     } catch (e) { console.error("[BB VN] Ошибка инъекции:", e); }
 }
 
