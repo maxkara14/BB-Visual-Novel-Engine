@@ -12,37 +12,33 @@ export const DEFAULT_SETTINGS = {
 
 export const SOCIAL_PROMPT = `[SYSTEM INSTRUCTION: VISUAL NOVEL ENGINE]
 You are tracking how the characters feel about {{user}}. 
-At the VERY END of your response, you MUST generate a hidden JSON block evaluating how {{user}}'s last action affected the characters.
+At the VERY END of your response, you MUST generate a hidden HTML block evaluating how {{user}}'s last action affected the characters.
 
 CRITICAL RULES:
 1. ONLY evaluate characters actively present or directly reacting in this specific turn.
 2. Keep JSON keys EXACTLY as written in English. Translate ONLY the values into Russian.
-3. To prevent breaking the chat UI, you MUST wrap your JSON inside a hidden HTML block exactly like this:
+3. To prevent conflicts with other JSON in messages, you MUST wrap updates inside a hidden HTML block exactly like this:
 
 <div style="display: none;" class="bb-vn-data">
-\`\`\`json
-{
-  "social_updates":[
-    {
-      "name": "CHARACTER_NAME",
-      "friendship_impact": "minor_positive",
-      "romance_impact": "none",
-      "role_dynamic": "ОТНОШЕНИЕ_К_USER",
-      "reason": "Краткая причина изменения",
-      "emotion": "эмоция"
-    }
-  ]
-}
-\`\`\`
+  <bb-social-updates>
+    <bb-social-update>
+      <name>CHARACTER_NAME</name>
+      <friendship_impact>minor_positive</friendship_impact>
+      <romance_impact>none</romance_impact>
+      <role_dynamic>ОТНОШЕНИЕ_К_USER</role_dynamic>
+      <reason>Краткая причина изменения</reason>
+      <emotion>эмоция</emotion>
+    </bb-social-update>
+  </bb-social-updates>
 </div>
 
-JSON KEYS:
-- "name": (String) Concrete character name. (e.g., "Alex"). No collective nouns.
-- "friendship_impact": (String) Choose strictly from: "none", "minor_positive", "major_positive", "life_changing", "minor_negative", "major_negative", "unforgivable". Evaluates trust, respect, and camaraderie.
-- "romance_impact": (String) Same scale as above. STRICT RULE: Keep "none" for casual/combat/platonic scenes. ONLY change during vulnerable, flirty, deeply caring, or jealous moments.
-- "role_dynamic": (String) 1-2 words describing {{user}}'s CURRENT role to them right now (e.g., "опасный союзник", "скрытая угроза", "надежный друг").
-- "reason": (String) Short Russian explanation of WHY the impact happened.
-- "emotion": (String) 1-2 words describing the character's internal emotional state. If using two nouns, separate with a comma (e.g., "шок, обида", "радость").`;
+HTML TAG FIELDS:
+- <name> Concrete character name. (e.g., "Alex"). No collective nouns.
+- <friendship_impact> Choose strictly from: "none", "minor_positive", "major_positive", "life_changing", "minor_negative", "major_negative", "unforgivable".
+- <romance_impact> Same scale as above. STRICT RULE: Keep "none" for casual/combat/platonic scenes.
+- <role_dynamic> 1-2 words describing {{user}}'s CURRENT role to them right now.
+- <reason> Short Russian explanation of WHY the impact happened.
+- <emotion> 1-2 words describing the character's internal emotional state.`;
 
 export const OPTIONS_PROMPT = `Analyze the recent chat. Generate exactly 3 highly distinct, engaging actions {{user}} can take right now to DRIVE THE STORY FORWARD.
 
