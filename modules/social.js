@@ -4,7 +4,8 @@ import { extension_settings } from '../../../../extensions.js';
 import { 
     currentCalculatedStats, 
     currentStoryMoments, 
-    setCurrentCalculatedStats 
+    setCurrentCalculatedStats,
+    setSocialParseDebug
 } from './state.js';
 import { MODULE_NAME, SOCIAL_PROMPT } from './constants.js';
 import { 
@@ -16,7 +17,8 @@ import {
     getShiftDescriptor,
     formatAffinityPoints,
     escapeHtml,
-    sanitizeRelationshipStatus
+    sanitizeRelationshipStatus,
+    sanitizeTraitOutput
 } from './utils.js';
 import { showStoryMomentToast, notifySuccess, notifyInfo, notifyError, pickToastMoment } from './toasts.js';
 import { buildChoiceContextPrompt } from './generator.js';
@@ -84,12 +86,8 @@ export function getCombinedSocial() {
 
 export function injectCombinedSocialPrompt() {
     try {
-        if (extension_settings[MODULE_NAME].useMacro) {
-            setExtensionPrompt('bb_social_injector', '', extension_prompt_types.IN_CHAT, 1, false, extension_prompt_roles.SYSTEM);
-        } else {
-            const promptText = getCombinedSocial();
-            setExtensionPrompt('bb_social_injector', promptText, extension_prompt_types.IN_CHAT, 1, false, extension_prompt_roles.SYSTEM);
-        }
+        const promptText = getCombinedSocial();
+        setExtensionPrompt('bb_social_injector', promptText, extension_prompt_types.IN_CHAT, 1, false, extension_prompt_roles.SYSTEM);
     } catch (e) { console.error("[BB VN] Ошибка инъекции:", e); }
 }
 
@@ -177,60 +175,55 @@ export function addGlobalLog(type, text, timeString) {
 
 export function tryParseSocialUpdates(rawText) {
     const text = String(rawText || '');
-    const keyword = '"social_updates"';
-    const keywordIdx = text.lastIndexOf(keyword);
-    if (keywordIdx === -1) return null;
 
-    let openBraceIdx = -1;
-    for (let i = keywordIdx; i >= 0; i--) {
-        if (text[i] === '{') { openBraceIdx = i; break; }
-    }
-    if (openBraceIdx === -1) return null;
+    const hiddenHtmlMatch = text.match(/<div[^>]*class=["'][^"']*bb-vn-data[^"']*["'][^>]*>[\s\S]*?<\/div>/i);
+    if (hiddenHtmlMatch) {
+        const hiddenHtml = hiddenHtmlMatch[0];
+        const updatesBlockMatch = hiddenHtml.match(/<bb-social-updates>[\s\S]*?<\/bb-social-updates>/i);
+        if (updatesBlockMatch) {
+            const block = updatesBlockMatch[0];
+            const updateMatches = [...block.matchAll(/<bb-social-update>([\s\S]*?)<\/bb-social-update>/gi)];
+            const updates = updateMatches.map(match => {
+                const item = match[1] || '';
+                const readTag = (tag) => {
+                    const found = item.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+                    return found ? String(found[1]).replace(/<[^>]+>/g, '').trim() : '';
+                };
+                return {
+                    name: readTag('name'),
+                    friendship_impact: readTag('friendship_impact'),
+                    romance_impact: readTag('romance_impact'),
+                    role_dynamic: readTag('role_dynamic'),
+                    reason: readTag('reason'),
+                    emotion: readTag('emotion'),
+                };
+            }).filter(u => u.name && u.friendship_impact);
 
-    let depth = 0;
-    let closeBraceIdx = -1;
-    let inString = false;
-    let escapeNext = false;
-
-    for (let i = openBraceIdx; i < text.length; i++) {
-        const char = text[i];
-        if (escapeNext) { escapeNext = false; continue; }
-        if (char === '\\') { escapeNext = true; continue; }
-        if (char === '"') { inString = !inString; }
-        
-        if (!inString) {
-            if (char === '{') depth++;
-            else if (char === '}') {
-                depth--;
-                if (depth === 0) { closeBraceIdx = i; break; }
+            if (updates.length > 0) {
+                return {
+                    parsed: { social_updates: updates },
+                    source: hiddenHtml,
+                };
             }
         }
     }
 
-    if (closeBraceIdx !== -1) {
-        let jsonStr = text.substring(openBraceIdx, closeBraceIdx + 1);
-        try {
-            const parsed = JSON.parse(jsonStr);
-            if (parsed && Array.isArray(parsed.social_updates)) {
-                return { parsed, source: jsonStr };
-            }
-        } catch(e) {
-            try {
-                const safeJsonStr = jsonStr.replace(/\n/g, '\\n').replace(/\r/g, '');
-                const parsed = JSON.parse(safeJsonStr);
-                if (parsed && Array.isArray(parsed.social_updates)) {
-                    return { parsed, source: text.substring(openBraceIdx, closeBraceIdx + 1) };
-                }
-            } catch(err) {}
-        }
-    }
     return null;
 }
 
-export function scanAndCleanMessage(msg, messageId) {
+export function scanAndCleanMessage(msg, messageId, trackDebug = false) {
     if (!msg || msg.is_user) return false;
     let modified = false;
     const swipeId = msg.swipe_id || 0;
+    let existingUpdates = msg.extra?.bb_social_swipes?.[swipeId];
+    if ((!Array.isArray(existingUpdates) || existingUpdates.length === 0) && msg.extra?.bb_social_swipes) {
+        for (const key in msg.extra.bb_social_swipes) {
+            if (Array.isArray(msg.extra.bb_social_swipes[key]) && msg.extra.bb_social_swipes[key].length > 0) {
+                existingUpdates = msg.extra.bb_social_swipes[key];
+                break;
+            }
+        }
+    }
     
     const originalMes = msg.mes;
     let currentMes = String(msg.mes || '').replace(/[\u200B-\u200D\uFEFF]/g, '');
@@ -245,15 +238,15 @@ export function scanAndCleanMessage(msg, messageId) {
 
             msg.extra.bb_social_swipes[swipeId] = parsed.social_updates;
             currentMes = currentMes.replace(parsedPayload.source, '');
+            if (trackDebug) setSocialParseDebug('parsed', `social_updates: ${parsed.social_updates.length}`);
         } catch(e) {}
+    } else if (Array.isArray(existingUpdates) && existingUpdates.length > 0) {
+        if (trackDebug) setSocialParseDebug('parsed', `social_updates (stored): ${existingUpdates.length}`);
+    } else if (String(currentMes || '').trim()) {
+        if (trackDebug) setSocialParseDebug('missing', 'В ответе нет social_updates');
     }
     
-    const bt = String.fromCharCode(96, 96, 96);
-    const emptyBlockRegex = new RegExp(bt + '{1,3}[a-zA-Z0-9_-]*\\s*' + bt + '{1,3}', 'gi');
-    currentMes = currentMes.replace(emptyBlockRegex, '');
     currentMes = currentMes.replace(/<div[^>]*>\s*<\/div>/gi, '');
-    const trailingBlockRegex = new RegExp(bt + '{1,3}[a-zA-Z0-9_-]*\\s*$', 'gi');
-    currentMes = currentMes.replace(trailingBlockRegex, '');
     
     if (originalMes !== currentMes) {
         msg.mes = currentMes.trim(); 
@@ -312,6 +305,10 @@ export function recalculateAllStats(isNewMessage = false) {
     
     if (!chat_metadata['bb_vn_char_bases']) chat_metadata['bb_vn_char_bases'] = {};
     if (!chat_metadata['bb_vn_ignored_chars']) chat_metadata['bb_vn_ignored_chars'] = [];
+    setSocialParseDebug('idle', 'Ожидание ответа модели');
+    const lastAssistantIndex = Array.isArray(chat)
+        ? [...chat].map((msg, idx) => ({ msg, idx })).reverse().find(item => item.msg && !item.msg.is_user)?.idx ?? -1
+        : -1;
 
     let needsSave = false;
 
@@ -342,7 +339,7 @@ export function recalculateAllStats(isNewMessage = false) {
             latestChoiceContext = msg.extra.bb_vn_choice_context;
         }
 
-        if (scanAndCleanMessage(msg, idx)) needsSave = true;
+        if (scanAndCleanMessage(msg, idx, idx === lastAssistantIndex)) needsSave = true;
 
         const swipeId = msg.swipe_id || 0;
 
@@ -351,15 +348,18 @@ export function recalculateAllStats(isNewMessage = false) {
             msgTraits.forEach(t => {
                 const cName = t.charName;
                 if (!cName || chat_metadata['bb_vn_ignored_chars'].includes(cName)) return;
-                
-                if (t.trait && (t.trait.includes('```') || t.trait.includes('trait_type'))) {
-                    const nameMatch = t.trait.match(/trait_type[\s"']*:[\s"']*([^,}\n"']+)/i);
-                    const descMatch = t.trait.match(/description[\s"']*:[\s"']*([^}\n]+)/i);
-                    let extractedName = nameMatch ? nameMatch[1].trim() : '';
-                    let extractedDesc = descMatch ? descMatch[1].replace(/["']/g, '').trim() : '';
-                    if (extractedName && extractedDesc) t.trait = `${extractedName}: ${extractedDesc}`;
-                    else t.trait = t.trait.replace(/`{3}json|`{3}/gi, '').replace(/[{}]/g, '').replace(/(trait_type|description)\s*:/gi, '').replace(/["']/g, '').trim();
+
+                if (t.trait) {
+                    const before = String(t.trait);
+                    t.trait = sanitizeTraitOutput(t.trait);
+                    if (t.trait !== before) {
+                        needsSave = true;
+                    }
+                }
+
+                if (!t.trait || t.trait.length > 240) {
                     needsSave = true;
+                    return;
                 }
                 
                 if (!newStats[cName]) {

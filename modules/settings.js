@@ -113,6 +113,34 @@ export function setupExtensionSettings() {
     const target = document.querySelector("#extensions_settings2") || document.querySelector("#extensions_settings");
     if (target) target.insertAdjacentHTML('beforeend', settingsHtml);
 
+    const applyModelOptions = (models = [], preferredModel = '') => {
+        const select = jQuery('#bb-vn-cfg-model').empty();
+        const safeModels = Array.isArray(models)
+            ? models.map(m => String(m || '').trim()).filter(Boolean)
+            : [];
+
+        if (safeModels.length === 0) {
+            select.append('<option value="">Модели не загружены</option>');
+            select.prop('disabled', true);
+            extension_settings[MODULE_NAME].customApiModel = '';
+            return;
+        }
+
+        safeModels.forEach(modelId => {
+            select.append(`<option value="${modelId}">${modelId}</option>`);
+        });
+
+        const initialModel = safeModels.includes(preferredModel)
+            ? preferredModel
+            : (extension_settings[MODULE_NAME].customApiModel && safeModels.includes(extension_settings[MODULE_NAME].customApiModel)
+                ? extension_settings[MODULE_NAME].customApiModel
+                : safeModels[0]);
+
+        select.val(initialModel);
+        select.prop('disabled', false);
+        extension_settings[MODULE_NAME].customApiModel = initialModel;
+    };
+
     jQuery('#bb-vn-cfg-autosend').on('change', function() { extension_settings[MODULE_NAME].autoSend = jQuery(this).is(':checked'); saveSettingsDebounced(); });
     jQuery('#bb-vn-cfg-autogen').on('change', function() { extension_settings[MODULE_NAME].autoGen = jQuery(this).is(':checked'); saveSettingsDebounced(); });
     jQuery('#bb-vn-cfg-emotional-choice').on('change', function() { extension_settings[MODULE_NAME].emotionalChoiceFraming = jQuery(this).is(':checked'); saveSettingsDebounced(); restoreVNOptions(true); });
@@ -128,15 +156,31 @@ export function setupExtensionSettings() {
     jQuery('#bb-vn-btn-connect').on('click', async function() {
         const btn = jQuery(this); btn.html('...');
         try {
+            const rawUrl = String(jQuery('#bb-vn-cfg-url').val() || '').trim();
+            const rawKey = String(jQuery('#bb-vn-cfg-key').val() || '').trim();
+            if (!rawUrl) throw new Error('URL пустой');
+
+            extension_settings[MODULE_NAME].customApiUrl = rawUrl;
+            extension_settings[MODULE_NAME].customApiKey = rawKey;
+
             // @ts-ignore
-            const response = await fetch(jQuery('#bb-vn-cfg-url').val().replace(/\/$/, '') + '/models', { headers: { 'Authorization': `Bearer ${jQuery('#bb-vn-cfg-key').val()}` } });
+            const response = await fetch(rawUrl.replace(/\/$/, '') + '/models', { headers: { 'Authorization': `Bearer ${rawKey}` } });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             if (data?.data) {
-                const select = jQuery('#bb-vn-cfg-model').empty();
-                data.data.forEach(m => select.append(`<option value="${m.id}">${m.id}</option>`));
-                select.prop('disabled', false); saveSettingsDebounced(); notifySuccess("Модели загружены!");
+                const modelIds = data.data.map(m => m?.id).filter(Boolean);
+                applyModelOptions(modelIds, extension_settings[MODULE_NAME].customApiModel || '');
+                extension_settings[MODULE_NAME].useCustomApi = true;
+                jQuery('#bb-vn-cfg-usecustom').prop('checked', true);
+                saveSettingsDebounced();
+                notifySuccess("Модели загружены!");
+            } else {
+                throw new Error('Список моделей пустой');
             }
-        } catch (e) { notifyError("Ошибка подключения."); } finally { btn.html('Подключиться'); }
+        } catch (e) {
+            console.error('[BB VN] Ошибка подключения custom API:', e);
+            notifyError("Ошибка подключения или пустой список моделей.");
+        } finally { btn.html('Подключиться'); }
     });
 
     jQuery('#bb-dbg-add-pts').on('click', () => injectDebugData('major_positive'));

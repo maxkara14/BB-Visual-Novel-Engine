@@ -2,13 +2,14 @@
 import { chat_metadata, saveChatDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { MODULE_NAME } from './constants.js';
-import { currentCalculatedStats, currentStoryMoments } from './state.js';
+import { currentCalculatedStats, currentStoryMoments, socialParseDebug } from './state.js';
 import { 
     escapeHtml, 
     getToneClass, 
     formatAffinityPoints, 
     getShiftDescriptor,
-    getAffinityNarrative
+    getAffinityNarrative,
+    sanitizeTraitOutput
 } from './utils.js';
 import { syncToastContainerWithHud, notifySuccess, notifyInfo, notifyError } from './toasts.js';
 import { 
@@ -30,6 +31,13 @@ export function renderSocialHud() {
     const deepMomentsCount = currentStoryMoments.filter(moment => String(moment.type || '').includes('deep')).length;
     const lastChoiceTone = chat_metadata['bb_vn_choice_context']?.tone || 'не зафиксирован';
     const latestMoment = currentStoryMoments.length > 0 ? currentStoryMoments[currentStoryMoments.length - 1] : null;
+    const socialDebugStatus = socialParseDebug?.status || 'idle';
+    const socialDebugText = socialParseDebug?.details || 'Нет данных';
+    const socialDebugLabel = socialDebugStatus === 'parsed'
+        ? 'HTML найден'
+        : socialDebugStatus === 'missing'
+            ? 'HTML не найден'
+            : 'Ожидание';
 
     const charsBox = document.getElementById('bb-hud-chars');
     if (charsBox) {
@@ -232,10 +240,10 @@ export function renderSocialHud() {
                 btn.html('<i class="fa-solid fa-spinner fa-spin"></i> Анализ воспоминаний...').css('pointer-events', 'none');
                 const memoriesToCompress = targetMemories.slice(0, 5).map(m => m.text).join('; ');
                 const userName = SillyTavern.getContext().substituteParams('{{user}}');
-                const prompt = `Вот 5 незабываемых событий, произошедших между ${charName} и ${userName}:\n${memoriesToCompress}\n\nПроанализируй их и создай ОДНУ ${isPositive ? "ПОЛОЖИТЕЛЬНУЮ" : "НЕГАТИВНУЮ"} перманентную черту характера, которая сформировалась у ${charName} по отношению к ${userName} из-за этого.\n\nПРАВИЛА ВЫВОДА: ВЕРНИ ТОЛЬКО ОДНУ СТРОКУ в формате "Название: Описание".`;
+                const prompt = `Вот 5 незабываемых событий, произошедших между ${charName} и ${userName}:\n${memoriesToCompress}\n\nПроанализируй их и создай ОДНУ ${isPositive ? "ПОЛОЖИТЕЛЬНУЮ" : "НЕГАТИВНУЮ"} перманентную черту характера, которая сформировалась у ${charName} по отношению к ${userName} из-за этого.\n\nПРАВИЛА ВЫВОДА:\n1) Верни ТОЛЬКО 1 строку в формате "Название: Описание".\n2) Не добавляй префиксы вроде "TRAIT:", "Черта:" и т.п.\n3) Не возвращай JSON и не цитируй исходные сообщения.`;
                 try {
-                    let result = await generateFastPrompt(prompt);
-                    result = String(result).replace(/["']/g, '').trim();
+                    let result = await generateFastPrompt(prompt, { responseFormat: 'text' });
+                    result = sanitizeTraitOutput(result);
                     if (result) {
                         const chat = SillyTavern.getContext().chat;
                         const lastMsg = chat[chat.length - 1];
@@ -265,7 +273,7 @@ export function renderSocialHud() {
         const logs = chat_metadata['bb_vn_global_log'] || [];
         const promptPreviewHtml = `
             <div class="bb-panel-hero bb-panel-hero-system"><div class="bb-panel-kicker">Журнал</div><div class="bb-panel-headline">Системный журнал</div><div class="bb-panel-subtitle">Здесь показаны изменения отношений и текущий инжектируемый prompt.</div>
-            <div class="bb-panel-stat-grid"><div class="bb-panel-stat"><span class="bb-panel-stat-label">Событий</span><strong>${logs.length}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Последний тон</span><strong>${escapeHtml(lastChoiceTone)}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Последнее событие</span><strong>${escapeHtml(latestMoment?.title || '—')}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Инжект</span><strong>Текущий prompt</strong></div></div></div>
+            <div class="bb-panel-stat-grid"><div class="bb-panel-stat"><span class="bb-panel-stat-label">Событий</span><strong>${logs.length}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Последний тон</span><strong>${escapeHtml(lastChoiceTone)}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Последнее событие</span><strong>${escapeHtml(latestMoment?.title || '—')}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Social HTML</span><strong>${escapeHtml(socialDebugLabel)}</strong></div></div><div class="bb-panel-subtitle" style="margin-top:8px;">${escapeHtml(socialDebugText)}</div></div>
             <details class="bb-prompt-card" open><summary class="bb-prompt-summary"><span>🧠 Inject Prompt</span><button type="button" class="menu_button bb-copy-prompt-btn"><i class="fa-solid fa-copy"></i>&nbsp; Копировать</button></summary><div class="bb-prompt-hint">Текущий системный текст, который BB VNE добавляет в инжект.</div><pre class="bb-prompt-pre">${escapeHtml(getCombinedSocial())}</pre></details>
         `;
         if (logs.length === 0) logBox.innerHTML = `${promptPreviewHtml}<div class="bb-empty-hud">Журнал событий пуст.</div>`;

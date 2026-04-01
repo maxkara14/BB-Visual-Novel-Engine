@@ -27,7 +27,8 @@ export async function runMainGen(promptText) {
     }
 }
 
-export async function generateFastPrompt(promptText) {
+export async function generateFastPrompt(promptText, options = {}) {
+    const responseFormat = options.responseFormat === 'text' ? 'text' : 'json';
     const s = extension_settings[MODULE_NAME];
     if (s.useCustomApi && s.customApiUrl && s.customApiModel) {
         try {
@@ -46,7 +47,12 @@ export async function generateFastPrompt(promptText) {
                 body: JSON.stringify({
                     model: s.customApiModel,
                     messages: [
-                        { role: 'system', content: 'You are an internal JSON generator. You MUST output ONLY valid JSON format. No conversational text.' },
+                        {
+                            role: 'system',
+                            content: responseFormat === 'text'
+                                ? 'You are an internal text generator. Return only the requested final result without extra explanations or wrappers.'
+                                : 'You are an internal JSON generator. You MUST output ONLY valid JSON format. No conversational text.'
+                        },
                         { role: 'user', content: promptText }
                     ],
                     temperature: 0.7,
@@ -167,17 +173,46 @@ export async function bbVnGenerateOptionsFlow(excludedIntents = []) {
             }
         }
 
-        const result = await generateFastPrompt(prompt);
+        const result = await generateFastPrompt(prompt, { responseFormat: 'json' });
 
         if (isVnGenerationCancelled) throw new Error("Отменено пользователем");
 
+        const extractTopLevelJsonArray = (rawText = '') => {
+            const source = String(rawText || '');
+            let start = -1;
+            let depth = 0;
+            let inString = false;
+            let escapeNext = false;
+
+            for (let i = 0; i < source.length; i++) {
+                const ch = source[i];
+                if (escapeNext) { escapeNext = false; continue; }
+                if (ch === '\\') { escapeNext = true; continue; }
+                if (ch === '"') { inString = !inString; continue; }
+                if (inString) continue;
+
+                if (ch === '[') {
+                    if (start === -1) start = i;
+                    depth++;
+                    continue;
+                }
+
+                if (ch === ']') {
+                    if (depth > 0) depth--;
+                    if (start !== -1 && depth === 0) {
+                        return source.substring(start, i + 1);
+                    }
+                }
+            }
+            return '';
+        };
+
         let cleanResult = String(result || "").trim();
         cleanResult = cleanResult.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
-        
-        const start = cleanResult.indexOf('[');
-        const end = cleanResult.lastIndexOf(']');
-        if (start !== -1 && end !== -1) {
-            cleanResult = cleanResult.substring(start, end + 1);
+
+        const extractedArray = extractTopLevelJsonArray(cleanResult);
+        if (extractedArray) {
+            cleanResult = extractedArray;
         } else {
             cleanResult = '[' + cleanResult.replace(/}\s*{/g, '},{') + ']';
         }
