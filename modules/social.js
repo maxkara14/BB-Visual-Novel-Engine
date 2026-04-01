@@ -262,7 +262,15 @@ export function scanAndCleanMessage(msg, messageId, trackDebug = false) {
     if (!msg || msg.is_user) return false;
     let modified = false;
     const swipeId = msg.swipe_id || 0;
-    const existingUpdates = msg.extra?.bb_social_swipes?.[swipeId];
+    let existingUpdates = msg.extra?.bb_social_swipes?.[swipeId];
+    if ((!Array.isArray(existingUpdates) || existingUpdates.length === 0) && msg.extra?.bb_social_swipes) {
+        for (const key in msg.extra.bb_social_swipes) {
+            if (Array.isArray(msg.extra.bb_social_swipes[key]) && msg.extra.bb_social_swipes[key].length > 0) {
+                existingUpdates = msg.extra.bb_social_swipes[key];
+                break;
+            }
+        }
+    }
     
     const originalMes = msg.mes;
     let currentMes = String(msg.mes || '').replace(/[\u200B-\u200D\uFEFF]/g, '');
