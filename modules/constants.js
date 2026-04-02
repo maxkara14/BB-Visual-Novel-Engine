@@ -60,8 +60,10 @@ CRITICAL JSON AND FORMATTING RULES:
 1. Return STRICTLY a valid JSON array. DO NOT output any conversational text outside the JSON.
 2. INSIDE the "message" field, you MUST use standard roleplay formatting: asterisks for *actions/thoughts* and quotes for dialogue.
 3. If you need literal double quotes inside "message", ALWAYS escape them as \\".
-4. To create paragraphs, use escaped newlines (\\n\\n) inside the "message" string. DO NOT use actual line breaks in the string, or it will break the JSON.
-5. Each option must be clearly different in intent from the others. Never output near-duplicates with only wording changes.
+4. Every "message" value MUST be a valid JSON-escaped string literal. Never insert raw line breaks inside the string; use only escaped sequences like \\n or \\n\\n.
+5. NEVER include comments (// or /* */), markdown fences, or any extra text before/after the array.
+6. To create paragraphs, use escaped newlines (\\n\\n) inside the "message" string. DO NOT use actual line breaks in the string, or it will break the JSON.
+7. Each option must be clearly different in intent from the others. Never output near-duplicates with only wording changes.
 
 Use this SHORT JSON SHAPE as a template. The placeholders below are instructions, not literal values. Return exactly 3 objects with this structure:
 [

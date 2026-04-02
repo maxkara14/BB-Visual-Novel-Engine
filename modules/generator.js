@@ -5,7 +5,6 @@ import { MODULE_NAME, OPTIONS_PROMPT } from './constants.js';
 import { 
     normalizeOptionData, 
     dedupeOptions, 
-    extractJsonStringMatches, 
     escapeHtml
 } from './utils.js';
 import { notifyInfo, notifyError } from './toasts.js';
@@ -29,6 +28,7 @@ export async function runMainGen(promptText) {
 
 export async function generateFastPrompt(promptText, options = {}) {
     const responseFormat = options.responseFormat === 'text' ? 'text' : 'json';
+    const includeMeta = options.includeMeta === true;
     const s = extension_settings[MODULE_NAME];
     if (s.useCustomApi && s.customApiUrl && s.customApiModel) {
         try {
@@ -64,18 +64,51 @@ export async function generateFastPrompt(promptText, options = {}) {
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             
             const data = await response.json();
+            const finishReason = data?.choices?.[0]?.finish_reason || '';
             const content = data?.choices?.[0]?.message?.content || "";
             if (!content.trim()) throw new Error("Прокси вернул пустой текст (Сработал фильтр).");
+            if (includeMeta) {
+                return {
+                    content,
+                    meta: {
+                        provider: 'custom-api',
+                        finishReason,
+                        usage: data?.usage || null,
+                    },
+                };
+            }
             return content;
         } catch (e) {
             if (e.name === 'AbortError') throw new Error("Отменено пользователем");
             console.warn(`[BB VN] Ошибка кастомного API (${e.message}), перехват на основной API...`);
-            return await runMainGen(promptText);
+            const fallbackContent = await runMainGen(promptText);
+            if (includeMeta) {
+                return {
+                    content: fallbackContent,
+                    meta: {
+                        provider: 'main-api-fallback',
+                        finishReason: '',
+                        usage: null,
+                    },
+                };
+            }
+            return fallbackContent;
         } finally {
             setVnGenerationAbortController(null);
         }
     } else {
-        return await runMainGen(promptText);
+        const content = await runMainGen(promptText);
+        if (includeMeta) {
+            return {
+                content,
+                meta: {
+                    provider: 'main-api',
+                    finishReason: '',
+                    usage: null,
+                },
+            };
+        }
+        return content;
     }
 }
 
@@ -173,7 +206,17 @@ export async function bbVnGenerateOptionsFlow(excludedIntents = []) {
             }
         }
 
-        const result = await generateFastPrompt(prompt, { responseFormat: 'json' });
+        const generationResult = await generateFastPrompt(prompt, { responseFormat: 'json', includeMeta: true });
+        const result = typeof generationResult === 'string'
+            ? generationResult
+            : generationResult?.content || '';
+        const finishReason = generationResult?.meta?.finishReason || '';
+        const provider = generationResult?.meta?.provider || 'unknown';
+        console.debug(`[BB VN][debug] generated result length=${String(result || '').length} provider=${provider} finish_reason=${finishReason || 'none'}`);
+
+        if (provider === 'custom-api' && finishReason === 'length') {
+            throw new Error('Кастомный API обрезал ответ по лимиту токенов (finish_reason=length). Уменьшите объём запроса или сделайте реролл.');
+        }
 
         if (isVnGenerationCancelled) throw new Error("Отменено пользователем");
 
@@ -207,42 +250,35 @@ export async function bbVnGenerateOptionsFlow(excludedIntents = []) {
             return '';
         };
 
-        let cleanResult = String(result || "").trim();
-        cleanResult = cleanResult.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
+        const cleanupMarkdownFences = (rawText = '') => String(rawText || '')
+            .replace(/```json/gi, '')
+            .replace(/```/g, '')
+            .trim();
 
-        const extractedArray = extractTopLevelJsonArray(cleanResult);
-        if (extractedArray) {
-            cleanResult = extractedArray;
-        } else {
-            cleanResult = '[' + cleanResult.replace(/}\s*{/g, '},{') + ']';
+        const repairJsonArrayCandidate = (rawText = '') => String(rawText || '')
+            .replace(/,\s*([\]}])/g, '$1')
+            .trim();
+
+        const cleanedResult = cleanupMarkdownFences(result);
+        const extractedArray = extractTopLevelJsonArray(cleanedResult);
+        if (!extractedArray) {
+            throw new Error('Модель вернула поврежденный JSON, сделайте реролл.');
         }
-        cleanResult = cleanResult.replace(/,\s*([\]}])/g, '$1');
 
         let parsedOptions;
         try {
-            parsedOptions = JSON.parse(cleanResult);
-        } catch (err) {
-            parsedOptions = [];
-            const intentMatches = extractJsonStringMatches(cleanResult, 'intent');
-            const toneMatches = extractJsonStringMatches(cleanResult, 'tone');
-            const forecastMatches = extractJsonStringMatches(cleanResult, 'forecast');
-            const riskMatches = extractJsonStringMatches(cleanResult, 'risk');
-            const messageMatches = extractJsonStringMatches(cleanResult, 'message|text|action|reply|response|dialogue|content|description');
-            const targetsMatches = [...cleanResult.matchAll(/"targets"\s*:\s*\[([^\]]*)\]/gi)].map(m =>
-                m[1].split(',').map(item => item.replace(/["']/g, '').trim()).filter(Boolean)
-            );
-            
-            for (let i = 0; i < intentMatches.length; i++) {
-                parsedOptions.push({
-                    intent: intentMatches[i],
-                    tone: toneMatches[i] || "",
-                    forecast: forecastMatches[i] || "",
-                    targets: targetsMatches[i] || [],
-                    risk: riskMatches[i] || "Средний",
-                    message: messageMatches[i] || ""
+            parsedOptions = JSON.parse(extractedArray);
+        } catch (directParseError) {
+            const repairedArray = repairJsonArrayCandidate(extractedArray);
+            try {
+                parsedOptions = JSON.parse(repairedArray);
+            } catch (repairError) {
+                console.warn('[BB VN] JSON parse failed after safe repair.', {
+                    directError: directParseError?.message,
+                    repairError: repairError?.message,
                 });
+                throw new Error('Модель вернула поврежденный JSON, сделайте реролл.');
             }
-            if (parsedOptions.length === 0) throw new Error("Модель вернула сломанный код.");
         }
 
         if (parsedOptions && parsedOptions.length > 0) {
@@ -264,7 +300,7 @@ export async function bbVnGenerateOptionsFlow(excludedIntents = []) {
     } catch (e) {
         if (e.message !== "Отменено пользователем") {
             console.error("[BB VN] Ошибка генерации:", e);
-            notifyError("Не удалось сгенерировать варианты");
+            notifyError(e.message || "Не удалось сгенерировать варианты");
             btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия VN').show();
         }
     }

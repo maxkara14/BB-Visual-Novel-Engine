@@ -22,6 +22,30 @@ import {
 } from './social.js';
 import { generateFastPrompt } from './generator.js';
 
+const HUD_VISIBILITY_RETRY_MS = 120;
+let hudVisibilityRetryTimer = null;
+
+function hasContextInitialized(context) {
+    if (!context || typeof context !== 'object') return false;
+    return Object.prototype.hasOwnProperty.call(context, 'chatId') || Object.prototype.hasOwnProperty.call(context, 'chat');
+}
+
+function hasActiveChatContext(context) {
+    const chatId = context?.chatId;
+    const hasValidChatId = typeof chatId === 'number'
+        || (typeof chatId === 'string' && chatId.trim().length > 0);
+    const hasChatMessages = Array.isArray(context?.chat) && context.chat.length > 0;
+    return hasValidChatId || hasChatMessages;
+}
+
+function isDevModeEnabled() {
+    const host = String(globalThis?.location?.hostname || '').toLowerCase();
+    return host === 'localhost'
+        || host === '127.0.0.1'
+        || host === '::1'
+        || globalThis?.BB_VN_DEV === true;
+}
+
 export function renderSocialHud() {
     const characterEntries = Object.keys(currentCalculatedStats)
         .sort((a, b) => currentCalculatedStats[b].affinity - currentCalculatedStats[a].affinity);
@@ -304,9 +328,48 @@ export function renderSocialHud() {
 }
 
 export function updateHudVisibility() {
-    const chatId = SillyTavern.getContext().chatId;
-    if (chatId) { jQuery('#bb-social-hud-toggle, #bb-social-hud-mobile-launcher').show(); } 
+    const context = SillyTavern.getContext();
+    if (!hasContextInitialized(context)) {
+        if (!hudVisibilityRetryTimer) {
+            hudVisibilityRetryTimer = setTimeout(() => {
+                hudVisibilityRetryTimer = null;
+                updateHudVisibility();
+            }, HUD_VISIBILITY_RETRY_MS);
+        }
+        return;
+    }
+
+    if (hudVisibilityRetryTimer) {
+        clearTimeout(hudVisibilityRetryTimer);
+        hudVisibilityRetryTimer = null;
+    }
+
+    const chatId = context?.chatId;
+    const chatLength = Array.isArray(context?.chat) ? context.chat.length : 0;
+    const isGroup = typeof context?.is_group === 'boolean'
+        ? context.is_group
+        : typeof context?.groupId !== 'undefined'
+            ? Boolean(context.groupId)
+            : undefined;
+    const chatType = typeof context?.chat_type === 'string'
+        ? context.chat_type
+        : isGroup === true
+            ? 'group'
+            : 'direct';
+    const shouldShowHud = hasActiveChatContext(context);
+
+    if (shouldShowHud) { jQuery('#bb-social-hud-toggle, #bb-social-hud-mobile-launcher').show(); } 
     else { jQuery('#bb-social-hud-toggle, #bb-social-hud-mobile-launcher').hide(); closeSocialHud(); }
+
+    if (isDevModeEnabled()) {
+        console.debug('[BB VN][debug] HUD visibility updated', {
+            action: shouldShowHud ? 'show' : 'hide',
+            chatId,
+            chatLength,
+            isGroup,
+            chatType,
+        });
+    }
     syncToastContainerWithHud();
 }
 
