@@ -188,7 +188,21 @@ export async function bbVnGenerateOptionsFlow(excludedIntents = []) {
                 const ch = source[i];
                 if (escapeNext) { escapeNext = false; continue; }
                 if (ch === '\\') { escapeNext = true; continue; }
-                if (ch === '"') { inString = !inString; continue; }
+                if (ch === '"') {
+                    if (!inString) {
+                        inString = true;
+                        continue;
+                    }
+
+                    const tail = source.slice(i + 1);
+                    if (/^\s*([,}\]]|$)/.test(tail)) {
+                        inString = false;
+                        continue;
+                    }
+
+                    // Tolerate unescaped quotes inside malformed JSON-like message content.
+                    continue;
+                }
                 if (inString) continue;
 
                 if (ch === '[') {
