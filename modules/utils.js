@@ -133,7 +133,10 @@ export function normalizeOptionData(option = {}) {
     
     let rawMessage = option.message || option.text || option.action || option.reply || option.response || option.dialogue || option.content || option.description || '';
     
+    const rawMessageLength = String(rawMessage || '').length;
     let finalMessage = normalizeGeneratedMessage(rawMessage);
+    const normalizedMessageLength = String(finalMessage || '').length;
+    console.debug(`[BB VN][debug] message normalization length raw=${rawMessageLength} normalized=${normalizedMessageLength}`);
     
     if (!finalMessage) {
         finalMessage = `*${intentStr}*`;
@@ -174,23 +177,7 @@ export function dedupeOptions(options = []) {
 }
 
 export function extractJsonStringMatches(input = "", field = "") {
-    const isMessage = field.includes('message');
     const fieldRegex = field.includes('|') ? field : String(field || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    if (isMessage) {
-        const strictRegex = new RegExp(`"(?:${fieldRegex})"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, 'gi');
-        const strictMatches = [...String(input || '').matchAll(strictRegex)].map(match => match[1] || '');
-        if (strictMatches.length > 0) return strictMatches;
-
-        const looseRegex = new RegExp(`"(?:${fieldRegex})"\\s*:\\s*"([\\s\\S]*?)"?(?=\\s*\\}|\\s*,\\s*"|$)`, 'gi');
-        return [...String(input || '').matchAll(looseRegex)].map(match => {
-            let val = match[1] || '';
-            const badTail = val.search(/["']?\s*\}[\s,]*\{/);
-            if (badTail !== -1) val = val.substring(0, badTail);
-            return val.trim();
-        });
-    }
-
     const regex = new RegExp(`"(?:${fieldRegex})"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, 'gi');
     return [...String(input || '').matchAll(regex)].map(match => match[1] || '');
 }

@@ -48,6 +48,24 @@ setRenderHudCallback(renderSocialHud);
 jQuery(async () => {
     try {
         const { eventSource, event_types } = SillyTavern.getContext();
+        const registerHudVisibilityRecoveryEvents = () => {
+            const recoveryEventCandidates = [
+                'CHAT_CREATED',
+                'CHAT_LOADED',
+                'CHARACTER_CHANGED',
+                'GROUP_UPDATED',
+                'GROUP_CHAT_CREATED',
+                'GROUP_CHAT_DELETED',
+                'IMPERSONATE_READY',
+                'SETTINGS_LOADED_AFTER',
+            ];
+
+            recoveryEventCandidates.forEach((eventKey) => {
+                const eventName = event_types[eventKey];
+                if (!eventName) return;
+                eventSource.on(eventName, () => { updateHudVisibility(); });
+            });
+        };
         
         setupExtensionSettings();
 
@@ -79,6 +97,8 @@ jQuery(async () => {
             recalculateAllStats(); 
             updateHudVisibility();
         });
+
+        registerHudVisibilityRecoveryEvents();
 
         eventSource.on(event_types.MESSAGE_RECEIVED, () => { restoreVNOptions(false); recalculateAllStats(true); }); 
         eventSource.on(event_types.MESSAGE_DELETED, () => { restoreVNOptions(false); recalculateAllStats(); });
