@@ -182,13 +182,47 @@ export function extractJsonStringMatches(input = "", field = "") {
         const strictMatches = [...String(input || '').matchAll(strictRegex)].map(match => match[1] || '');
         if (strictMatches.length > 0) return strictMatches;
 
-        const looseRegex = new RegExp(`"(?:${fieldRegex})"\\s*:\\s*"([\\s\\S]*?)"?(?=\\s*\\}|\\s*,\\s*"|$)`, 'gi');
-        return [...String(input || '').matchAll(looseRegex)].map(match => {
-            let val = match[1] || '';
-            const badTail = val.search(/["']?\s*\}[\s,]*\{/);
-            if (badTail !== -1) val = val.substring(0, badTail);
-            return val.trim();
-        });
+        const source = String(input || '');
+        const keyRegex = new RegExp(`"(?:${fieldRegex})"\\s*:\\s*"`, 'gi');
+        const collected = [];
+        let keyMatch;
+        while ((keyMatch = keyRegex.exec(source)) !== null) {
+            let cursor = keyMatch.index + keyMatch[0].length;
+            let value = '';
+            let escaped = false;
+
+            while (cursor < source.length) {
+                const ch = source[cursor];
+                if (escaped) {
+                    value += ch;
+                    escaped = false;
+                    cursor++;
+                    continue;
+                }
+                if (ch === '\\') {
+                    value += ch;
+                    escaped = true;
+                    cursor++;
+                    continue;
+                }
+                if (ch === '"') {
+                    const tail = source.slice(cursor + 1);
+                    if (/^\s*(,|\}|$)/.test(tail)) {
+                        break;
+                    }
+                }
+                value += ch;
+                cursor++;
+            }
+
+            let normalized = value.replace(/\\+$/g, '').trim();
+            const badTail = normalized.search(/["']?\s*\}[\s,]*\{/);
+            if (badTail !== -1) normalized = normalized.substring(0, badTail).trim();
+            collected.push(normalized);
+
+            keyRegex.lastIndex = cursor + 1;
+        }
+        return collected;
     }
 
     const regex = new RegExp(`"(?:${fieldRegex})"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, 'gi');
