@@ -398,14 +398,65 @@ export function recalculateAllStats(isNewMessage = false) {
         }
 
         if (activeUpdates && Array.isArray(activeUpdates)) {
+            const IMPACT_MAP = {
+                unforgivable: -20,
+                major_negative: -8,
+                minor_negative: -2,
+                none: 0,
+                minor_positive: 2,
+                major_positive: 8,
+                life_changing: 20,
+            };
+            const normalizeImpactToken = (value) => String(value || '')
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, '_')
+                .replace(/-/g, '_');
+            const parseImpactDelta = (rawImpact) => {
+                const token = normalizeImpactToken(rawImpact);
+                if (!token) return 0;
+                if (Object.prototype.hasOwnProperty.call(IMPACT_MAP, token)) return IMPACT_MAP[token];
+
+                const aliases = {
+                    neutral: 'none',
+                    no_change: 'none',
+                    small_positive: 'minor_positive',
+                    small_negative: 'minor_negative',
+                    huge_positive: 'life_changing',
+                    huge_negative: 'unforgivable',
+                    слабый_плюс: 'minor_positive',
+                    небольшой_плюс: 'minor_positive',
+                    легкий_плюс: 'minor_positive',
+                    сильный_плюс: 'major_positive',
+                    большой_плюс: 'major_positive',
+                    очень_сильный_плюс: 'life_changing',
+                    слабый_минус: 'minor_negative',
+                    небольшой_минус: 'minor_negative',
+                    легкий_минус: 'minor_negative',
+                    сильный_минус: 'major_negative',
+                    большой_минус: 'major_negative',
+                    очень_сильный_минус: 'unforgivable',
+                    нет: 'none',
+                    ноль: 'none',
+                    отсутствует: 'none',
+                };
+                const normalizedAlias = aliases[token];
+                if (normalizedAlias && Object.prototype.hasOwnProperty.call(IMPACT_MAP, normalizedAlias)) {
+                    return IMPACT_MAP[normalizedAlias];
+                }
+
+                const numeric = parseInt(token, 10);
+                if (!Number.isNaN(numeric)) return Math.max(-20, Math.min(20, numeric));
+                return 0;
+            };
+
             activeUpdates.forEach(update => {
                 const charName = update.name;
                 if (!charName || isCollectiveEntityName(charName)) return;
                 if (chat_metadata['bb_vn_ignored_chars'].includes(charName)) return;
 
-                const IMPACT_MAP = { "unforgivable": -20, "major_negative": -8, "minor_negative": -2, "none": 0, "minor_positive": 2, "major_positive": 8, "life_changing": 20 };
-                const f_delta = IMPACT_MAP[update.friendship_impact || update.impact_level] || 0;
-                let r_delta = IMPACT_MAP[update.romance_impact] || 0;
+                const f_delta = parseImpactDelta(update.friendship_impact || update.impact_level);
+                let r_delta = parseImpactDelta(update.romance_impact || update.romantic_impact || update.love_impact);
                 if (!chat_metadata['bb_vn_platonic_chars']) chat_metadata['bb_vn_platonic_chars'] = [];
                 if (chat_metadata['bb_vn_platonic_chars'].includes(charName)) r_delta = 0;
 
