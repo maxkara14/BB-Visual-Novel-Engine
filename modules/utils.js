@@ -176,6 +176,7 @@ export function dedupeOptions(options = []) {
 export function extractJsonStringMatches(input = "", field = "") {
     const isMessage = field.includes('message');
     const fieldRegex = field.includes('|') ? field : String(field || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const looksLikeJsonFieldBoundary = (tail = '') => /^\s*(?:\}|\]|$|,\s*"[\wА-Яа-яЁё\- ]+"\s*:)/.test(String(tail || ''));
 
     if (isMessage) {
         const strictRegex = new RegExp(`"(?:${fieldRegex})"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, 'gi');
@@ -207,7 +208,7 @@ export function extractJsonStringMatches(input = "", field = "") {
                 }
                 if (ch === '"') {
                     const tail = source.slice(cursor + 1);
-                    if (/^\s*(,|\}|$)/.test(tail)) {
+                    if (looksLikeJsonFieldBoundary(tail)) {
                         break;
                     }
                 }

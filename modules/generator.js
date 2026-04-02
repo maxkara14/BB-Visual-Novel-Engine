@@ -179,6 +179,7 @@ export async function bbVnGenerateOptionsFlow(excludedIntents = []) {
 
         const extractTopLevelJsonArray = (rawText = '') => {
             const source = String(rawText || '');
+            const looksLikeJsonStringBoundary = (tail = '') => /^\s*(?:,|}|]|$|,\s*"[\wА-Яа-яЁё\- ]+"\s*:)/.test(String(tail || ''));
             let start = -1;
             let depth = 0;
             let inString = false;
@@ -195,7 +196,7 @@ export async function bbVnGenerateOptionsFlow(excludedIntents = []) {
                     }
 
                     const tail = source.slice(i + 1);
-                    if (/^\s*([,}\]]|$)/.test(tail)) {
+                    if (looksLikeJsonStringBoundary(tail)) {
                         inString = false;
                         continue;
                     }

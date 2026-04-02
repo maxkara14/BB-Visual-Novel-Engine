@@ -236,7 +236,9 @@
 }
 
 #bb-social-hud-toggle {
-    position: fixed; left: -50px; 
+    position: fixed;
+    right: 0;
+    left: auto;
     top: 130px; /* ФИКС: Спускаем язычок на уровень "Связей" */
     width: 50px;
     background: linear-gradient(180deg, rgba(10, 14, 23, 0.62), rgba(28, 19, 37, 0.56));
@@ -247,6 +249,7 @@
     backdrop-filter: blur(6px); opacity: 0.62;
     transition: background 0.2s, color 0.2s, transform 0.2s, opacity 0.2s;
     overflow: hidden;
+    z-index: 2050;
 }
 #bb-social-hud-toggle::after {
     content: '';
