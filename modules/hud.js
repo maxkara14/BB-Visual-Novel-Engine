@@ -25,6 +25,10 @@ import { generateFastPrompt } from './generator.js';
 const HUD_VISIBILITY_RETRY_MS = 120;
 let hudVisibilityRetryTimer = null;
 
+function setHudPopupPriority(isPopupActive) {
+    document.body.classList.toggle('bb-hud-popup-active', Boolean(isPopupActive));
+}
+
 function hasContextInitialized(context) {
     if (!context || typeof context !== 'object') return false;
     return Object.prototype.hasOwnProperty.call(context, 'chatId') || Object.prototype.hasOwnProperty.call(context, 'chat');
@@ -288,7 +292,13 @@ export function renderSocialHud() {
 
             jQuery('.bb-btn-hide-char').off('click').on('click', async function() {
                 const charName = jQuery(this).attr('data-char');
-                const confirmed = await SillyTavern.getContext().callPopup(`<h3>Скрыть персонажа?</h3><p>Персонаж <strong>${charName}</strong> пропадёт из трекера.</p>`, 'confirm');
+                let confirmed = false;
+                setHudPopupPriority(true);
+                try {
+                    confirmed = await SillyTavern.getContext().callPopup(`<h3>Скрыть персонажа?</h3><p>Персонаж <strong>${charName}</strong> пропадёт из трекера.</p>`, 'confirm');
+                } finally {
+                    setHudPopupPriority(false);
+                }
                 if (!confirmed) return;
                 if (!chat_metadata['bb_vn_ignored_chars']) chat_metadata['bb_vn_ignored_chars'] = [];
                 if (!chat_metadata['bb_vn_ignored_chars'].includes(charName)) chat_metadata['bb_vn_ignored_chars'].push(charName);
