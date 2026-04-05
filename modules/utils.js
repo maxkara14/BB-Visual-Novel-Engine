@@ -60,6 +60,202 @@ export function normalizeGeneratedMessage(message = "") {
         .trim();
 }
 
+export function cleanupMarkdownFences(raw = "") {
+    return String(raw || '')
+        .replace(/```(?:json)?/gi, '')
+        .replace(/```/g, '')
+        .trim();
+}
+
+export function extractBalancedSegment(raw = "", openChar = "[", closeChar = "]") {
+    const source = String(raw || '');
+    let start = -1;
+    let depth = 0;
+    let inString = false;
+    let escapeNext = false;
+
+    for (let i = 0; i < source.length; i++) {
+        const ch = source[i];
+        if (escapeNext) {
+            escapeNext = false;
+            continue;
+        }
+        if (ch === '\\') {
+            escapeNext = true;
+            continue;
+        }
+        if (ch === '"') {
+            inString = !inString;
+            continue;
+        }
+        if (inString) continue;
+        if (ch === openChar) {
+            if (start === -1) start = i;
+            depth++;
+            continue;
+        }
+        if (ch === closeChar && depth > 0) {
+            depth--;
+            if (start !== -1 && depth === 0) {
+                return source.substring(start, i + 1);
+            }
+        }
+    }
+
+    return '';
+}
+
+export function escapeUnescapedJsonStringChars(raw = "") {
+    const source = String(raw || '');
+    let result = '';
+    let inString = false;
+    let escapeNext = false;
+
+    for (let i = 0; i < source.length; i++) {
+        const ch = source[i];
+
+        if (escapeNext) {
+            result += ch;
+            escapeNext = false;
+            continue;
+        }
+
+        if (ch === '\\') {
+            result += ch;
+            escapeNext = true;
+            continue;
+        }
+
+        if (ch === '"') {
+            result += ch;
+            inString = !inString;
+            continue;
+        }
+
+        if (inString) {
+            if (ch === '\n') {
+                result += '\\n';
+                continue;
+            }
+            if (ch === '\r') {
+                result += '\\r';
+                continue;
+            }
+            if (ch === '\t') {
+                result += '\\t';
+                continue;
+            }
+        }
+
+        result += ch;
+    }
+
+    return result;
+}
+
+export function repairJsonCandidate(raw = "") {
+    return escapeUnescapedJsonStringChars(
+        cleanupMarkdownFences(raw)
+            .replace(/[\u200B-\u200D\uFEFF]/g, '')
+            .replace(/[“”]/g, '"')
+            .replace(/[‘’]/g, "'")
+            .replace(/,\s*([\]}])/g, '$1')
+            .trim(),
+    );
+}
+
+function normalizeParsedJsonResult(parsed, prefer = 'array') {
+    if (prefer === 'object') {
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+            const firstObject = parsed.find(item => item && typeof item === 'object' && !Array.isArray(item));
+            return firstObject || null;
+        }
+        return null;
+    }
+
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === 'object') {
+        const arrayKeys = ['options', 'items', 'choices', 'result', 'data'];
+        for (const key of arrayKeys) {
+            if (Array.isArray(parsed[key])) return parsed[key];
+        }
+    }
+    return null;
+}
+
+export function parseModelJson(raw = "", options = {}) {
+    const prefer = options.prefer === 'object' ? 'object' : 'array';
+    const cleaned = cleanupMarkdownFences(raw);
+    const candidates = [];
+    const pushCandidate = (value) => {
+        const text = String(value || '').trim();
+        if (!text || candidates.includes(text)) return;
+        candidates.push(text);
+    };
+
+    const primaryOpen = prefer === 'object' ? '{' : '[';
+    const primaryClose = prefer === 'object' ? '}' : ']';
+    pushCandidate(extractBalancedSegment(cleaned, primaryOpen, primaryClose));
+    pushCandidate(cleaned);
+    pushCandidate(extractBalancedSegment(cleaned, '[', ']'));
+    pushCandidate(extractBalancedSegment(cleaned, '{', '}'));
+
+    const errors = [];
+    for (const candidate of candidates) {
+        for (const shouldRepair of [false, true]) {
+            const prepared = shouldRepair ? repairJsonCandidate(candidate) : candidate;
+            try {
+                const parsed = JSON.parse(prepared);
+                const normalized = normalizeParsedJsonResult(parsed, prefer);
+                if (normalized !== null) {
+                    return {
+                        ok: true,
+                        parsed: normalized,
+                        source: prepared,
+                        repaired: shouldRepair,
+                    };
+                }
+                errors.push(`Parsed JSON but shape mismatch (${prefer})`);
+            } catch (error) {
+                errors.push(error?.message || 'Unknown JSON parse error');
+            }
+        }
+    }
+
+    return {
+        ok: false,
+        parsed: null,
+        source: '',
+        repaired: false,
+        errors,
+    };
+}
+
+function pickTraitObjectCandidate(value) {
+    if (!value) return null;
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const found = pickTraitObjectCandidate(item);
+            if (found) return found;
+        }
+        return null;
+    }
+    if (typeof value !== 'object') return null;
+
+    const directKeys = ['trait_type', 'trait', 'name', 'title', 'label', 'description', 'desc', 'text', 'summary'];
+    if (directKeys.some(key => Object.prototype.hasOwnProperty.call(value, key))) {
+        return value;
+    }
+
+    for (const nested of Object.values(value)) {
+        const found = pickTraitObjectCandidate(nested);
+        if (found) return found;
+    }
+
+    return null;
+}
+
 export function sanitizeTraitOutput(raw = "") {
     let text = String(raw || '').trim();
     if (!text) return '';
@@ -101,6 +297,33 @@ export function sanitizeTraitOutput(raw = "") {
         .trim();
 
     return cleaned;
+}
+
+export function normalizeTraitResponse(raw = "") {
+    const rough = sanitizeTraitOutput(raw);
+    let text = cleanupMarkdownFences(rough);
+    if (!text) return '';
+
+    const parsedJson = parseModelJson(text, { prefer: 'object' });
+    if (parsedJson.ok) {
+        const traitObject = pickTraitObjectCandidate(parsedJson.parsed);
+        if (traitObject) {
+            const traitName = traitObject.trait_type || traitObject.trait || traitObject.name || traitObject.title || traitObject.label || '';
+            const traitDesc = traitObject.description || traitObject.desc || traitObject.text || traitObject.summary || '';
+            if (traitName && traitDesc) {
+                return `${String(traitName).trim()}: ${String(traitDesc).trim()}`;
+            }
+            if (traitName) return String(traitName).trim();
+        }
+    }
+
+    text = text
+        .replace(/^\s*\d+[.)]\s*/, '')
+        .replace(/^["']|["']$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    return text;
 }
 
 export function getLegacyToneFromRisk(risk = "") {
@@ -162,14 +385,16 @@ export function canonicalizeIntent(text = "") {
 }
 
 export function dedupeOptions(options = []) {
-    const seenIntents = new Set();
+    const seenPayloads = new Set();
     const unique = [];
 
     options.forEach(option => {
         const normalized = normalizeOptionData(option);
-        const key = canonicalizeIntent(normalized.intent || normalized.message || '');
-        if (!key || seenIntents.has(key)) return;
-        seenIntents.add(key);
+        const intentKey = canonicalizeIntent(normalized.intent || '');
+        const messageKey = canonicalizeIntent(normalized.message || '').slice(0, 180);
+        const key = `${intentKey}__${messageKey}`;
+        if (!messageKey || seenPayloads.has(key)) return;
+        seenPayloads.add(key);
         unique.push(normalized);
     });
 

@@ -9,7 +9,7 @@ import {
     formatAffinityPoints, 
     getShiftDescriptor,
     getAffinityNarrative,
-    sanitizeTraitOutput
+    normalizeTraitResponse
 } from './utils.js';
 import { syncToastContainerWithHud, notifySuccess, notifyInfo, notifyError } from './toasts.js';
 import { 
@@ -20,7 +20,7 @@ import {
     recalculateAllStats,
     getCombinedSocial
 } from './social.js';
-import { generateFastPrompt } from './generator.js';
+import { crystallizeTraitFromMemories } from './generator.js';
 
 const HUD_VISIBILITY_RETRY_MS = 120;
 let hudVisibilityRetryTimer = null;
@@ -63,6 +63,14 @@ export function renderSocialHud() {
     const socialDebugText = socialParseDebug?.details || 'Нет данных';
     const socialDebugLabel = socialDebugStatus === 'parsed'
         ? 'HTML найден'
+        : socialDebugStatus === 'injecting'
+            ? 'Макрос внедрён'
+        : socialDebugStatus === 'stored'
+            ? 'HTML сохранён'
+        : socialDebugStatus === 'checking'
+            ? 'Проверка'
+        : socialDebugStatus === 'error'
+            ? 'HTML не распознан'
         : socialDebugStatus === 'missing'
             ? 'HTML не найден'
             : 'Ожидание';
@@ -268,12 +276,14 @@ export function renderSocialHud() {
                 if (targetMemories.length < 5) return;
                 const btn = jQuery(this); const originalHtml = btn.html();
                 btn.html('<i class="fa-solid fa-spinner fa-spin"></i> Анализ воспоминаний...').css('pointer-events', 'none');
-                const memoriesToCompress = targetMemories.slice(0, 5).map(m => m.text).join('; ');
                 const userName = SillyTavern.getContext().substituteParams('{{user}}');
-                const prompt = `Вот 5 незабываемых событий, произошедших между ${charName} и ${userName}:\n${memoriesToCompress}\n\nПроанализируй их и создай ОДНУ ${isPositive ? "ПОЛОЖИТЕЛЬНУЮ" : "НЕГАТИВНУЮ"} перманентную черту характера, которая сформировалась у ${charName} по отношению к ${userName} из-за этого.\n\nПРАВИЛА ВЫВОДА:\n1) Верни ТОЛЬКО 1 строку в формате "Название: Описание".\n2) Не добавляй префиксы вроде "TRAIT:", "Черта:" и т.п.\n3) Не возвращай JSON и не цитируй исходные сообщения.`;
                 try {
-                    let result = await generateFastPrompt(prompt, { responseFormat: 'text' });
-                    result = sanitizeTraitOutput(result);
+                    const result = normalizeTraitResponse(await crystallizeTraitFromMemories({
+                        charName,
+                        userName,
+                        memories: targetMemories,
+                        isPositive,
+                    }));
                     if (!result || result.length > 240) throw new Error('INVALID_TRAIT_OUTPUT');
                     const chat = SillyTavern.getContext().chat;
                     const lastMsg = chat[chat.length - 1];

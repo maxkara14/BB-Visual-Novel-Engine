@@ -17,6 +17,7 @@ import {
 import { setupExtensionSettings, wipeGlobalLog, wipeAllSocialData, injectDebugData } from './modules/settings.js';
 import { injectVNActionsUI } from './modules/actions.js';
 import { restoreVNOptions, bbVnGenerateOptionsFlow, clearVNOptions } from './modules/generator.js';
+import { setSocialParseDebug } from './modules/state.js';
 
 // Глобальный экспорт для консоли и внешних вызовов
 window['recalculateAllStats'] = recalculateAllStats;
@@ -44,6 +45,48 @@ extension_settings[MODULE_NAME] = {
 
 // Привязываем коллбэк отрисовки HUD к логике пересчета статов
 setRenderHudCallback(renderSocialHud);
+
+function replaceMacroDeep(target, promptText) {
+    const macro = '{{bb_vn}}';
+    const countOccurrences = (value) => {
+        if (typeof value !== 'string' || !value.includes(macro)) return 0;
+        return value.split(macro).length - 1;
+    };
+
+    const walk = (value) => {
+        if (typeof value === 'string') {
+            const replacements = countOccurrences(value);
+            return {
+                value: replacements > 0 ? value.replace(/\{\{bb_vn\}\}/g, promptText) : value,
+                replacements,
+            };
+        }
+
+        if (Array.isArray(value)) {
+            let total = 0;
+            for (let i = 0; i < value.length; i++) {
+                const result = walk(value[i]);
+                value[i] = result.value;
+                total += result.replacements;
+            }
+            return { value, replacements: total };
+        }
+
+        if (value && typeof value === 'object') {
+            let total = 0;
+            for (const key of Object.keys(value)) {
+                const result = walk(value[key]);
+                value[key] = result.value;
+                total += result.replacements;
+            }
+            return { value, replacements: total };
+        }
+
+        return { value, replacements: 0 };
+    };
+
+    return walk(target).replacements;
+}
 
 jQuery(async () => {
     try {
@@ -120,13 +163,21 @@ jQuery(async () => {
         });
 
         eventSource.on(event_types.GENERATE_AFTER_DATA, (generate_data) => {
-            if (extension_settings[MODULE_NAME].useMacro && generate_data && Array.isArray(generate_data.messages)) {
+            if (extension_settings[MODULE_NAME].useMacro && generate_data) {
                 const promptText = getCombinedSocial();
-                generate_data.messages.forEach(msg => {
-                    if (msg && msg.content && typeof msg.content === 'string' && msg.content.includes('{{bb_vn}}')) {
-                        msg.content = msg.content.replace(/\{\{bb_vn\}\}/g, promptText);
-                    }
-                });
+                let replacements = 0;
+
+                if (Array.isArray(generate_data.messages)) {
+                    replacements += replaceMacroDeep(generate_data.messages, promptText);
+                }
+
+                replacements += replaceMacroDeep(generate_data, promptText);
+
+                if (replacements > 0) {
+                    setSocialParseDebug('injecting', `Макрос {{bb_vn}} внедрён: ${replacements}`);
+                } else {
+                    setSocialParseDebug('missing', 'Макрос {{bb_vn}} не найден в активном пресете/запросе.');
+                }
             }
         });
 

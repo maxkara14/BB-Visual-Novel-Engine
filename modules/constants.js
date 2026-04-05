@@ -37,6 +37,7 @@ CRITICAL RULES:
 
 HTML TAG FIELDS (STRICT):
 - <name> Concrete character name. (e.g., "Alex"). No collective nouns.
+- Do NOT translate the token values for <friendship_impact> and <romance_impact>. Keep those exact enum tokens in English.
 - <friendship_impact> Choose strictly from: "none", "minor_positive", "major_positive", "life_changing", "minor_negative", "major_negative", "unforgivable".
 - <romance_impact> Same scale as above. STRICT RULE: Keep "none" for casual/combat/platonic scenes.
 - <role_dynamic> 1-2 words describing {{user}}'s CURRENT role to them right now (e.g., "опасный союзник", "скрытая угроза", "надежный друг").

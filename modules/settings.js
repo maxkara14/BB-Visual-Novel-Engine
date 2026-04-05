@@ -21,7 +21,9 @@ export function injectDebugData(impact, isRomance = false) {
 }
 
 export function wipeGlobalLog() {
+    const chat = SillyTavern.getContext().chat || [];
     chat_metadata['bb_vn_global_log'] = [];
+    chat_metadata['bb_vn_log_cutoff_index'] = chat.length;
     saveChatDebounced();
     recalculateAllStats();
     notifySuccess("Журнал событий очищен!");
@@ -38,6 +40,7 @@ export function wipeAllSocialData() {
     chat_metadata['bb_vn_global_log'] = [];
     chat_metadata['bb_vn_char_bases'] = {};
     chat_metadata['bb_vn_ignored_chars'] = [];
+    delete chat_metadata['bb_vn_log_cutoff_index'];
     delete chat_metadata['bb_vn_char_traits'];
     delete chat_metadata['bb_vn_choice_context'];
     delete chat_metadata['bb_vn_pending_choice_context'];

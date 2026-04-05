@@ -18,7 +18,7 @@ import {
     formatAffinityPoints,
     escapeHtml,
     sanitizeRelationshipStatus,
-    sanitizeTraitOutput
+    normalizeTraitResponse
 } from './utils.js';
 import { showStoryMomentToast, notifySuccess, notifyInfo, notifyError, pickToastMoment } from './toasts.js';
 import { buildChoiceContextPrompt } from './generator.js';
@@ -86,7 +86,8 @@ export function getCombinedSocial() {
 
 export function injectCombinedSocialPrompt() {
     try {
-        const promptText = getCombinedSocial();
+        const useMacroMode = extension_settings[MODULE_NAME]?.useMacro === true;
+        const promptText = useMacroMode ? '' : getCombinedSocial();
         setExtensionPrompt('bb_social_injector', promptText, extension_prompt_types.IN_CHAT, 1, false, extension_prompt_roles.SYSTEM);
     } catch (e) { console.error("[BB VN] Ошибка инъекции:", e); }
 }
@@ -173,77 +174,122 @@ export function addGlobalLog(type, text, timeString) {
     if (chat_metadata['bb_vn_global_log'].length > 100) chat_metadata['bb_vn_global_log'].shift();
 }
 
-export function tryParseSocialUpdates(rawText) {
-    const text = String(rawText || '');
-    const readUpdatesFromBlock = (block) => {
-        const updateMatches = [...block.matchAll(/<bb-social-update>([\s\S]*?)<\/bb-social-update>/gi)];
-        const updates = updateMatches.map(match => {
-            const item = match[1] || '';
-            const readTag = (tag) => {
-                const found = item.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i'));
-                return found ? String(found[1]).replace(/<[^>]+>/g, '').trim() : '';
-            };
-            return {
-                name: readTag('name'),
-                friendship_impact: readTag('friendship_impact'),
-                romance_impact: readTag('romance_impact'),
-                role_dynamic: readTag('role_dynamic'),
-                reason: readTag('reason'),
-                emotion: readTag('emotion'),
-            };
-        }).filter(u => u.name && u.friendship_impact);
+function getJournalCutoffIndex(chat = []) {
+    const rawValue = parseInt(chat_metadata['bb_vn_log_cutoff_index'], 10);
+    if (Number.isNaN(rawValue) || rawValue <= 0) return 0;
+    return Math.min(rawValue, Array.isArray(chat) ? chat.length : rawValue);
+}
 
-        return updates;
-    };
+function getStoredSwipeEntries(swipesMap, swipeId, allowLegacyFallback = false) {
+    if (!swipesMap || typeof swipesMap !== 'object') return null;
+    const exact = swipesMap[swipeId];
+    if (Array.isArray(exact)) return exact;
+    if (!allowLegacyFallback) return null;
 
-    const directBlockMatches = [...text.matchAll(/<bb-social-updates>[\s\S]*?<\/bb-social-updates>/gi)];
-    for (const match of directBlockMatches) {
-        const block = match[0];
-        const updates = readUpdatesFromBlock(block);
-        if (updates.length > 0) {
-            return {
-                parsed: { social_updates: updates },
-                source: block,
-            };
-        }
-    }
-
-    const hiddenHtmlMatch = text.match(/<div[^>]*(?:class=["'][^"']*bb-vn-data[^"']*["']|style=["'][^"']*display\s*:\s*none[^"']*["'])[^>]*>[\s\S]*?<\/div>/i);
-    if (hiddenHtmlMatch) {
-        const hiddenHtml = hiddenHtmlMatch[0];
-        const updatesBlockMatch = hiddenHtml.match(/<bb-social-updates>[\s\S]*?<\/bb-social-updates>/i);
-        if (updatesBlockMatch) {
-            const block = updatesBlockMatch[0];
-            const updates = readUpdatesFromBlock(block);
-
-            if (updates.length > 0) {
-                return {
-                    parsed: { social_updates: updates },
-                    source: updatesBlockMatch[0],
-                };
-            }
+    for (const key in swipesMap) {
+        if (Array.isArray(swipesMap[key]) && swipesMap[key].length > 0) {
+            return swipesMap[key];
         }
     }
 
     return null;
 }
 
+function decodeHtmlEntities(text = '') {
+    return String(text || '')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/&amp;/gi, '&');
+}
+
+export function tryParseSocialUpdates(rawText) {
+    const text = String(rawText || '');
+    const decodedText = decodeHtmlEntities(text);
+    const normalizeImpactField = (value) => {
+        const normalized = String(value || '').trim();
+        return normalized || 'none';
+    };
+    const readUpdatesFromBlock = (block) => {
+        const updateMatches = [...block.matchAll(/<bb-social-update\b[^>]*>([\s\S]*?)<\/bb-social-update>/gi)];
+        const updates = updateMatches.map(match => {
+            const item = match[1] || '';
+            const readTag = (tag) => {
+                const found = item.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+                return found ? String(found[1]).replace(/<[^>]+>/g, '').trim() : '';
+            };
+            return {
+                name: readTag('name'),
+                friendship_impact: normalizeImpactField(readTag('friendship_impact')),
+                romance_impact: normalizeImpactField(readTag('romance_impact')),
+                role_dynamic: readTag('role_dynamic'),
+                reason: readTag('reason'),
+                emotion: readTag('emotion'),
+            };
+        }).filter(u => u.name && (u.friendship_impact || u.romance_impact));
+
+        return updates;
+    };
+
+    const parseFromSource = (sourceText, preferOriginalSource = '') => {
+        const directBlockMatches = [...sourceText.matchAll(/<bb-social-updates\b[^>]*>[\s\S]*?<\/bb-social-updates>/gi)];
+        for (const match of directBlockMatches) {
+            const block = match[0];
+            const updates = readUpdatesFromBlock(block);
+            if (updates.length > 0) {
+                return {
+                    parsed: { social_updates: updates },
+                    source: preferOriginalSource || block,
+                };
+            }
+        }
+
+        const hiddenHtmlMatch = sourceText.match(/<div[^>]*(?:class=["'][^"']*bb-vn-data[^"']*["']|style=["'][^"']*display\s*:\s*none[^"']*["'])[^>]*>[\s\S]*?<\/div>/i);
+        if (hiddenHtmlMatch) {
+            const hiddenHtml = hiddenHtmlMatch[0];
+            const updatesBlockMatch = hiddenHtml.match(/<bb-social-updates\b[^>]*>[\s\S]*?<\/bb-social-updates>/i);
+            if (updatesBlockMatch) {
+                const block = updatesBlockMatch[0];
+                const updates = readUpdatesFromBlock(block);
+
+                if (updates.length > 0) {
+                    return {
+                        parsed: { social_updates: updates },
+                        source: preferOriginalSource || updatesBlockMatch[0],
+                    };
+                }
+            }
+        }
+
+        const bareUpdates = readUpdatesFromBlock(sourceText);
+        if (bareUpdates.length > 0) {
+            const sourceMatch = sourceText.match(/(?:<bb-social-update\b[^>]*>[\s\S]*?<\/bb-social-update>\s*)+/i);
+            return {
+                parsed: { social_updates: bareUpdates },
+                source: preferOriginalSource || (sourceMatch ? sourceMatch[0] : ''),
+            };
+        }
+
+        return null;
+    }
+
+    return parseFromSource(text) || parseFromSource(decodedText);
+}
+
 export function scanAndCleanMessage(msg, messageId, trackDebug = false) {
     if (!msg || msg.is_user) return false;
     let modified = false;
     const swipeId = msg.swipe_id || 0;
-    let existingUpdates = msg.extra?.bb_social_swipes?.[swipeId];
-    if ((!Array.isArray(existingUpdates) || existingUpdates.length === 0) && msg.extra?.bb_social_swipes) {
-        for (const key in msg.extra.bb_social_swipes) {
-            if (Array.isArray(msg.extra.bb_social_swipes[key]) && msg.extra.bb_social_swipes[key].length > 0) {
-                existingUpdates = msg.extra.bb_social_swipes[key];
-                break;
-            }
-        }
-    }
+    const allowLegacyFallback = !Array.isArray(msg.swipes) || msg.swipes.length <= 1;
+    const existingUpdates = getStoredSwipeEntries(msg.extra?.bb_social_swipes, swipeId, allowLegacyFallback);
     
     const originalMes = msg.mes;
     let currentMes = String(msg.mes || '').replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+    if (trackDebug) {
+        setSocialParseDebug('checking', 'Проверка текущего ответа');
+    }
 
     const parsedPayload = tryParseSocialUpdates(currentMes);
 
@@ -258,9 +304,15 @@ export function scanAndCleanMessage(msg, messageId, trackDebug = false) {
             if (trackDebug) setSocialParseDebug('parsed', `social_updates: ${parsed.social_updates.length}`);
         } catch(e) {}
     } else if (Array.isArray(existingUpdates) && existingUpdates.length > 0) {
-        if (trackDebug) setSocialParseDebug('parsed', `social_updates (stored): ${existingUpdates.length}`);
-    } else if (String(currentMes || '').trim()) {
-        if (trackDebug) setSocialParseDebug('missing', 'В ответе нет social_updates');
+        if (trackDebug) setSocialParseDebug('stored', `social_updates (saved): ${existingUpdates.length}`);
+    } else if (trackDebug) {
+        if (/(bb-social-update|bb-social-updates|bb-vn-data|&lt;bb-social-update|&lt;bb-social-updates)/i.test(currentMes)) {
+            setSocialParseDebug('error', 'HTML-подобный блок найден, но не удалось распарсить');
+        } else if (String(currentMes || '').trim()) {
+            setSocialParseDebug('missing', 'В текущем ответе нет social_updates');
+        } else {
+            setSocialParseDebug('missing', 'Текущий ответ пуст или social_updates отсутствуют');
+        }
     }
     
     currentMes = currentMes
@@ -353,7 +405,10 @@ export function recalculateAllStats(isNewMessage = false) {
         return;
     }
 
+    const journalCutoffIndex = getJournalCutoffIndex(chat);
+
     chat.forEach((msg, idx) => {
+        const shouldRecordJournal = idx >= journalCutoffIndex;
         if (msg?.is_user && msg.extra?.bb_vn_choice_context) {
             latestChoiceContext = msg.extra.bb_vn_choice_context;
         }
@@ -361,6 +416,7 @@ export function recalculateAllStats(isNewMessage = false) {
         if (scanAndCleanMessage(msg, idx, idx === lastAssistantIndex)) needsSave = true;
 
         const swipeId = msg.swipe_id || 0;
+        const allowLegacyFallback = !Array.isArray(msg?.swipes) || msg.swipes.length <= 1;
 
         const msgTraits = msg.extra?.bb_vn_char_traits_swipes?.[swipeId];
         if (msgTraits && Array.isArray(msgTraits)) {
@@ -370,7 +426,7 @@ export function recalculateAllStats(isNewMessage = false) {
 
                 if (t.trait) {
                     const before = String(t.trait);
-                    t.trait = sanitizeTraitOutput(t.trait);
+                    t.trait = normalizeTraitResponse(t.trait);
                     if (t.trait !== before) {
                         needsSave = true;
                     }
@@ -390,12 +446,7 @@ export function recalculateAllStats(isNewMessage = false) {
             });
         }
 
-        let activeUpdates = msg.extra?.bb_social_swipes?.[swipeId];
-        if (!activeUpdates && msg.extra?.bb_social_swipes) {
-            for (const key in msg.extra.bb_social_swipes) {
-                if (Array.isArray(msg.extra.bb_social_swipes[key])) { activeUpdates = msg.extra.bb_social_swipes[key]; break; }
-            }
-        }
+        let activeUpdates = getStoredSwipeEntries(msg.extra?.bb_social_swipes, swipeId, allowLegacyFallback);
 
         if (activeUpdates && Array.isArray(activeUpdates)) {
             const IMPACT_MAP = {
@@ -470,7 +521,7 @@ export function recalculateAllStats(isNewMessage = false) {
                     if (chat_metadata['bb_vn_char_bases_romance']?.[charName] !== undefined) baseRomance = parseInt(chat_metadata['bb_vn_char_bases_romance'][charName]);
 
                     newStats[charName] = { affinity: base, romance: baseRomance, history: [], status: coerceUserFacingStatus(currentStatus, base, "", f_delta), memories: { soft: [], deep: [] }, core_traits: [] };
-                    if (isBrandNew) {
+                    if (isBrandNew && shouldRecordJournal) {
                         const introMoment = maybeAddStoryMoment({ type: 'intro', char: charName, title: 'Новый контакт', text: `${charName} появился в трекере отношений.` });
                         if (isNewMessage && idx === chat.length - 1) showStoryMomentToast(introMoment);
                     }
@@ -499,19 +550,19 @@ export function recalculateAllStats(isNewMessage = false) {
                 const previousTier = getTierInfo(previousAffinity).label;
                 const newTier = getTierInfo(newStats[charName].affinity).label;
                 let toastMoment = null;
-                if (previousTier !== newTier) toastMoment = pickToastMoment(toastMoment, maybeAddStoryMoment({ type: 'tier-shift', char: charName, title: 'Сдвиг в отношениях', text: `${charName}: статус изменился с «${previousTier}» на «${newTier}».` }));
+                if (shouldRecordJournal && previousTier !== newTier) toastMoment = pickToastMoment(toastMoment, maybeAddStoryMoment({ type: 'tier-shift', char: charName, title: 'Сдвиг в отношениях', text: `${charName}: статус изменился с «${previousTier}» на «${newTier}».` }));
 
-                if (Math.abs(dominantDelta) >= 2 && update.reason) {
+                if (shouldRecordJournal && Math.abs(dominantDelta) >= 2 && update.reason) {
                     const shift = getShiftDescriptor(dominantDelta, moodlet);
                     let momentType = dominantDelta > 0 ? 'soft-positive' : 'soft-negative';
                     if (isRomanceShift) momentType = dominantDelta > 0 ? 'romance-positive' : 'romance-negative';
                     toastMoment = pickToastMoment(toastMoment, maybeAddStoryMoment({ type: momentType, char: charName, title: shift.full, text: `${charName}: ${update.reason}` }));
                 }
 
-                if (Math.abs(dominantDelta) >= 15 && update.reason) toastMoment = pickToastMoment(toastMoment, maybeAddStoryMoment({ type: dominantDelta > 0 ? 'deep-positive' : 'deep-negative', char: charName, title: 'Незабываемое событие', text: `${charName}: ${update.reason}` }));
+                if (shouldRecordJournal && Math.abs(dominantDelta) >= 15 && update.reason) toastMoment = pickToastMoment(toastMoment, maybeAddStoryMoment({ type: dominantDelta > 0 ? 'deep-positive' : 'deep-negative', char: charName, title: 'Незабываемое событие', text: `${charName}: ${update.reason}` }));
                 if (dominantDelta !== 0 && isNewMessage && idx === chat.length - 1 && toastMoment) showStoryMomentToast(toastMoment);
 
-                if (f_delta !== 0 || r_delta !== 0) {
+                if (shouldRecordJournal && (f_delta !== 0 || r_delta !== 0)) {
                     const totalDelta = f_delta + r_delta;
                     const logType = totalDelta > 0 ? 'plus' : (totalDelta < 0 ? 'minus' : 'system');
                     let pointsHtml = '';

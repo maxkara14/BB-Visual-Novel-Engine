@@ -5,7 +5,9 @@ import { MODULE_NAME, OPTIONS_PROMPT } from './constants.js';
 import { 
     normalizeOptionData, 
     dedupeOptions, 
-    escapeHtml
+    escapeHtml,
+    parseModelJson,
+    normalizeTraitResponse
 } from './utils.js';
 import { notifyInfo, notifyError } from './toasts.js';
 import { 
@@ -15,6 +17,16 @@ import {
     setIsVnGenerationCancelled 
 } from './state.js';
 import { injectCombinedSocialPrompt } from './social.js';
+
+let lastCustomApiFallbackNoticeAt = 0;
+const MIN_RENDERABLE_OPTIONS = 2;
+
+function maybeNotifyCustomApiFallback() {
+    const now = Date.now();
+    if (now - lastCustomApiFallbackNoticeAt < 8000) return;
+    lastCustomApiFallbackNoticeAt = now;
+    notifyInfo('Кастомная модель не ответила. Генерация продолжена на основной модели.');
+}
 
 export async function runMainGen(promptText) {
     if (typeof generateQuietPrompt === 'function') {
@@ -81,6 +93,7 @@ export async function generateFastPrompt(promptText, options = {}) {
         } catch (e) {
             if (e.name === 'AbortError') throw new Error("Отменено пользователем");
             console.warn(`[BB VN] Ошибка кастомного API (${e.message}), перехват на основной API...`);
+            maybeNotifyCustomApiFallback();
             const fallbackContent = await runMainGen(promptText);
             if (includeMeta) {
                 return {
@@ -110,6 +123,181 @@ export async function generateFastPrompt(promptText, options = {}) {
         }
         return content;
     }
+}
+
+function extractOptionsFromGeneration(rawText = '') {
+    const parsed = parseModelJson(rawText, { prefer: 'array' });
+    if (parsed.ok && Array.isArray(parsed.parsed)) {
+        return {
+            ok: true,
+            options: parsed.parsed,
+            repaired: parsed.repaired,
+            source: parsed.source,
+        };
+    }
+
+    return {
+        ok: false,
+        options: null,
+        repaired: false,
+        source: '',
+        errors: parsed.errors || [],
+    };
+}
+
+async function repairOptionsJson(rawText = '') {
+    const repairPrompt = `You repair malformed JSON arrays for an internal roleplay tool.
+
+Return ONLY a valid JSON array with exactly 3 objects.
+Do not add markdown fences, comments, or explanations.
+Preserve the original Russian wording as much as possible.
+Every "message" value must be a valid JSON string. Escape paragraph breaks as \\n\\n.
+If a field is missing, use an empty string or [] instead of removing the object.
+
+BROKEN INPUT:
+${String(rawText || '').trim()}`;
+
+    const generationResult = await generateFastPrompt(repairPrompt, { responseFormat: 'json', includeMeta: true });
+    return typeof generationResult === 'string'
+        ? generationResult
+        : generationResult?.content || '';
+}
+
+function buildOptionsCountError(rawCount = 0, uniqueCount = 0) {
+    if (rawCount <= 0 && uniqueCount <= 0) {
+        return 'Модель не вернула ни одного корректного варианта.';
+    }
+    if (uniqueCount >= MIN_RENDERABLE_OPTIONS) {
+        return '';
+    }
+    if (rawCount > 0 && rawCount < 3) {
+        return `Модель вернула только ${rawCount} варианта вместо 3.`;
+    }
+    if (uniqueCount > 0 && uniqueCount < 3) {
+        return `Удалось собрать только ${uniqueCount} различимых варианта. Остальные были пустыми или слишком похожими.`;
+    }
+    return 'Не удалось собрать 3 корректных варианта ответа.';
+}
+
+function maybeNotifyPartialOptions(count = 0) {
+    if (count >= 3 || count < MIN_RENDERABLE_OPTIONS) return;
+    notifyInfo(`Модель собрала ${count} варианта из 3. Показываю то, что удалось получить.`);
+}
+
+async function fillMissingOptions(basePrompt = '', existingOptions = []) {
+    let distinctOptions = dedupeOptions(Array.isArray(existingOptions) ? existingOptions : []);
+    if (distinctOptions.length >= 3) return distinctOptions.slice(0, 3);
+
+    for (let attempt = 0; attempt < 2 && distinctOptions.length < 3; attempt++) {
+        const missingCount = 3 - distinctOptions.length;
+        const existingSummary = distinctOptions.length > 0
+            ? distinctOptions.map((option, index) => {
+                const intent = String(option?.intent || '').trim() || `Вариант ${index + 1}`;
+                const message = String(option?.message || '').trim().replace(/\s+/g, ' ').slice(0, 180);
+                return `${index + 1}. ${intent}${message ? ` :: ${message}` : ''}`;
+            }).join('\n')
+            : 'Нет сохранённых вариантов.';
+
+        const recoveryPrompt = `${basePrompt}
+
+[RECOVERY MODE]
+You already produced ${distinctOptions.length} usable options.
+Generate EXACTLY ${missingCount} additional options that are clearly different from the existing ones below.
+Do not repeat or lightly paraphrase them.
+Return ONLY a valid JSON array with the same schema.
+
+[EXISTING OPTIONS]
+${existingSummary}`;
+
+        const recoveryResult = await generateFastPrompt(recoveryPrompt, { responseFormat: 'json', includeMeta: true });
+        const recoveryText = typeof recoveryResult === 'string'
+            ? recoveryResult
+            : recoveryResult?.content || '';
+        const parsedRecovery = extractOptionsFromGeneration(recoveryText);
+        if (!parsedRecovery.ok || !Array.isArray(parsedRecovery.options) || parsedRecovery.options.length === 0) {
+            break;
+        }
+
+        distinctOptions = dedupeOptions([...distinctOptions, ...parsedRecovery.options]);
+    }
+
+    return distinctOptions.slice(0, 3);
+}
+
+function isValidTraitResult(value = '') {
+    const text = String(value || '').trim();
+    if (!text || text.length > 240) return false;
+    if (/[{}\[\]]/.test(text)) return false;
+    return text.length >= 3;
+}
+
+export async function crystallizeTraitFromMemories({ charName = '', userName = '', memories = [], isPositive = true } = {}) {
+    const selectedMemories = Array.isArray(memories) ? memories.slice(-5) : [];
+    if (selectedMemories.length < 5) {
+        throw new Error('NOT_ENOUGH_MEMORIES');
+    }
+
+    const memoriesBlock = selectedMemories
+        .map((memory, index) => `${index + 1}. ${String(memory?.text || '').trim()}`)
+        .filter(Boolean)
+        .join('\n');
+
+    const polarity = isPositive ? 'ПОЛОЖИТЕЛЬНУЮ' : 'НЕГАТИВНУЮ';
+    const baseInstruction = `Вот 5 незабываемых событий, произошедших между ${charName} и ${userName}:
+${memoriesBlock}
+
+Проанализируй их и создай ОДНУ ${polarity} перманентную черту характера, которая сформировалась у ${charName} по отношению к ${userName} из-за этого.`;
+
+    const strictJsonPrompt = `${baseInstruction}
+
+Верни ТОЛЬКО валидный JSON-объект без markdown и пояснений:
+{"trait":"Короткое название","description":"Краткое описание"}
+
+ПРАВИЛА:
+1. "trait" — 1-4 слова.
+2. "description" — 6-18 слов.
+3. Не цитируй исходные события.
+4. Не добавляй поля кроме "trait" и "description".`;
+
+    const strictTextPrompt = `${baseInstruction}
+
+ПРАВИЛА ВЫВОДА:
+1. Верни ТОЛЬКО 1 строку в формате "Название: Описание".
+2. Не добавляй префиксы вроде "TRAIT:", "Черта:" и т.п.
+3. Не возвращай JSON и не цитируй исходные сообщения.
+4. Сделай ответ короче 240 символов.`;
+
+    const attemptPrompts = [
+        { prompt: strictJsonPrompt, responseFormat: 'json' },
+        { prompt: strictTextPrompt, responseFormat: 'text' },
+    ];
+
+    let lastRaw = '';
+    for (const attempt of attemptPrompts) {
+        const generationResult = await generateFastPrompt(attempt.prompt, { responseFormat: attempt.responseFormat });
+        lastRaw = typeof generationResult === 'string' ? generationResult : generationResult?.content || '';
+        const normalized = normalizeTraitResponse(lastRaw);
+        if (isValidTraitResult(normalized)) {
+            return normalized;
+        }
+    }
+
+    if (lastRaw) {
+        const repairPrompt = `Преобразуй этот черновик в ОДНУ строку формата "Название: Описание".
+Верни только итоговую строку без markdown, кавычек и комментариев.
+Ограничение: до 240 символов.
+
+Черновик:
+${lastRaw}`;
+
+        const repaired = await generateFastPrompt(repairPrompt, { responseFormat: 'text' });
+        const normalized = normalizeTraitResponse(repaired);
+        if (isValidTraitResult(normalized)) {
+            return normalized;
+        }
+    }
+
+    throw new Error('INVALID_TRAIT_OUTPUT');
 }
 
 export function buildChoiceContextPrompt() {
@@ -220,6 +408,44 @@ export async function bbVnGenerateOptionsFlow(excludedIntents = []) {
 
         if (isVnGenerationCancelled) throw new Error("Отменено пользователем");
 
+        let recoveredPayload = extractOptionsFromGeneration(result);
+        let recoveredOptions = recoveredPayload.options;
+        if (!recoveredPayload.ok) {
+            console.warn('[BB VN] Initial options JSON parse failed. Attempting repair...', {
+                errors: recoveredPayload.errors,
+            });
+
+            const repairedResult = await repairOptionsJson(result);
+            recoveredPayload = extractOptionsFromGeneration(repairedResult);
+            recoveredOptions = recoveredPayload.options;
+        }
+
+        if (recoveredPayload.ok && recoveredOptions && recoveredOptions.length > 0) {
+            const recoveredRawCount = recoveredOptions.length;
+            recoveredOptions = await fillMissingOptions(prompt, recoveredOptions);
+            const recoveredError = buildOptionsCountError(recoveredRawCount, recoveredOptions.length);
+            if (recoveredError) throw new Error(recoveredError);
+            maybeNotifyPartialOptions(recoveredOptions.length);
+
+            const lastMsg = chat[chat.length - 1];
+            const swipeId = lastMsg.swipe_id || 0;
+            if (!lastMsg.extra) lastMsg.extra = {};
+            if (!lastMsg.extra.bb_vn_options_swipes) lastMsg.extra.bb_vn_options_swipes = {};
+            lastMsg.extra.bb_vn_options_swipes[swipeId] = recoveredOptions;
+            saveChatDebounced();
+
+            if (typeof window['renderVNOptionsFromData'] === 'function') {
+                window['renderVNOptionsFromData'](recoveredOptions, true);
+            }
+            return;
+        }
+
+        if (provider === 'custom-api' && finishReason === 'length') {
+            throw new Error('Кастомный API обрезал ответ по лимиту токенов (finish_reason=length). Уменьшите объём запроса или сделайте реролл.');
+        }
+
+        if (isVnGenerationCancelled) throw new Error("Отменено пользователем");
+
         const extractTopLevelJsonArray = (rawText = '') => {
             const source = String(rawText || '');
             let start = -1;
@@ -282,8 +508,11 @@ export async function bbVnGenerateOptionsFlow(excludedIntents = []) {
         }
 
         if (parsedOptions && parsedOptions.length > 0) {
-            parsedOptions = dedupeOptions(parsedOptions);
-            if (parsedOptions.length < 3) throw new Error("Модель вернула слишком похожие варианты. Попробуйте реролл ещё раз.");
+            const parsedRawCount = parsedOptions.length;
+            parsedOptions = await fillMissingOptions(prompt, parsedOptions);
+            const parsedError = buildOptionsCountError(parsedRawCount, parsedOptions.length);
+            if (parsedError) throw new Error(parsedError);
+            maybeNotifyPartialOptions(parsedOptions.length);
             
             const lastMsg = chat[chat.length - 1];
             const swipeId = lastMsg.swipe_id || 0;
