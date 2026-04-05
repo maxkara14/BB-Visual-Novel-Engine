@@ -176,7 +176,7 @@ jQuery(async () => {
                 if (replacements > 0) {
                     setSocialParseDebug('injecting', `Макрос {{bb_vn}} внедрён: ${replacements}`);
                 } else {
-                    setSocialParseDebug('missing', 'Макрос {{bb_vn}} не найден в активном пресете/запросе.');
+                    setSocialParseDebug('checking', 'Режим макроса активен. Прямой {{bb_vn}} в generate_data не найден, возможно он уже был развёрнут пресетом ранее.');
                 }
             }
         });
