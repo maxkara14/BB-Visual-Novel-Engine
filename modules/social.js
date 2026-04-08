@@ -18,12 +18,328 @@ import {
     formatAffinityPoints,
     escapeHtml,
     sanitizeRelationshipStatus,
-    normalizeTraitResponse
+    normalizeTraitResponse,
+    isLikelyModelRefusalText
 } from './utils.js';
 import { showStoryMomentToast, notifySuccess, notifyInfo, notifyError, pickToastMoment } from './toasts.js';
 import { buildChoiceContextPrompt } from './generator.js';
 
+function normalizeCharacterLookupName(name = '') {
+    return String(name || '')
+        .toLowerCase()
+        .normalize('NFKC')
+        .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function hashString(input = '') {
+    let hash = 2166136261;
+    const source = String(input || '');
+    for (let i = 0; i < source.length; i++) {
+        hash ^= source.charCodeAt(i);
+        hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+    }
+    return Math.abs(hash >>> 0).toString(36);
+}
+
+function getCurrentPersonaText() {
+    try {
+        return String(SillyTavern.getContext().substituteParams('{{persona}}') || '').trim();
+    } catch (error) {
+        void error;
+        return '';
+    }
+}
+
+export function getCurrentPersonaScopeKey() {
+    const personaText = getCurrentPersonaText();
+    if (!personaText) return 'default';
+    return `persona_${hashString(personaText)}`;
+}
+
+function getCurrentPersonaLabel() {
+    const personaText = getCurrentPersonaText();
+    if (!personaText) return 'Default persona';
+    return personaText.split(/\r?\n/).map(line => line.trim()).find(Boolean)?.slice(0, 80) || 'Persona';
+}
+
+function ensurePersonaStateShape(scopeState = {}) {
+    if (!scopeState.char_bases || typeof scopeState.char_bases !== 'object') scopeState.char_bases = {};
+    if (!scopeState.char_bases_romance || typeof scopeState.char_bases_romance !== 'object') scopeState.char_bases_romance = {};
+    if (!Array.isArray(scopeState.ignored_chars)) scopeState.ignored_chars = [];
+    if (!Array.isArray(scopeState.platonic_chars)) scopeState.platonic_chars = [];
+    if (!Array.isArray(scopeState.global_log)) scopeState.global_log = [];
+    if (!scopeState.char_registry || typeof scopeState.char_registry !== 'object') scopeState.char_registry = {};
+    if (!Array.isArray(scopeState.merge_suggestions)) scopeState.merge_suggestions = [];
+    scopeState.log_cutoff_index = parseInt(scopeState.log_cutoff_index, 10) || 0;
+    if (!scopeState.label) scopeState.label = getCurrentPersonaLabel();
+    return scopeState;
+}
+
+function ensureActivePersonaState() {
+    if (!chat_metadata['bb_vn_persona_states'] || typeof chat_metadata['bb_vn_persona_states'] !== 'object') {
+        chat_metadata['bb_vn_persona_states'] = {};
+    }
+
+    const scopeKey = getCurrentPersonaScopeKey();
+    const scopes = chat_metadata['bb_vn_persona_states'];
+    if (!scopes[scopeKey] || typeof scopes[scopeKey] !== 'object') {
+        scopes[scopeKey] = {};
+    }
+
+    const scopeState = ensurePersonaStateShape(scopes[scopeKey]);
+    if (!scopeState._legacy_migrated) {
+        const isFirstScope = Object.keys(scopes).length === 1;
+        if (isFirstScope) {
+            if (chat_metadata['bb_vn_char_bases'] && Object.keys(scopeState.char_bases).length === 0) scopeState.char_bases = chat_metadata['bb_vn_char_bases'];
+            if (chat_metadata['bb_vn_char_bases_romance'] && Object.keys(scopeState.char_bases_romance).length === 0) scopeState.char_bases_romance = chat_metadata['bb_vn_char_bases_romance'];
+            if (Array.isArray(chat_metadata['bb_vn_ignored_chars']) && scopeState.ignored_chars.length === 0) scopeState.ignored_chars = chat_metadata['bb_vn_ignored_chars'];
+            if (Array.isArray(chat_metadata['bb_vn_platonic_chars']) && scopeState.platonic_chars.length === 0) scopeState.platonic_chars = chat_metadata['bb_vn_platonic_chars'];
+            if (Array.isArray(chat_metadata['bb_vn_global_log']) && scopeState.global_log.length === 0) scopeState.global_log = chat_metadata['bb_vn_global_log'];
+            if (chat_metadata['bb_vn_char_registry'] && Object.keys(scopeState.char_registry).length === 0) scopeState.char_registry = chat_metadata['bb_vn_char_registry'];
+            if (Array.isArray(chat_metadata['bb_vn_merge_suggestions']) && scopeState.merge_suggestions.length === 0) scopeState.merge_suggestions = chat_metadata['bb_vn_merge_suggestions'];
+            const legacyCutoff = parseInt(chat_metadata['bb_vn_log_cutoff_index'], 10);
+            if (legacyCutoff > 0 && scopeState.log_cutoff_index === 0) scopeState.log_cutoff_index = legacyCutoff;
+        }
+        scopeState._legacy_migrated = true;
+    }
+
+    return { scopeKey, scopeState };
+}
+
+export function bindActivePersonaState() {
+    const { scopeKey, scopeState } = ensureActivePersonaState();
+    chat_metadata['bb_vn_active_persona_scope'] = scopeKey;
+    chat_metadata['bb_vn_char_bases'] = scopeState.char_bases;
+    chat_metadata['bb_vn_char_bases_romance'] = scopeState.char_bases_romance;
+    chat_metadata['bb_vn_ignored_chars'] = scopeState.ignored_chars;
+    chat_metadata['bb_vn_platonic_chars'] = scopeState.platonic_chars;
+    chat_metadata['bb_vn_global_log'] = scopeState.global_log;
+    chat_metadata['bb_vn_char_registry'] = scopeState.char_registry;
+    chat_metadata['bb_vn_merge_suggestions'] = scopeState.merge_suggestions;
+    chat_metadata['bb_vn_log_cutoff_index'] = scopeState.log_cutoff_index || 0;
+    return { scopeKey, scopeState };
+}
+
+function saveActivePersonaCutoff() {
+    const { scopeState } = ensureActivePersonaState();
+    scopeState.log_cutoff_index = parseInt(chat_metadata['bb_vn_log_cutoff_index'], 10) || 0;
+}
+
+function getRegistryEntries(scopeState) {
+    return Object.values(scopeState?.char_registry || {}).filter(entry => entry && typeof entry === 'object' && entry.id);
+}
+
+function entryOwnsName(entry, rawName = '') {
+    const normalized = normalizeCharacterLookupName(rawName);
+    if (!normalized || !entry) return false;
+    const names = [entry.primary_name, ...(Array.isArray(entry.aliases) ? entry.aliases : [])];
+    return names.some(name => normalizeCharacterLookupName(name) === normalized);
+}
+
+function addAliasToEntry(entry, alias, scopeState) {
+    const aliasText = String(alias || '').trim();
+    if (!aliasText || !entry) return;
+    if (!Array.isArray(entry.aliases)) entry.aliases = [];
+    if (!entry.aliases.some(existing => normalizeCharacterLookupName(existing) === normalizeCharacterLookupName(aliasText))) {
+        entry.aliases.push(aliasText);
+    }
+    scopeState.char_registry[entry.id] = entry;
+}
+
+function scoreCharacterMatch(sourceName = '', candidateName = '') {
+    const source = normalizeCharacterLookupName(sourceName);
+    const candidate = normalizeCharacterLookupName(candidateName);
+    if (!source || !candidate) return 0;
+    if (source === candidate) return 1;
+    if (source.includes(candidate) || candidate.includes(source)) {
+        const minLen = Math.min(source.length, candidate.length);
+        const maxLen = Math.max(source.length, candidate.length);
+        return minLen / maxLen;
+    }
+
+    const sourceTokens = new Set(source.split(' ').filter(Boolean));
+    const candidateTokens = new Set(candidate.split(' ').filter(Boolean));
+    if (sourceTokens.size === 0 || candidateTokens.size === 0) return 0;
+
+    let overlap = 0;
+    sourceTokens.forEach(token => {
+        if (candidateTokens.has(token)) overlap++;
+    });
+
+    const union = new Set([...sourceTokens, ...candidateTokens]).size || 1;
+    return overlap / union;
+}
+
+function rememberMergeSuggestion(scopeState, sourceName, targetEntry, score) {
+    if (!scopeState || !targetEntry) return;
+    if (!Array.isArray(scopeState.merge_suggestions)) scopeState.merge_suggestions = [];
+
+    const normalizedSource = normalizeCharacterLookupName(sourceName);
+    const normalizedTarget = normalizeCharacterLookupName(targetEntry.primary_name);
+    const alreadyExists = scopeState.merge_suggestions.some(item =>
+        normalizeCharacterLookupName(item.source || '') === normalizedSource &&
+        normalizeCharacterLookupName(item.target || '') === normalizedTarget
+    );
+    if (alreadyExists) return;
+
+    const suggestion = {
+        source: String(sourceName || '').trim(),
+        target: targetEntry.primary_name,
+        target_id: targetEntry.id,
+        score: Number(score || 0),
+        at: Date.now(),
+    };
+    scopeState.merge_suggestions.push(suggestion);
+    if (scopeState.merge_suggestions.length > 20) scopeState.merge_suggestions.shift();
+    notifyInfo(`Возможный дубль: «${suggestion.source}» похоже на «${suggestion.target}». Проверь объединение.`);
+}
+
+function createCharacterRegistryEntry(scopeState, displayName) {
+    const entry = {
+        id: `char_${hashString(`${displayName}|${Date.now()}|${Math.random()}`)}`,
+        primary_name: String(displayName || '').trim(),
+        aliases: [String(displayName || '').trim()],
+        created_at: Date.now(),
+    };
+    scopeState.char_registry[entry.id] = entry;
+    return entry;
+}
+
+export function resolveCharacterIdentity(rawName = '', options = {}) {
+    const {
+        allowCreate = true,
+        allowSuggestions = true,
+    } = options || {};
+
+    const { scopeState } = bindActivePersonaState();
+    const displayName = String(rawName || '').trim();
+    const normalized = normalizeCharacterLookupName(displayName);
+    if (!displayName || !normalized) return null;
+
+    const entries = getRegistryEntries(scopeState);
+    for (const entry of entries) {
+        if (entryOwnsName(entry, displayName)) {
+            addAliasToEntry(entry, displayName, scopeState);
+            return { id: entry.id, primaryName: entry.primary_name, entry, created: false };
+        }
+    }
+
+    let bestEntry = null;
+    let bestScore = 0;
+    entries.forEach(entry => {
+        const names = [entry.primary_name, ...(Array.isArray(entry.aliases) ? entry.aliases : [])];
+        names.forEach(candidateName => {
+            const score = scoreCharacterMatch(displayName, candidateName);
+            if (score > bestScore) {
+                bestScore = score;
+                bestEntry = entry;
+            }
+        });
+    });
+
+    if (bestEntry && bestScore >= 0.82) {
+        addAliasToEntry(bestEntry, displayName, scopeState);
+        return { id: bestEntry.id, primaryName: bestEntry.primary_name, entry: bestEntry, created: false };
+    }
+
+    if (bestEntry && bestScore >= 0.55 && allowSuggestions) {
+        rememberMergeSuggestion(scopeState, displayName, bestEntry, bestScore);
+    }
+
+    if (!allowCreate) return null;
+
+    const createdEntry = createCharacterRegistryEntry(scopeState, displayName);
+    return { id: createdEntry.id, primaryName: createdEntry.primary_name, entry: createdEntry, created: true };
+}
+
+export function mergeCharacterRecords(fromName = '', toName = '') {
+    const { scopeKey, scopeState } = bindActivePersonaState();
+    const source = resolveCharacterIdentity(fromName, { allowCreate: false, allowSuggestions: false });
+    const target = resolveCharacterIdentity(toName, { allowCreate: true, allowSuggestions: false });
+    if (!source || !target) return { ok: false, count: 0 };
+    if (source.id === target.id) return { ok: true, count: 0, same: true, targetName: target.primaryName };
+
+    const sourceEntry = scopeState.char_registry[source.id];
+    const targetEntry = scopeState.char_registry[target.id];
+    if (!sourceEntry || !targetEntry) return { ok: false, count: 0 };
+
+    const sourceNames = [sourceEntry.primary_name, ...(Array.isArray(sourceEntry.aliases) ? sourceEntry.aliases : [])];
+    sourceNames.forEach(name => addAliasToEntry(targetEntry, name, scopeState));
+
+    let count = 0;
+    const chat = SillyTavern.getContext().chat;
+    if (Array.isArray(chat)) {
+        chat.forEach(msg => {
+            if (msg.extra?.bb_social_swipes) {
+                for (const sId in msg.extra.bb_social_swipes) {
+                    if (!Array.isArray(msg.extra.bb_social_swipes[sId])) continue;
+                    msg.extra.bb_social_swipes[sId].forEach(update => {
+                        if (update?.scope && update.scope !== scopeKey) return;
+                        if (update?.char_id === source.id || entryOwnsName(sourceEntry, update?.name || '')) {
+                            update.name = targetEntry.primary_name;
+                            update.char_id = target.id;
+                            update.scope = scopeKey;
+                            count++;
+                        }
+                    });
+                }
+            }
+            if (msg.extra?.bb_vn_char_traits_swipes) {
+                for (const sId in msg.extra.bb_vn_char_traits_swipes) {
+                    if (!Array.isArray(msg.extra.bb_vn_char_traits_swipes[sId])) continue;
+                    msg.extra.bb_vn_char_traits_swipes[sId].forEach(trait => {
+                        if (trait?.scope && trait.scope !== scopeKey) return;
+                        if (trait?.char_id === source.id || entryOwnsName(sourceEntry, trait?.charName || '')) {
+                            trait.charName = targetEntry.primary_name;
+                            trait.char_id = target.id;
+                            trait.scope = scopeKey;
+                            count++;
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    const fromPrimary = sourceEntry.primary_name;
+    const toPrimary = targetEntry.primary_name;
+    const targetBase = chat_metadata['bb_vn_char_bases']?.[toPrimary] ?? 0;
+    const sourceBase = chat_metadata['bb_vn_char_bases']?.[fromPrimary] ?? 0;
+    if ((targetBase === 0 || targetBase === undefined) && sourceBase !== 0) {
+        chat_metadata['bb_vn_char_bases'][toPrimary] = sourceBase;
+    }
+    delete chat_metadata['bb_vn_char_bases'][fromPrimary];
+
+    const targetRomance = chat_metadata['bb_vn_char_bases_romance']?.[toPrimary] ?? 0;
+    const sourceRomance = chat_metadata['bb_vn_char_bases_romance']?.[fromPrimary] ?? 0;
+    if ((targetRomance === 0 || targetRomance === undefined) && sourceRomance !== 0) {
+        chat_metadata['bb_vn_char_bases_romance'][toPrimary] = sourceRomance;
+    }
+    if (chat_metadata['bb_vn_char_bases_romance']) delete chat_metadata['bb_vn_char_bases_romance'][fromPrimary];
+
+    if (Array.isArray(chat_metadata['bb_vn_ignored_chars'])) {
+        scopeState.ignored_chars = [...new Set(chat_metadata['bb_vn_ignored_chars'].map(name => entryOwnsName(sourceEntry, name) ? toPrimary : name))];
+        chat_metadata['bb_vn_ignored_chars'] = scopeState.ignored_chars;
+    }
+    if (Array.isArray(chat_metadata['bb_vn_platonic_chars'])) {
+        scopeState.platonic_chars = [...new Set(chat_metadata['bb_vn_platonic_chars'].map(name => entryOwnsName(sourceEntry, name) ? toPrimary : name))];
+        chat_metadata['bb_vn_platonic_chars'] = scopeState.platonic_chars;
+    }
+
+    scopeState.merge_suggestions = scopeState.merge_suggestions.filter(item =>
+        item.target_id !== source.id &&
+        normalizeCharacterLookupName(item.source || '') !== normalizeCharacterLookupName(fromPrimary)
+    );
+    chat_metadata['bb_vn_merge_suggestions'] = scopeState.merge_suggestions;
+
+    delete scopeState.char_registry[source.id];
+    return { ok: true, count, targetName: toPrimary };
+}
+
 export function getCombinedSocial() {
+    bindActivePersonaState();
     let combinedStr = SOCIAL_PROMPT;
     const characters = Object.keys(currentCalculatedStats);
     
@@ -86,6 +402,7 @@ export function getCombinedSocial() {
 
 export function injectCombinedSocialPrompt() {
     try {
+        bindActivePersonaState();
         const useMacroMode = extension_settings[MODULE_NAME]?.useMacro === true;
         const promptText = useMacroMode ? '' : getCombinedSocial();
         setExtensionPrompt('bb_social_injector', promptText, extension_prompt_types.IN_CHAT, 1, false, extension_prompt_roles.SYSTEM);
@@ -278,6 +595,7 @@ export function tryParseSocialUpdates(rawText) {
 }
 
 export function scanAndCleanMessage(msg, messageId, trackDebug = false) {
+    const { scopeKey } = bindActivePersonaState();
     if (!msg || msg.is_user) return false;
     let modified = false;
     const swipeId = msg.swipe_id || 0;
@@ -299,7 +617,10 @@ export function scanAndCleanMessage(msg, messageId, trackDebug = false) {
             if (!msg.extra) msg.extra = {};
             if (!msg.extra.bb_social_swipes) msg.extra.bb_social_swipes = {};
 
-            msg.extra.bb_social_swipes[swipeId] = parsed.social_updates;
+            msg.extra.bb_social_swipes[swipeId] = parsed.social_updates.map(update => ({
+                ...update,
+                scope: update.scope || scopeKey,
+            }));
             currentMes = currentMes.replace(parsedPayload.source, '');
             if (trackDebug) setSocialParseDebug('parsed', `social_updates: ${parsed.social_updates.length}`);
         } catch(e) {}
@@ -344,6 +665,7 @@ let renderHudCallback = () => {};
 export function setRenderHudCallback(cb) { renderHudCallback = cb; }
 
 export async function handleNewCharacterInterviews(chars) {
+    bindActivePersonaState();
     let madeChanges = false;
     const userName = SillyTavern.getContext().substituteParams('{{user}}');
 
@@ -366,10 +688,12 @@ export async function handleNewCharacterInterviews(chars) {
 }
 
 export function recalculateAllStats(isNewMessage = false) {
+    const { scopeKey, scopeState } = bindActivePersonaState();
     const newStats = {};
     setCurrentCalculatedStats(newStats);
     currentStoryMoments.length = 0;
-    chat_metadata['bb_vn_global_log'] = [];
+    scopeState.global_log = [];
+    chat_metadata['bb_vn_global_log'] = scopeState.global_log;
     const chat = SillyTavern.getContext().chat;
     let latestChoiceContext = null;
     const newlyDiscoveredChars = [];
@@ -392,7 +716,7 @@ export function recalculateAllStats(isNewMessage = false) {
         
         for (const cName in chat_metadata['bb_vn_char_traits']) {
             chat_metadata['bb_vn_char_traits'][cName].forEach(t => {
-                lastMsg.extra.bb_vn_char_traits_swipes[sId].push({ charName: cName, trait: t.trait, type: t.type });
+                lastMsg.extra.bb_vn_char_traits_swipes[sId].push({ charName: cName, trait: t.trait, type: t.type, scope: scopeKey });
             });
         }
         delete chat_metadata['bb_vn_char_traits'];
@@ -421,7 +745,22 @@ export function recalculateAllStats(isNewMessage = false) {
         const msgTraits = msg.extra?.bb_vn_char_traits_swipes?.[swipeId];
         if (msgTraits && Array.isArray(msgTraits)) {
             msgTraits.forEach(t => {
-                const cName = t.charName;
+                if (t.scope && t.scope !== scopeKey) return;
+                if (!t.scope) {
+                    t.scope = scopeKey;
+                    needsSave = true;
+                }
+
+                const resolvedTraitIdentity = resolveCharacterIdentity(t.charName || '', { allowCreate: true });
+                const cName = resolvedTraitIdentity?.primaryName || t.charName;
+                if (resolvedTraitIdentity?.id && t.char_id !== resolvedTraitIdentity.id) {
+                    t.char_id = resolvedTraitIdentity.id;
+                    needsSave = true;
+                }
+                if (cName && t.charName !== cName) {
+                    t.charName = cName;
+                    needsSave = true;
+                }
                 if (!cName || chat_metadata['bb_vn_ignored_chars'].includes(cName)) return;
 
                 if (t.trait) {
@@ -432,7 +771,11 @@ export function recalculateAllStats(isNewMessage = false) {
                     }
                 }
 
-                if (!t.trait || t.trait.length > 240) {
+                if (!t.trait || t.trait.length > 240 || isLikelyModelRefusalText(t.trait) || !t.trait.includes(':')) {
+                    if (t.trait) {
+                        t.trait = '';
+                        needsSave = true;
+                    }
                     needsSave = true;
                     return;
                 }
@@ -502,7 +845,22 @@ export function recalculateAllStats(isNewMessage = false) {
             };
 
             activeUpdates.forEach(update => {
-                const charName = update.name;
+                if (update.scope && update.scope !== scopeKey) return;
+                if (!update.scope) {
+                    update.scope = scopeKey;
+                    needsSave = true;
+                }
+
+                const resolvedIdentity = resolveCharacterIdentity(update.name || '', { allowCreate: true });
+                const charName = resolvedIdentity?.primaryName || update.name;
+                if (resolvedIdentity?.id && update.char_id !== resolvedIdentity.id) {
+                    update.char_id = resolvedIdentity.id;
+                    needsSave = true;
+                }
+                if (charName && update.name !== charName) {
+                    update.name = charName;
+                    needsSave = true;
+                }
                 if (!charName || isCollectiveEntityName(charName)) return;
                 if (chat_metadata['bb_vn_ignored_chars'].includes(charName)) return;
 
@@ -599,9 +957,13 @@ export function recalculateAllStats(isNewMessage = false) {
     else if (chat_metadata['bb_vn_pending_choice_context']) chat_metadata['bb_vn_choice_context'] = chat_metadata['bb_vn_pending_choice_context'];
     else delete chat_metadata['bb_vn_choice_context'];
 
+    saveActivePersonaCutoff();
     if (needsSave) saveChatDebounced();
     injectCombinedSocialPrompt();
     renderHudCallback();
+    if (typeof window['bbRenderMergeSuggestionsList'] === 'function') {
+        window['bbRenderMergeSuggestionsList']();
+    }
 
     if (newlyDiscoveredChars.length > 0) handleNewCharacterInterviews(newlyDiscoveredChars);
 }

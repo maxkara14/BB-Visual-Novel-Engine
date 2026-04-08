@@ -8,7 +8,8 @@ import {
     getToneClass 
 } from './utils.js';
 import { 
-    bbVnGenerateOptionsFlow 
+    bbVnGenerateOptionsFlow,
+    clearSavedVNOptions
 } from './generator.js';
 import { injectCombinedSocialPrompt } from './social.js';
 
@@ -44,6 +45,7 @@ export function renderVNOptionsFromData(parsedOptions, autoOpen = false) {
     optionsHtml += `
         <div class="bb-vn-utility-row">
             <div class="bb-vn-option risk-med bb-vn-utility-card bb-vn-utility-compact" id="bb-vn-btn-reroll" title="Реролл"><i class="fa-solid fa-rotate-right"></i></div>
+            <div class="bb-vn-option risk-med bb-vn-utility-card bb-vn-utility-compact" id="bb-vn-btn-clear" title="Очистить сохранённые варианты"><i class="fa-solid fa-trash-can"></i></div>
             <div class="bb-vn-option risk-med bb-vn-utility-card bb-vn-utility-compact" id="bb-vn-btn-cancel" title="Свернуть"><i class="fa-solid fa-chevron-up"></i></div>
         </div>
     `;
@@ -104,6 +106,10 @@ export function renderVNOptionsFromData(parsedOptions, autoOpen = false) {
     jQuery('#bb-vn-btn-reroll').off('click').on('click', async () => {
         const prev = jQuery('#bb-vn-options-container .bb-vn-option[data-intent]').map(function() { return jQuery(this).attr('data-intent'); }).get().filter(Boolean);
         await bbVnGenerateOptionsFlow(prev);
+    });
+
+    jQuery('#bb-vn-btn-clear').off('click').on('click', () => {
+        clearSavedVNOptions();
     });
 }
 

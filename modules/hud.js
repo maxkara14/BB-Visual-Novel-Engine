@@ -18,7 +18,9 @@ import {
     getUnforgettableImpact, 
     getUnforgettableRoleStatus,
     recalculateAllStats,
-    getCombinedSocial
+    getCombinedSocial,
+    bindActivePersonaState,
+    getCurrentPersonaScopeKey
 } from './social.js';
 import { crystallizeTraitFromMemories } from './generator.js';
 
@@ -51,6 +53,7 @@ function isDevModeEnabled() {
 }
 
 export function renderSocialHud() {
+    bindActivePersonaState();
     const characterEntries = Object.keys(currentCalculatedStats)
         .sort((a, b) => currentCalculatedStats[b].affinity - currentCalculatedStats[a].affinity);
     const visibleCharacters = characterEntries.length;
@@ -253,6 +256,7 @@ export function renderSocialHud() {
             });
 
             jQuery('.bb-btn-save-char').off('click').on('click', function() {
+                bindActivePersonaState();
                 const charName = jQuery(this).attr('data-char');
                 const editor = jQuery(this).closest('.bb-char-editor');
                 const newBase = parseInt(String(editor.find('.bb-edit-base-input').val()), 10);
@@ -268,6 +272,7 @@ export function renderSocialHud() {
             });
 
             jQuery('.bb-btn-crystallize-pos, .bb-btn-crystallize-neg').off('click').on('click', async function(e) {
+                bindActivePersonaState();
                 e.preventDefault(); e.stopPropagation();
                 const charName = jQuery(this).attr('data-char');
                 const isPositive = jQuery(this).hasClass('bb-btn-crystallize-pos');
@@ -291,7 +296,7 @@ export function renderSocialHud() {
                     if (!lastMsg.extra) lastMsg.extra = {};
                     if (!lastMsg.extra.bb_vn_char_traits_swipes) lastMsg.extra.bb_vn_char_traits_swipes = {};
                     if (!lastMsg.extra.bb_vn_char_traits_swipes[sId]) lastMsg.extra.bb_vn_char_traits_swipes[sId] = [];
-                    lastMsg.extra.bb_vn_char_traits_swipes[sId].push({ charName: charName, trait: result, type: isPositive ? 'positive' : 'negative' });
+                    lastMsg.extra.bb_vn_char_traits_swipes[sId].push({ charName: charName, trait: result, type: isPositive ? 'positive' : 'negative', scope: getCurrentPersonaScopeKey() });
                     saveChatDebounced(); recalculateAllStats(); notifySuccess(`Черта характера кристаллизована!`);
                 } catch (e) {
                     notifyError("Не удалось кристаллизовать память.");
@@ -301,6 +306,7 @@ export function renderSocialHud() {
             });
 
             jQuery('.bb-btn-hide-char').off('click').on('click', async function() {
+                bindActivePersonaState();
                 const charName = jQuery(this).attr('data-char');
                 let confirmed = false;
                 setHudPopupPriority(true);

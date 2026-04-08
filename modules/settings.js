@@ -2,11 +2,44 @@
 import { chat_metadata, saveChatDebounced, saveSettingsDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { MODULE_NAME } from './constants.js';
-import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog } from './social.js';
+import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog, bindActivePersonaState, getCurrentPersonaScopeKey, mergeCharacterRecords, resolveCharacterIdentity } from './social.js';
 import { notifySuccess, notifyInfo, notifyError, showHudToast } from './toasts.js';
 import { restoreVNOptions } from './generator.js';
 
+function renderMergeSuggestionsList() {
+    bindActivePersonaState();
+    const container = jQuery('#bb-dbg-merge-suggestions');
+    if (container.length === 0) return;
+
+    const suggestions = Array.isArray(chat_metadata['bb_vn_merge_suggestions'])
+        ? [...chat_metadata['bb_vn_merge_suggestions']].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 6)
+        : [];
+
+    if (suggestions.length === 0) {
+        container.html('<div style="font-size: 11px; color: #64748b;">Пока подозрительных дублей не найдено.</div>');
+        return;
+    }
+
+    container.html(suggestions.map(item => {
+        const score = Math.round(Number(item.score || 0) * 100);
+        return `<button type="button" class="menu_button bb-dbg-merge-suggestion" data-from="${String(item.source || '').replace(/"/g, '&quot;')}" data-to="${String(item.target || '').replace(/"/g, '&quot;')}" style="text-align:left; width:100%; margin-top:6px; border-color: rgba(192, 132, 252, 0.22); color: #ddd6fe;">
+            <span style="display:block; font-size:11px; color:#c4b5fd;">Кандидат на объединение · ${score}%</span>
+            <strong style="display:block; color:#f8fafc;">${item.source}</strong>
+            <span style="display:block; font-size:12px; color:#94a3b8;">→ ${item.target}</span>
+        </button>`;
+    }).join(''));
+
+    jQuery('.bb-dbg-merge-suggestion').off('click').on('click', function() {
+        jQuery('#bb-dbg-merge-from').val(jQuery(this).attr('data-from') || '');
+        jQuery('#bb-dbg-merge-to').val(jQuery(this).attr('data-to') || '');
+        notifyInfo('Кандидат на объединение подставлен в поля слияния.');
+    });
+}
+
+window['bbRenderMergeSuggestionsList'] = renderMergeSuggestionsList;
+
 export function injectDebugData(impact, isRomance = false) {
+    bindActivePersonaState();
     const charName = String(jQuery('#bb-debug-char-name').val()).trim();
     if(!charName) return notifyError("Укажите имя!");
     const chat = SillyTavern.getContext().chat;
@@ -16,13 +49,15 @@ export function injectDebugData(impact, isRomance = false) {
     if (!lastMsg.extra.bb_social_swipes) lastMsg.extra.bb_social_swipes = {};
     const sId = lastMsg.swipe_id || 0;
     if (!lastMsg.extra.bb_social_swipes[sId]) lastMsg.extra.bb_social_swipes[sId] = [];
-    lastMsg.extra.bb_social_swipes[sId].push({ name: charName, friendship_impact: isRomance ? "none" : impact, romance_impact: isRomance ? impact : "none", role_dynamic: "Дебаг", reason: jQuery('#bb-debug-reason').val(), emotion: "тест" });
+    lastMsg.extra.bb_social_swipes[sId].push({ name: charName, friendship_impact: isRomance ? "none" : impact, romance_impact: isRomance ? impact : "none", role_dynamic: "Дебаг", reason: jQuery('#bb-debug-reason').val(), emotion: "тест", scope: getCurrentPersonaScopeKey() });
     saveChatDebounced(); recalculateAllStats(false); notifySuccess("Данные внедрены.");
 }
 
 export function wipeGlobalLog() {
+    const { scopeState } = bindActivePersonaState();
     const chat = SillyTavern.getContext().chat || [];
-    chat_metadata['bb_vn_global_log'] = [];
+    scopeState.global_log = [];
+    chat_metadata['bb_vn_global_log'] = scopeState.global_log;
     chat_metadata['bb_vn_log_cutoff_index'] = chat.length;
     saveChatDebounced();
     recalculateAllStats();
@@ -30,16 +65,40 @@ export function wipeGlobalLog() {
 }
 
 export function wipeAllSocialData() {
+    const scopeKey = getCurrentPersonaScopeKey();
+    const { scopeState } = bindActivePersonaState();
     const chat = SillyTavern.getContext().chat;
     if (!chat) return;
     chat.forEach(msg => {
-        if (msg.extra && msg.extra.bb_social_swipes) delete msg.extra.bb_social_swipes;
+        if (msg.extra && msg.extra.bb_social_swipes) {
+            for (const sId in msg.extra.bb_social_swipes) {
+                if (!Array.isArray(msg.extra.bb_social_swipes[sId])) continue;
+                msg.extra.bb_social_swipes[sId] = msg.extra.bb_social_swipes[sId].filter(update => update?.scope && update.scope !== scopeKey);
+            }
+        }
         if (msg.extra && msg.extra.bb_vn_options_swipes) delete msg.extra.bb_vn_options_swipes;
-        if (msg.extra && msg.extra.bb_vn_char_traits_swipes) delete msg.extra.bb_vn_char_traits_swipes;
+        if (msg.extra && msg.extra.bb_vn_char_traits_swipes) {
+            for (const sId in msg.extra.bb_vn_char_traits_swipes) {
+                if (!Array.isArray(msg.extra.bb_vn_char_traits_swipes[sId])) continue;
+                msg.extra.bb_vn_char_traits_swipes[sId] = msg.extra.bb_vn_char_traits_swipes[sId].filter(trait => trait?.scope && trait.scope !== scopeKey);
+            }
+        }
     });
-    chat_metadata['bb_vn_global_log'] = [];
-    chat_metadata['bb_vn_char_bases'] = {};
-    chat_metadata['bb_vn_ignored_chars'] = [];
+    scopeState.global_log = [];
+    scopeState.char_bases = {};
+    scopeState.ignored_chars = [];
+    scopeState.char_bases_romance = {};
+    scopeState.platonic_chars = [];
+    scopeState.char_registry = {};
+    scopeState.merge_suggestions = [];
+    scopeState.log_cutoff_index = 0;
+    chat_metadata['bb_vn_global_log'] = scopeState.global_log;
+    chat_metadata['bb_vn_char_bases'] = scopeState.char_bases;
+    chat_metadata['bb_vn_ignored_chars'] = scopeState.ignored_chars;
+    chat_metadata['bb_vn_char_bases_romance'] = scopeState.char_bases_romance;
+    chat_metadata['bb_vn_platonic_chars'] = scopeState.platonic_chars;
+    chat_metadata['bb_vn_char_registry'] = scopeState.char_registry;
+    chat_metadata['bb_vn_merge_suggestions'] = scopeState.merge_suggestions;
     delete chat_metadata['bb_vn_log_cutoff_index'];
     delete chat_metadata['bb_vn_char_traits'];
     delete chat_metadata['bb_vn_choice_context'];
@@ -51,6 +110,7 @@ export function wipeAllSocialData() {
 }
 
 export function setupExtensionSettings() {
+    bindActivePersonaState();
     if (document.getElementById('bb-social-settings-wrapper')) return;
     
     const s = extension_settings[MODULE_NAME];
@@ -100,6 +160,7 @@ export function setupExtensionSettings() {
                         <span style="font-size: 11px; color: #cbd5e1; font-weight:bold;">🧬 Слияние дубликатов:</span>
                         <div style="display: flex; gap: 6px;"><input type="text" id="bb-dbg-merge-from" class="text_pole" placeholder="Кого" style="flex:1;"><input type="text" id="bb-dbg-merge-to" class="text_pole" placeholder="В кого" style="flex:1;"></div>
                         <button id="bb-dbg-btn-merge" class="menu_button" style="color:#c084fc; border-color:rgba(192, 132, 252, 0.3);"><i class="fa-solid fa-code-merge"></i>&ensp; Слить в одного</button>
+                        <div id="bb-dbg-merge-suggestions" style="display:flex; flex-direction:column; gap: 0; margin-top: 4px;"></div>
                         <hr style="border-color: rgba(255,255,255,0.05); margin: 4px 0;">
                         <button id="bb-dbg-reset-char" class="menu_button" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: #ef4444;">💀 Полностью обнулить персонажа</button>
                         <button id="bb-dbg-toast" class="menu_button"><i class="fa-solid fa-bell"></i>&ensp; Рандомное уведомление</button>
@@ -201,7 +262,7 @@ export function setupExtensionSettings() {
         const lastMsg = chat[chat.length - 1]; const sId = lastMsg.swipe_id || 0;
         if (!lastMsg.extra) lastMsg.extra = {}; if (!lastMsg.extra.bb_vn_char_traits_swipes) lastMsg.extra.bb_vn_char_traits_swipes = {};
         if (!lastMsg.extra.bb_vn_char_traits_swipes[sId]) lastMsg.extra.bb_vn_char_traits_swipes[sId] = [];
-        lastMsg.extra.bb_vn_char_traits_swipes[sId].push({ charName, trait, type: 'positive' });
+        lastMsg.extra.bb_vn_char_traits_swipes[sId].push({ charName, trait, type: 'positive', scope: getCurrentPersonaScopeKey() });
         saveChatDebounced(); recalculateAllStats(false); notifySuccess("Черта внедрена.");
     });
 
@@ -213,7 +274,7 @@ export function setupExtensionSettings() {
         const lastMsg = chat[chat.length - 1]; const sId = lastMsg.swipe_id || 0;
         if (!lastMsg.extra) lastMsg.extra = {}; if (!lastMsg.extra.bb_vn_char_traits_swipes) lastMsg.extra.bb_vn_char_traits_swipes = {};
         if (!lastMsg.extra.bb_vn_char_traits_swipes[sId]) lastMsg.extra.bb_vn_char_traits_swipes[sId] = [];
-        lastMsg.extra.bb_vn_char_traits_swipes[sId].push({ charName, trait, type: 'negative' });
+        lastMsg.extra.bb_vn_char_traits_swipes[sId].push({ charName, trait, type: 'negative', scope: getCurrentPersonaScopeKey() });
         saveChatDebounced(); recalculateAllStats(false); notifySuccess("Черта внедрена.");
     });
 
@@ -225,33 +286,33 @@ export function setupExtensionSettings() {
         const lastMsg = chat[chat.length - 1]; const sId = lastMsg.swipe_id || 0;
         if (!lastMsg.extra) lastMsg.extra = {}; if (!lastMsg.extra.bb_social_swipes) lastMsg.extra.bb_social_swipes = {};
         if (!lastMsg.extra.bb_social_swipes[sId]) lastMsg.extra.bb_social_swipes[sId] = [];
-        lastMsg.extra.bb_social_swipes[sId].push({ name: charName, impact_level: "none", role_dynamic: status, reason: "Ручная смена статуса", emotion: "дебаг" });
+        lastMsg.extra.bb_social_swipes[sId].push({ name: charName, impact_level: "none", role_dynamic: status, reason: "Ручная смена статуса", emotion: "дебаг", scope: getCurrentPersonaScopeKey() });
         saveChatDebounced(); recalculateAllStats(false); notifySuccess("Статус изменен.");
     });
 
     jQuery('#bb-dbg-btn-merge').on('click', function() {
+        bindActivePersonaState();
         const from = String(jQuery('#bb-dbg-merge-from').val()).trim(), to = String(jQuery('#bb-dbg-merge-to').val()).trim();
         if(!from || !to || from === to) return notifyError("Некорректные имена!");
-        const chat = SillyTavern.getContext().chat; let count = 0;
-        if(chat) {
-            chat.forEach(msg => {
-                if(msg.extra?.bb_social_swipes) { for(const sId in msg.extra.bb_social_swipes) { if(Array.isArray(msg.extra.bb_social_swipes[sId])) msg.extra.bb_social_swipes[sId].forEach(u => { if(u.name === from) { u.name = to; count++; } }); } }
-                if(msg.extra?.bb_vn_char_traits_swipes) { for(const sId in msg.extra.bb_vn_char_traits_swipes) { if(Array.isArray(msg.extra.bb_vn_char_traits_swipes[sId])) msg.extra.bb_vn_char_traits_swipes[sId].forEach(t => { if(t.charName === from) t.charName = to; }); } }
-            });
-        }
-        if(chat_metadata['bb_vn_char_bases']?.[from] !== undefined) delete chat_metadata['bb_vn_char_bases'][from];
-        if(count > 0) { saveChatDebounced(); recalculateAllStats(false); notifySuccess(`Слито записей: ${count}`); } else notifyError("Персонаж не найден.");
+        const result = mergeCharacterRecords(from, to);
+        if(result.ok) { saveChatDebounced(); recalculateAllStats(false); renderMergeSuggestionsList(); notifySuccess(result.same ? `Это уже один и тот же персонаж: ${result.targetName}` : `Слито записей: ${result.count}`); } else notifyError("Персонаж не найден.");
     });
 
     jQuery('#bb-dbg-reset-char').on('click', () => {
+        const scopeKey = getCurrentPersonaScopeKey();
+        bindActivePersonaState();
         const name = String(jQuery('#bb-debug-char-name').val()).trim();
         if(!name) return notifyError("Укажите имя!");
-        if(chat_metadata['bb_vn_char_bases']) delete chat_metadata['bb_vn_char_bases'][name];
+        const resolved = resolveCharacterIdentity(name, { allowCreate: false, allowSuggestions: false });
+        const canonicalName = resolved?.primaryName || name;
+        if(chat_metadata['bb_vn_char_bases']) delete chat_metadata['bb_vn_char_bases'][canonicalName];
+        if(chat_metadata['bb_vn_char_bases_romance']) delete chat_metadata['bb_vn_char_bases_romance'][canonicalName];
+        if (resolved?.id && chat_metadata['bb_vn_char_registry']) delete chat_metadata['bb_vn_char_registry'][resolved.id];
         const chat = SillyTavern.getContext().chat;
         if(chat) {
             chat.forEach(msg => {
-                if(msg.extra?.bb_social_swipes) { for(const sId in msg.extra.bb_social_swipes) { if(Array.isArray(msg.extra.bb_social_swipes[sId])) msg.extra.bb_social_swipes[sId] = msg.extra.bb_social_swipes[sId].filter(u => u.name !== name); } }
-                if(msg.extra?.bb_vn_char_traits_swipes) { for(const sId in msg.extra.bb_vn_char_traits_swipes) { if(Array.isArray(msg.extra.bb_vn_char_traits_swipes[sId])) msg.extra.bb_vn_char_traits_swipes[sId] = msg.extra.bb_vn_char_traits_swipes[sId].filter(t => t.charName !== name); } }
+                if(msg.extra?.bb_social_swipes) { for(const sId in msg.extra.bb_social_swipes) { if(Array.isArray(msg.extra.bb_social_swipes[sId])) msg.extra.bb_social_swipes[sId] = msg.extra.bb_social_swipes[sId].filter(u => (u?.scope && u.scope !== scopeKey) || u.name !== canonicalName); } }
+                if(msg.extra?.bb_vn_char_traits_swipes) { for(const sId in msg.extra.bb_vn_char_traits_swipes) { if(Array.isArray(msg.extra.bb_vn_char_traits_swipes[sId])) msg.extra.bb_vn_char_traits_swipes[sId] = msg.extra.bb_vn_char_traits_swipes[sId].filter(t => (t?.scope && t.scope !== scopeKey) || t.charName !== canonicalName); } }
             });
         }
         saveChatDebounced(); recalculateAllStats(false); notifySuccess("Персонаж обнулен.");
@@ -262,7 +323,8 @@ export function setupExtensionSettings() {
         showHudToast({ title: 'Тест', text: 'Проверка уведомлений', badge: 'Дебаг', variant: types[Math.floor(Math.random()*types.length)], icon: 'fa-solid fa-bug' });
     });
 
-    jQuery('#bb-social-restore-chars-btn').on('click', () => { chat_metadata['bb_vn_ignored_chars'] = []; saveChatDebounced(); recalculateAllStats(); notifySuccess("Скрытые персонажи восстановлены!"); });
+    jQuery('#bb-social-restore-chars-btn').on('click', () => { const { scopeState } = bindActivePersonaState(); scopeState.ignored_chars = []; chat_metadata['bb_vn_ignored_chars'] = scopeState.ignored_chars; saveChatDebounced(); recalculateAllStats(); notifySuccess("Скрытые персонажи восстановлены!"); });
     jQuery('#bb-social-clear-log-btn').on('click', wipeGlobalLog);
     jQuery('#bb-social-wipe-btn').on('click', wipeAllSocialData);
+    renderMergeSuggestionsList();
 }

@@ -11,7 +11,7 @@ export const DEFAULT_SETTINGS = {
 };
 
 export const SOCIAL_PROMPT = `[SYSTEM INSTRUCTION: VISUAL NOVEL ENGINE]
-You are tracking how the characters feel about {{user}}. 
+You are tracking how the characters feel about {{user}}.
 At the VERY END of your response, you MUST generate a hidden HTML block evaluating how {{user}}'s last action affected the characters.
 
 CRITICAL RULES:
@@ -25,9 +25,9 @@ CRITICAL RULES:
       <name>CHARACTER_NAME</name>
       <friendship_impact>minor_positive</friendship_impact>
       <romance_impact>none</romance_impact>
-      <role_dynamic>ОТНОШЕНИЕ_К_USER</role_dynamic>
-      <reason>Краткая причина изменения</reason>
-      <emotion>эмоция</emotion>
+      <role_dynamic>\u041e\u0422\u041d\u041e\u0428\u0415\u041d\u0418\u0415_\u041a_USER</role_dynamic>
+      <reason>\u041a\u0440\u0430\u0442\u043a\u0430\u044f \u043f\u0440\u0438\u0447\u0438\u043d\u0430 \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f</reason>
+      <emotion>\u044d\u043c\u043e\u0446\u0438\u044f</emotion>
     </bb-social-update>
   </bb-social-updates>
 </div>
@@ -40,22 +40,27 @@ HTML TAG FIELDS (STRICT):
 - Do NOT translate the token values for <friendship_impact> and <romance_impact>. Keep those exact enum tokens in English.
 - <friendship_impact> Choose strictly from: "none", "minor_positive", "major_positive", "life_changing", "minor_negative", "major_negative", "unforgivable".
 - <romance_impact> Same scale as above. STRICT RULE: Keep "none" for casual/combat/platonic scenes.
-- <role_dynamic> 1-2 words describing {{user}}'s CURRENT role to them right now (e.g., "опасный союзник", "скрытая угроза", "надежный друг").
+- <role_dynamic> 1-2 words describing {{user}}'s CURRENT role to them right now (e.g., "\u043e\u043f\u0430\u0441\u043d\u044b\u0439 \u0441\u043e\u044e\u0437\u043d\u0438\u043a", "\u0441\u043a\u0440\u044b\u0442\u0430\u044f \u0443\u0433\u0440\u043e\u0437\u0430", "\u043d\u0430\u0434\u0451\u0436\u043d\u044b\u0439 \u0434\u0440\u0443\u0433").
 - <reason> Short Russian explanation of WHY the impact happened.
-- <emotion> 1-2 words describing the character's internal emotional state. If using two nouns, separate with a comma (e.g., "шок, обида", "радость").`;
+- <emotion> 1-2 words describing the character's internal emotional state. If using two nouns, separate with a comma (e.g., "\u0448\u043e\u043a, \u043e\u0431\u0438\u0434\u0430", "\u0440\u0430\u0434\u043e\u0441\u0442\u044c").`;
 
 export const OPTIONS_PROMPT = `Analyze the recent chat. Generate exactly 3 highly distinct, engaging actions {{user}} can take right now to DRIVE THE STORY FORWARD.
 
-CRITICAL: Your generated messages MUST logically continue from the VERY LAST sentence of the [IMMEDIATE TRIGGER]. Do not ignore the character's final question, movement, or action. React directly to it!
+CRITICAL: Your generated messages MUST logically continue from the VERY LAST sentence of the [IMMEDIATE TRIGGER]. Do not ignore the character's final question, movement, or action. React directly to it.
 
 For EACH action, write a LONG, HIGHLY DETAILED roleplay message (2-4 paragraphs) from {{user}}'s perspective. Include rich sensory details, deep internal monologues, and complex actions. DO NOT just react passively; make {{user}} take initiative to progress the plot or shift the dynamic. Match {{user}}'s persona perfectly. Write in Russian.
 
 CRITICAL RULES FOR EMOTIONAL CHOICE FRAMING:
 1. "tone": Describe the emotional flavor of the answer in 1-2 Russian words. Think in placeholder terms like "SHORT_RUSSIAN_TONE".
-2. "forecast": A SHORT Russian hint for what this action may cause. Think in placeholder terms like "SHORT_RUSSIAN_OUTCOME_HINT".
-3. "targets": Array of 1-3 character names that are most affected by this action. If no single character stands out, return an empty array.
-4. "risk": OPTIONAL legacy field for backward compatibility. If you include it, use "Низкий", "Средний", or "Высокий". Do not make it the main focus.
-5. "intent": Must be a natural Russian phrase (2-5 words). Never use placeholders, ALL_CAPS tokens, snake_case, or English-only labels.
+2. The "tone" MUST strongly affect the actual "message": vocabulary, body language, pacing, initiative, and inner monologue must all feel saturated with that tone.
+3. The 3 options must differ not only by action idea, but also by emotional delivery. Avoid producing three options that all feel emotionally similar.
+4. "forecast": A SHORT Russian hint for what this action may cause. Think in placeholder terms like "SHORT_RUSSIAN_OUTCOME_HINT".
+5. "forecast" must logically match the tone and action. Do not write a soft forecast for an aggressive action or vice versa.
+6. Prefer vivid, readable tones such as "\u043d\u0435\u0436\u043d\u043e", "\u0434\u0435\u0440\u0437\u043a\u043e", "\u0445\u043e\u043b\u043e\u0434\u043d\u043e", "\u043e\u043f\u0430\u0441\u043d\u043e", "\u0438\u0440\u043e\u043d\u0438\u0447\u043d\u043e", "\u0443\u044f\u0437\u0432\u0438\u043c\u043e", "\u043d\u0430\u043f\u043e\u0440\u0438\u0441\u0442\u043e", "\u043b\u0430\u0441\u043a\u043e\u0432\u043e", "\u0436\u0451\u0441\u0442\u043a\u043e" when they fit.
+7. If the scene allows it, make the tones meaningfully contrast with each other.
+8. "targets": Array of 1-3 character names that are most affected by this action. If no single character stands out, return an empty array.
+9. "risk": OPTIONAL legacy field for backward compatibility. If you include it, use "\u041d\u0438\u0437\u043a\u0438\u0439", "\u0421\u0440\u0435\u0434\u043d\u0438\u0439", or "\u0412\u044b\u0441\u043e\u043a\u0438\u0439". Do not make it the main focus.
+10. "intent": Must be a natural Russian phrase (2-5 words). Never use placeholders, ALL_CAPS tokens, snake_case, or English-only labels.
 
 CRITICAL JSON AND FORMATTING RULES:
 1. Return STRICTLY a valid JSON array. DO NOT output any conversational text outside the JSON.
@@ -78,8 +83,12 @@ Use this SHORT JSON SHAPE as a template. The placeholders below are instructions
   }
 ]
 
-[USER PERSONA REFERENCE]:
-{{persona}}
+[STRUCTURED STORY CONTEXT]:
+<context>
+Protagonist: {{user}} ({{persona}})
+Scene: {{authorsNote}}
+Story Summary: {{summary}}
+</context>
 
 [RECENT CONTEXT (For background)]:
 """{{chat}}"""
