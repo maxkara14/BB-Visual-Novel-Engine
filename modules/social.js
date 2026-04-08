@@ -22,7 +22,7 @@ import {
     isLikelyModelRefusalText
 } from './utils.js';
 import { showStoryMomentToast, notifySuccess, notifyInfo, notifyError, pickToastMoment } from './toasts.js';
-import { buildChoiceContextPrompt } from './generator.js';
+import { buildChoiceContextPrompt, getActiveChoiceContext, tryBindPendingChoiceContextToMessage } from './generator.js';
 
 function normalizeCharacterLookupName(name = '') {
     return String(name || '')
@@ -733,6 +733,9 @@ export function recalculateAllStats(isNewMessage = false) {
 
     chat.forEach((msg, idx) => {
         const shouldRecordJournal = idx >= journalCutoffIndex;
+        if (msg?.is_user && chat_metadata['bb_vn_pending_choice_context']) {
+            if (tryBindPendingChoiceContextToMessage(msg)) needsSave = true;
+        }
         if (msg?.is_user && msg.extra?.bb_vn_choice_context) {
             latestChoiceContext = msg.extra.bb_vn_choice_context;
         }
@@ -953,8 +956,11 @@ export function recalculateAllStats(isNewMessage = false) {
         stats.memories.deep = newDeep;
     }
 
-    if (latestChoiceContext) chat_metadata['bb_vn_choice_context'] = latestChoiceContext;
-    else if (chat_metadata['bb_vn_pending_choice_context']) chat_metadata['bb_vn_choice_context'] = chat_metadata['bb_vn_pending_choice_context'];
+    if (latestChoiceContext) chat_metadata['bb_vn_last_used_choice_context'] = latestChoiceContext;
+    else delete chat_metadata['bb_vn_last_used_choice_context'];
+
+    const activeChoiceContext = getActiveChoiceContext();
+    if (activeChoiceContext) chat_metadata['bb_vn_choice_context'] = activeChoiceContext;
     else delete chat_metadata['bb_vn_choice_context'];
 
     saveActivePersonaCutoff();

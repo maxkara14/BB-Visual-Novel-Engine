@@ -327,13 +327,55 @@ ${lastRaw}`;
     throw new Error('INVALID_TRAIT_OUTPUT');
 }
 
+export function getActiveChoiceContext() {
+    const context = SillyTavern.getContext?.();
+    const chat = Array.isArray(context?.chat) ? context.chat : [];
+    const pendingChoiceContext = chat_metadata['bb_vn_pending_choice_context'];
+
+    if (chat.length === 0) {
+        return pendingChoiceContext && pendingChoiceContext.intent ? pendingChoiceContext : null;
+    }
+
+    const lastMsg = chat[chat.length - 1];
+    if (!lastMsg?.is_user) return null;
+
+    const boundChoiceContext = lastMsg.extra?.bb_vn_choice_context;
+    if (boundChoiceContext && boundChoiceContext.intent) return boundChoiceContext;
+
+    if (!pendingChoiceContext || !pendingChoiceContext.intent) return null;
+
+    const preview = String(pendingChoiceContext.messagePreview || '').trim();
+    const messageText = String(lastMsg.mes || '').trim();
+    if (!preview || !messageText) return null;
+
+    const previewSlice = preview.slice(0, 80);
+    const matchesPreview = messageText.startsWith(previewSlice) || previewSlice.startsWith(messageText.slice(0, 40));
+    return matchesPreview ? pendingChoiceContext : null;
+}
+
 export function buildChoiceContextPrompt() {
-    const choiceContext = chat_metadata['bb_vn_choice_context'];
+    const choiceContext = getActiveChoiceContext();
     if (!choiceContext || !choiceContext.intent) return '';
+    const useEmotionalChoiceFraming = !!extension_settings[MODULE_NAME]?.emotionalChoiceFraming;
 
     const targets = Array.isArray(choiceContext.targets) && choiceContext.targets.length > 0
         ? choiceContext.targets.join(', ')
         : 'general scene';
+
+    if (!useEmotionalChoiceFraming) {
+        return `
+[DIRECTOR'S COMMAND FOR THIS TURN]:
+The player has just made a SPECIFIC narrative choice. You MUST execute it in this very response.
+
+- INTENT: "${choiceContext.intent}"
+- FOCUS: ${targets !== 'general scene' ? `Make sure ${targets} reacts clearly to this.` : 'Shift the scene in a clear, noticeable way.'}
+
+EXECUTION PROTOCOL:
+1. Do not ignore, soften away, or overwrite the chosen action.
+2. Advance the scene immediately instead of stalling or looping in place.
+3. Keep the response natural to the scene without forcing extra tone or forecast framing.
+`.trim();
+    }
 
     return `
 [DIRECTOR'S STRICT COMMAND FOR THIS TURN]:

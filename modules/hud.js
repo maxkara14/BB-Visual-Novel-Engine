@@ -54,13 +54,21 @@ function isDevModeEnabled() {
 
 export function renderSocialHud() {
     bindActivePersonaState();
+    const context = SillyTavern.getContext?.();
+    const chat = Array.isArray(context?.chat) ? context.chat : [];
+    const lastChatMessage = chat.length > 0 ? chat[chat.length - 1] : null;
+    const shouldShowLastUsedTone = !lastChatMessage || !lastChatMessage.is_user;
     const characterEntries = Object.keys(currentCalculatedStats)
         .sort((a, b) => currentCalculatedStats[b].affinity - currentCalculatedStats[a].affinity);
     const visibleCharacters = characterEntries.length;
     const topCharacterName = visibleCharacters > 0 ? characterEntries[0] : '';
     const topAffinity = topCharacterName ? currentCalculatedStats[topCharacterName].affinity : 0;
     const deepMomentsCount = currentStoryMoments.filter(moment => String(moment.type || '').includes('deep')).length;
-    const lastChoiceTone = chat_metadata['bb_vn_choice_context']?.tone || 'не зафиксирован';
+    const activeChoiceTone = extension_settings[MODULE_NAME].emotionalChoiceFraming
+        ? ((shouldShowLastUsedTone
+            ? chat_metadata['bb_vn_last_used_choice_context']?.tone
+            : chat_metadata['bb_vn_choice_context']?.tone) || 'не активен')
+        : 'выключен';
     const latestMoment = currentStoryMoments.length > 0 ? currentStoryMoments[currentStoryMoments.length - 1] : null;
     const socialDebugStatus = socialParseDebug?.status || 'idle';
     const socialDebugText = socialParseDebug?.details || 'Нет данных';
@@ -328,8 +336,8 @@ export function renderSocialHud() {
         const logs = chat_metadata['bb_vn_global_log'] || [];
         const promptPreviewHtml = `
             <div class="bb-panel-hero bb-panel-hero-system"><div class="bb-panel-kicker">Журнал</div><div class="bb-panel-headline">Системный журнал</div><div class="bb-panel-subtitle">Здесь показаны изменения отношений и текущий инжектируемый prompt.</div>
-            <div class="bb-panel-stat-grid"><div class="bb-panel-stat"><span class="bb-panel-stat-label">Событий</span><strong>${logs.length}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Последний тон</span><strong>${escapeHtml(lastChoiceTone)}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Последнее событие</span><strong>${escapeHtml(latestMoment?.title || '—')}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Social HTML</span><strong>${escapeHtml(socialDebugLabel)}</strong></div></div><div class="bb-panel-subtitle" style="margin-top:8px;">${escapeHtml(socialDebugText)}</div></div>
-            <details class="bb-prompt-card" open><summary class="bb-prompt-summary"><span>🧠 Inject Prompt</span><button type="button" class="menu_button bb-copy-prompt-btn"><i class="fa-solid fa-copy"></i>&nbsp; Копировать</button></summary><div class="bb-prompt-hint">Текущий системный текст, который BB VNE добавляет в инжект.</div><pre class="bb-prompt-pre">${escapeHtml(getCombinedSocial())}</pre></details>
+            <div class="bb-panel-stat-grid"><div class="bb-panel-stat"><span class="bb-panel-stat-label">Событий</span><strong>${logs.length}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Активный тон</span><strong>${escapeHtml(activeChoiceTone)}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Последнее событие</span><strong>${escapeHtml(latestMoment?.title || '—')}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Social HTML</span><strong>${escapeHtml(socialDebugLabel)}</strong></div></div><div class="bb-panel-subtitle" style="margin-top:8px;">${escapeHtml(socialDebugText)}</div></div>
+            <details class="bb-prompt-card"><summary class="bb-prompt-summary"><span>🧠 Inject Prompt</span><button type="button" class="menu_button bb-copy-prompt-btn"><i class="fa-solid fa-copy"></i>&nbsp; Копировать</button></summary><div class="bb-prompt-hint">Это текущий prompt для следующего ответа. Он может отличаться от prompt, который уже был использован на прошлом VN-ходе.</div><pre class="bb-prompt-pre">${escapeHtml(getCombinedSocial())}</pre></details>
         `;
         if (logs.length === 0) logBox.innerHTML = `${promptPreviewHtml}<div class="bb-empty-hud">Журнал событий пуст.</div>`;
         else {

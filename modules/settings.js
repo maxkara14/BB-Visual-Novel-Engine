@@ -4,7 +4,7 @@ import { extension_settings } from '../../../../extensions.js';
 import { MODULE_NAME } from './constants.js';
 import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog, bindActivePersonaState, getCurrentPersonaScopeKey, mergeCharacterRecords, resolveCharacterIdentity } from './social.js';
 import { notifySuccess, notifyInfo, notifyError, showHudToast } from './toasts.js';
-import { restoreVNOptions } from './generator.js';
+import { restoreVNOptions, clearSavedVNOptions } from './generator.js';
 
 function renderMergeSuggestionsList() {
     bindActivePersonaState();
@@ -103,6 +103,7 @@ export function wipeAllSocialData() {
     delete chat_metadata['bb_vn_char_traits'];
     delete chat_metadata['bb_vn_choice_context'];
     delete chat_metadata['bb_vn_pending_choice_context'];
+    delete chat_metadata['bb_vn_last_used_choice_context'];
     addGlobalLog('system', 'Все отношения сброшены до нуля.');
     saveChatDebounced();
     recalculateAllStats();
@@ -207,7 +208,13 @@ export function setupExtensionSettings() {
 
     jQuery('#bb-vn-cfg-autosend').on('change', function() { extension_settings[MODULE_NAME].autoSend = jQuery(this).is(':checked'); saveSettingsDebounced(); });
     jQuery('#bb-vn-cfg-autogen').on('change', function() { extension_settings[MODULE_NAME].autoGen = jQuery(this).is(':checked'); saveSettingsDebounced(); });
-    jQuery('#bb-vn-cfg-emotional-choice').on('change', function() { extension_settings[MODULE_NAME].emotionalChoiceFraming = jQuery(this).is(':checked'); saveSettingsDebounced(); restoreVNOptions(true); });
+    jQuery('#bb-vn-cfg-emotional-choice').on('change', function() {
+        extension_settings[MODULE_NAME].emotionalChoiceFraming = jQuery(this).is(':checked');
+        saveSettingsDebounced();
+        clearSavedVNOptions();
+        restoreVNOptions(false);
+        injectCombinedSocialPrompt();
+    });
     jQuery('#bb-vn-cfg-usecustom').on('change', function() { 
         const isChecked = jQuery(this).is(':checked'); extension_settings[MODULE_NAME].useCustomApi = isChecked;
         if (isChecked) jQuery('#bb-vn-custom-api-block').slideDown(200); else jQuery('#bb-vn-custom-api-block').slideUp(200);
