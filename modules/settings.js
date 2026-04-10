@@ -145,6 +145,7 @@ export function wipeAllSocialData() {
     chat_metadata['bb_vn_ignored_chars'] = scopeState.ignored_chars;
     chat_metadata['bb_vn_char_bases_romance'] = scopeState.char_bases_romance;
     chat_metadata['bb_vn_platonic_chars'] = scopeState.platonic_chars;
+    chat_metadata['bb_vn_char_custom_avatars'] = {};
     chat_metadata['bb_vn_char_registry'] = scopeState.char_registry;
     chat_metadata['bb_vn_merge_suggestions'] = scopeState.merge_suggestions;
     delete chat_metadata['bb_vn_log_cutoff_index'];
@@ -494,6 +495,7 @@ export function setupExtensionSettings() {
         const canonicalName = resolved?.primaryName || name;
         if(chat_metadata['bb_vn_char_bases']) delete chat_metadata['bb_vn_char_bases'][canonicalName];
         if(chat_metadata['bb_vn_char_bases_romance']) delete chat_metadata['bb_vn_char_bases_romance'][canonicalName];
+        if(chat_metadata['bb_vn_char_custom_avatars']) delete chat_metadata['bb_vn_char_custom_avatars'][canonicalName];
         if (resolved?.id && chat_metadata['bb_vn_char_registry']) delete chat_metadata['bb_vn_char_registry'][resolved.id];
         if (scopeState.snapshot_baseline?.characters) delete scopeState.snapshot_baseline.characters[canonicalName];
         if (scopeState.snapshot_baseline?.char_bases) delete scopeState.snapshot_baseline.char_bases[canonicalName];
