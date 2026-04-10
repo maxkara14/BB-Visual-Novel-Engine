@@ -5,7 +5,8 @@ import {
     injectCombinedSocialPrompt, 
     recalculateAllStats, 
     setRenderHudCallback,
-    getCombinedSocial
+    getCombinedSocial,
+    getCurrentPersonaScopeKey
 } from './modules/social.js';
 import { 
     ensureHudContainer, 
@@ -36,6 +37,10 @@ window['wipeAllSocialData'] = wipeAllSocialData;
 window['updateHudVisibility'] = updateHudVisibility;
 window['ensureHudContainer'] = ensureHudContainer;
 window['injectDebugData'] = injectDebugData;
+
+const PERSONA_SCOPE_POLL_MS = 350;
+let personaScopeMonitorId = null;
+let lastObservedPersonaScopeKey = '';
 
 // Инициализация настроек по умолчанию
 extension_settings[MODULE_NAME] = {
@@ -91,6 +96,17 @@ function replaceMacroDeep(target, promptText) {
 jQuery(async () => {
     try {
         const { eventSource, event_types } = SillyTavern.getContext();
+        const syncPersonaScopeIfChanged = (force = false) => {
+            if (typeof document !== 'undefined' && document.hidden) return;
+            const currentScopeKey = getCurrentPersonaScopeKey();
+            if (!force && currentScopeKey === lastObservedPersonaScopeKey) return;
+            lastObservedPersonaScopeKey = currentScopeKey;
+            restoreVNOptions(false);
+            injectCombinedSocialPrompt();
+            recalculateAllStats();
+            updateHudVisibility();
+        };
+
         const registerHudVisibilityRecoveryEvents = () => {
             const recoveryEventCandidates = [
                 'CHAT_CREATED',
@@ -106,7 +122,11 @@ jQuery(async () => {
             recoveryEventCandidates.forEach((eventKey) => {
                 const eventName = event_types[eventKey];
                 if (!eventName) return;
-                eventSource.on(eventName, () => { updateHudVisibility(); });
+                eventSource.on(eventName, () => {
+                    injectCombinedSocialPrompt();
+                    recalculateAllStats();
+                    updateHudVisibility();
+                });
             });
         };
         
@@ -123,6 +143,13 @@ jQuery(async () => {
         ensureHudContainer();
         injectVNActionsUI();
         updateHudVisibility();
+        lastObservedPersonaScopeKey = getCurrentPersonaScopeKey();
+
+        if (!personaScopeMonitorId) {
+            personaScopeMonitorId = window.setInterval(() => {
+                syncPersonaScopeIfChanged(false);
+            }, PERSONA_SCOPE_POLL_MS);
+        }
 
         eventSource.on(event_types.APP_READY, () => {
             setupExtensionSettings();
@@ -131,6 +158,7 @@ jQuery(async () => {
             injectVNActionsUI();
             recalculateAllStats(); 
             updateHudVisibility();
+            syncPersonaScopeIfChanged(true);
         });
         
         eventSource.on(event_types.CHAT_CHANGED, () => {
@@ -139,6 +167,7 @@ jQuery(async () => {
             injectVNActionsUI();
             recalculateAllStats(); 
             updateHudVisibility();
+            syncPersonaScopeIfChanged(true);
         });
 
         registerHudVisibilityRecoveryEvents();

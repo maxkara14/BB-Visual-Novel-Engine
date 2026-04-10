@@ -2,7 +2,7 @@
 import { chat_metadata, saveChatDebounced, saveSettingsDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { MODULE_NAME } from './constants.js';
-import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog, bindActivePersonaState, getCurrentPersonaScopeKey, mergeCharacterRecords, resolveCharacterIdentity } from './social.js';
+import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog, bindActivePersonaState, getCurrentPersonaScopeKey, mergeCharacterRecords, resolveCharacterIdentity, exportActivePersonaSnapshot, importActivePersonaSnapshot, clearActivePersonaSnapshot } from './social.js';
 import { notifySuccess, notifyInfo, notifyError, showHudToast } from './toasts.js';
 import { restoreVNOptions, clearSavedVNOptions } from './generator.js';
 
@@ -38,6 +38,25 @@ function renderMergeSuggestionsList() {
 
 window['bbRenderMergeSuggestionsList'] = renderMergeSuggestionsList;
 
+function makeSnapshotFilename() {
+    const scopeKey = getCurrentPersonaScopeKey().replace(/[^\w-]+/g, '_');
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    return `bb-vne-snapshot-${scopeKey}-${stamp}.json`;
+}
+
+function downloadSnapshotFile(snapshot) {
+    const json = JSON.stringify(snapshot, null, 2);
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = makeSnapshotFilename();
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 export function injectDebugData(impact, isRomance = false) {
     bindActivePersonaState();
     const charName = String(jQuery('#bb-debug-char-name').val()).trim();
@@ -51,6 +70,32 @@ export function injectDebugData(impact, isRomance = false) {
     if (!lastMsg.extra.bb_social_swipes[sId]) lastMsg.extra.bb_social_swipes[sId] = [];
     lastMsg.extra.bb_social_swipes[sId].push({ name: charName, friendship_impact: isRomance ? "none" : impact, romance_impact: isRomance ? impact : "none", role_dynamic: "Дебаг", reason: jQuery('#bb-debug-reason').val(), emotion: "тест", scope: getCurrentPersonaScopeKey() });
     saveChatDebounced(); recalculateAllStats(false); notifySuccess("Данные внедрены.");
+}
+
+export function injectMixedDeepDebugData() {
+    bindActivePersonaState();
+    const charName = String(jQuery('#bb-debug-char-name').val()).trim();
+    if(!charName) return notifyError("Укажите имя!");
+    const chat = SillyTavern.getContext().chat;
+    if (!chat?.length) return;
+    const lastMsg = chat[chat.length - 1];
+    if (!lastMsg.extra) lastMsg.extra = {};
+    if (!lastMsg.extra.bb_social_swipes) lastMsg.extra.bb_social_swipes = {};
+    const sId = lastMsg.swipe_id || 0;
+    if (!lastMsg.extra.bb_social_swipes[sId]) lastMsg.extra.bb_social_swipes[sId] = [];
+    const customReason = String(jQuery('#bb-debug-reason').val() || '').trim();
+    lastMsg.extra.bb_social_swipes[sId].push({
+        name: charName,
+        friendship_impact: "unforgivable",
+        romance_impact: "life_changing",
+        role_dynamic: "",
+        reason: customReason || "Тянет вопреки опасности",
+        emotion: "опасное влечение",
+        scope: getCurrentPersonaScopeKey(),
+    });
+    saveChatDebounced();
+    recalculateAllStats(false);
+    notifySuccess("Смешанное незабываемое событие внедрено.");
 }
 
 export function wipeGlobalLog() {
@@ -92,6 +137,9 @@ export function wipeAllSocialData() {
     scopeState.char_registry = {};
     scopeState.merge_suggestions = [];
     scopeState.log_cutoff_index = 0;
+    scopeState.snapshot_baseline = null;
+    scopeState.snapshot_cutoff_index = 0;
+    scopeState.snapshot_restore_state = null;
     chat_metadata['bb_vn_global_log'] = scopeState.global_log;
     chat_metadata['bb_vn_char_bases'] = scopeState.char_bases;
     chat_metadata['bb_vn_ignored_chars'] = scopeState.ignored_chars;
@@ -153,6 +201,7 @@ export function setupExtensionSettings() {
                             <button id="bb-dbg-sub-romance" class="menu_button" style="color:#e11d48; border-color:rgba(225,29,72,0.3);">💔 Романтика</button>
                             <button id="bb-dbg-add-deep-pos" class="menu_button" style="color:#86efac; border-color:rgba(74,222,128,0.3);">🟢 Глубокий светлый</button>
                             <button id="bb-dbg-add-deep-neg" class="menu_button" style="color:#fca5a5; border-color:rgba(251,113,133,0.3);">🔴 Глубокий мрачный</button>
+                            <button id="bb-dbg-add-deep-mixed" class="menu_button" style="grid-column:1 / -1; color:#f9a8d4; border-color:rgba(244,114,182,0.28);">🌓 Смешанное +20/-20</button>
                             <button id="bb-dbg-add-trait-pos" class="menu_button" style="color:#86efac; border-color:rgba(74,222,128,0.3);">💎 Светлая черта</button>
                             <button id="bb-dbg-add-trait-neg" class="menu_button" style="color:#fca5a5; border-color:rgba(251,113,133,0.3);">💎 Мрачная черта</button>
                         </div>
@@ -169,6 +218,16 @@ export function setupExtensionSettings() {
                 </div>
 
                 <hr style="border-color: rgba(255,255,255,0.1); margin: 10px 0;">
+                <div style="display:flex; flex-direction:column; gap: 6px; margin-bottom: 10px; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.05);">
+                    <span style="font-size: 12px; color: #cbd5e1; font-weight:bold;">Снимок базы связей</span>
+                    <span style="font-size: 11px; color: #94a3b8; line-height: 1.45;">Экспорт сохраняет текущие связи, воспоминания, черты, журнал и дневник. Импорт подключает этот снимок как базу текущей персоны и продолжает считать только новые события.</span>
+                    <input type="file" id="bb-social-snapshot-file" accept=".json,application/json" style="display:none;">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                        <button id="bb-social-export-btn" class="menu_button"><i class="fa-solid fa-file-export"></i>&ensp; Экспорт</button>
+                        <button id="bb-social-import-btn" class="menu_button"><i class="fa-solid fa-file-import"></i>&ensp; Импорт</button>
+                    </div>
+                    <button id="bb-social-clear-snapshot-btn" class="menu_button" style="width:100%; color:#fda4af; border-color:rgba(244,114,182,0.22);">Очистить snapshot-базу</button>
+                </div>
                 <button id="bb-social-restore-chars-btn" class="menu_button" style="width: 100%; margin-bottom: 5px;">Вернуть скрытых персонажей</button>
                 <button id="bb-social-clear-log-btn" class="menu_button" style="width: 100%; margin-bottom: 5px;">Очистить журнал</button>
                 <button id="bb-social-wipe-btn" class="menu_button" style="width: 100%; background: rgba(239, 68, 68, 0.2); color: #ef4444;">Сбросить историю</button>
@@ -260,6 +319,7 @@ export function setupExtensionSettings() {
     jQuery('#bb-dbg-sub-romance').on('click', () => injectDebugData('major_negative', true));
     jQuery('#bb-dbg-add-deep-pos').on('click', () => injectDebugData('life_changing', false));
     jQuery('#bb-dbg-add-deep-neg').on('click', () => injectDebugData('unforgivable', false));
+    jQuery('#bb-dbg-add-deep-mixed').on('click', () => injectMixedDeepDebugData());
 
     jQuery('#bb-dbg-add-trait-pos').on('click', function() {
         const charName = String(jQuery('#bb-debug-char-name').val()).trim();
@@ -307,7 +367,7 @@ export function setupExtensionSettings() {
 
     jQuery('#bb-dbg-reset-char').on('click', () => {
         const scopeKey = getCurrentPersonaScopeKey();
-        bindActivePersonaState();
+        const { scopeState } = bindActivePersonaState();
         const name = String(jQuery('#bb-debug-char-name').val()).trim();
         if(!name) return notifyError("Укажите имя!");
         const resolved = resolveCharacterIdentity(name, { allowCreate: false, allowSuggestions: false });
@@ -315,6 +375,9 @@ export function setupExtensionSettings() {
         if(chat_metadata['bb_vn_char_bases']) delete chat_metadata['bb_vn_char_bases'][canonicalName];
         if(chat_metadata['bb_vn_char_bases_romance']) delete chat_metadata['bb_vn_char_bases_romance'][canonicalName];
         if (resolved?.id && chat_metadata['bb_vn_char_registry']) delete chat_metadata['bb_vn_char_registry'][resolved.id];
+        if (scopeState.snapshot_baseline?.characters) delete scopeState.snapshot_baseline.characters[canonicalName];
+        if (scopeState.snapshot_baseline?.char_bases) delete scopeState.snapshot_baseline.char_bases[canonicalName];
+        if (scopeState.snapshot_baseline?.char_bases_romance) delete scopeState.snapshot_baseline.char_bases_romance[canonicalName];
         const chat = SillyTavern.getContext().chat;
         if(chat) {
             chat.forEach(msg => {
@@ -328,6 +391,46 @@ export function setupExtensionSettings() {
     jQuery('#bb-dbg-toast').on('click', () => {
         const types = ['system', 'positive', 'negative', 'milestone', 'alert'];
         showHudToast({ title: 'Тест', text: 'Проверка уведомлений', badge: 'Дебаг', variant: types[Math.floor(Math.random()*types.length)], icon: 'fa-solid fa-bug' });
+    });
+
+    jQuery('#bb-social-export-btn').on('click', () => {
+        bindActivePersonaState();
+        recalculateAllStats(false);
+        const snapshot = exportActivePersonaSnapshot();
+        downloadSnapshotFile(snapshot);
+        const characterCount = Object.keys(snapshot?.data?.characters || {}).length;
+        notifySuccess(`Snapshot экспортирован: ${characterCount} персонажей.`);
+    });
+
+    jQuery('#bb-social-import-btn').on('click', () => {
+        const input = jQuery('#bb-social-snapshot-file');
+        input.val('');
+        input.trigger('click');
+    });
+
+    jQuery('#bb-social-snapshot-file').on('change', async function() {
+        const file = this.files?.[0];
+        if (!file) return;
+        try {
+            const raw = await file.text();
+            const result = importActivePersonaSnapshot(raw);
+            saveChatDebounced();
+            recalculateAllStats(false);
+            notifySuccess(`Snapshot импортирован: ${result.characters} персонажей. Старые события до точки импорта больше не наслаиваются повторно.`);
+        } catch (error) {
+            console.error('[BB VN] Snapshot import failed:', error);
+            notifyError("Не удалось импортировать snapshot. Проверьте JSON-файл.");
+        } finally {
+            jQuery(this).val('');
+        }
+    });
+
+    jQuery('#bb-social-clear-snapshot-btn').on('click', () => {
+        const hadSnapshot = clearActivePersonaSnapshot();
+        saveChatDebounced();
+        recalculateAllStats(false);
+        if (hadSnapshot) notifyInfo("Snapshot-база очищена. Состояние до импорта восстановлено, расчёт снова идёт от данных чата.");
+        else notifyInfo("Активной snapshot-базы не было.");
     });
 
     jQuery('#bb-social-restore-chars-btn').on('click', () => { const { scopeState } = bindActivePersonaState(); scopeState.ignored_chars = []; chat_metadata['bb_vn_ignored_chars'] = scopeState.ignored_chars; saveChatDebounced(); recalculateAllStats(); notifySuccess("Скрытые персонажи восстановлены!"); });

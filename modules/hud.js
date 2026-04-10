@@ -52,6 +52,45 @@ function isDevModeEnabled() {
         || globalThis?.BB_VN_DEV === true;
 }
 
+function buildDeepMemoryDisplayItems(memories = []) {
+    const orderedMemories = [...memories].reverse();
+    const items = [];
+
+    for (let index = 0; index < orderedMemories.length; index++) {
+        const current = orderedMemories[index];
+        const currentText = String(current?.text || '').trim();
+        if (!currentText) continue;
+
+        const next = orderedMemories[index + 1];
+        const nextText = String(next?.text || '').trim();
+        const currentTone = String(current?.tone || '');
+        const nextTone = String(next?.tone || '');
+        const isDualTonePair = nextText
+            && currentText === nextText
+            && ((currentTone === 'positive' && nextTone === 'negative') || (currentTone === 'negative' && nextTone === 'positive'));
+
+        if (isDualTonePair) {
+            items.push({ text: currentText, tone: 'dual' });
+            index++;
+            continue;
+        }
+
+        items.push({ text: currentText, tone: currentTone });
+    }
+
+    return items;
+}
+
+function renderDeepMemoryPill(memory = {}) {
+    const text = escapeHtml(memory?.text || '');
+    const tone = String(memory?.tone || '');
+    if (!text) return '';
+    if (tone === 'dual') {
+        return `<div class="bb-memory-pill deep dual-tone" title="Противоречивое незабываемое событие"><span>${text}</span></div>`;
+    }
+    return `<div class="bb-memory-pill deep ${tone}">${text}</div>`;
+}
+
 export function renderSocialHud() {
     bindActivePersonaState();
     const context = SillyTavern.getContext?.();
@@ -153,7 +192,7 @@ export function renderSocialHud() {
                     : '<i style="color:#64748b; font-size: 11px;">Пока нет мягких следов</i>';
 
                 const deepMemoriesHtml = allDeepMemories.length > 0
-                    ? [...allDeepMemories].reverse().map(memory => `<div class="bb-memory-pill deep ${memory.tone}">${escapeHtml(memory.text)}</div>`).join('')
+                    ? buildDeepMemoryDisplayItems(allDeepMemories).map(renderDeepMemoryPill).join('')
                     : '<i style="color:#64748b; font-size: 11px;">Ничего незабываемого</i>';
 
                 const coreTraits = stats.core_traits || [];

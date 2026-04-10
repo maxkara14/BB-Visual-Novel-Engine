@@ -40,6 +40,8 @@ HTML TAG FIELDS (STRICT):
 - Do NOT translate the token values for <friendship_impact> and <romance_impact>. Keep those exact enum tokens in English.
 - <friendship_impact> Choose strictly from: "none", "minor_positive", "major_positive", "life_changing", "minor_negative", "major_negative", "unforgivable".
 - <romance_impact> Same scale as above. STRICT RULE: Keep "none" for casual/combat/platonic scenes.
+- If the character genuinely likes, welcomes, enjoys, or is emotionally drawn to {{user}}'s action, do NOT lower friendship/trust at the same time as a positive romance shift.
+- Use friendship negative + romance positive ONLY for clearly conflicted or dark attraction: fear mixed with desire, dangerous fascination, toxic obsession, shame, manipulation, coercion, or "drawn in despite the harm".
 - <role_dynamic> 1-2 words describing {{user}}'s CURRENT role to them right now (e.g., "\u043e\u043f\u0430\u0441\u043d\u044b\u0439 \u0441\u043e\u044e\u0437\u043d\u0438\u043a", "\u0441\u043a\u0440\u044b\u0442\u0430\u044f \u0443\u0433\u0440\u043e\u0437\u0430", "\u043d\u0430\u0434\u0451\u0436\u043d\u044b\u0439 \u0434\u0440\u0443\u0433").
 - <reason> Short Russian explanation of WHY the impact happened.
 - <emotion> 1-2 words describing the character's internal emotional state. If using two nouns, separate with a comma (e.g., "\u0448\u043e\u043a, \u043e\u0431\u0438\u0434\u0430", "\u0440\u0430\u0434\u043e\u0441\u0442\u044c").`;

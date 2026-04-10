@@ -13,6 +13,7 @@ import {
     getMemoryBucket, 
     getMemoryTone, 
     coerceUserFacingStatus, 
+    isValidUserFacingStatus,
     isCollectiveEntityName, 
     getShiftDescriptor,
     formatAffinityPoints,
@@ -64,6 +65,87 @@ function getCurrentPersonaLabel() {
     return personaText.split(/\r?\n/).map(line => line.trim()).find(Boolean)?.slice(0, 80) || 'Persona';
 }
 
+function cloneJsonData(value, fallback) {
+    try {
+        if (value === undefined) return fallback;
+        return JSON.parse(JSON.stringify(value));
+    } catch (error) {
+        void error;
+        return fallback;
+    }
+}
+
+function clampRelationshipValue(value = 0) {
+    const numeric = parseInt(value, 10);
+    if (Number.isNaN(numeric)) return 0;
+    return Math.max(-100, Math.min(100, numeric));
+}
+
+function normalizeImportedHistoryEntry(entry = {}) {
+    return {
+        delta: Math.max(-20, Math.min(20, parseInt(entry?.delta, 10) || 0)),
+        reason: String(entry?.reason || ''),
+        moodlet: sanitizeMoodlet(entry?.moodlet || ''),
+    };
+}
+
+function normalizeImportedMemoryEntry(entry = {}) {
+    const delta = Math.max(-20, Math.min(20, parseInt(entry?.delta, 10) || 0));
+    return {
+        text: String(entry?.text || ''),
+        delta,
+        tone: entry?.tone === 'positive' || entry?.tone === 'negative' || entry?.tone === 'neutral'
+            ? entry.tone
+            : getMemoryTone(delta),
+        moodlet: sanitizeMoodlet(entry?.moodlet || ''),
+    };
+}
+
+function normalizeImportedTraitEntry(entry = {}) {
+    const normalizedTrait = normalizeTraitResponse(entry?.trait || '');
+    if (!normalizedTrait) return null;
+    const normalizedType = entry?.type === 'positive' || entry?.type === 'negative' ? entry.type : '';
+    return {
+        trait: normalizedTrait,
+        type: normalizedType,
+    };
+}
+
+function normalizeImportedCharacterStats(stats = {}) {
+    const memories = stats?.memories && typeof stats.memories === 'object' ? stats.memories : {};
+    return {
+        affinity: clampRelationshipValue(stats?.affinity),
+        romance: clampRelationshipValue(stats?.romance),
+        history: Array.isArray(stats?.history) ? stats.history.map(normalizeImportedHistoryEntry).slice(-24) : [],
+        status: sanitizeRelationshipStatus(stats?.status || ''),
+        memories: {
+            soft: Array.isArray(memories.soft) ? memories.soft.map(normalizeImportedMemoryEntry).filter(entry => entry.text).slice(-4) : [],
+            deep: Array.isArray(memories.deep) ? memories.deep.map(normalizeImportedMemoryEntry).filter(entry => entry.text) : [],
+            archive: Array.isArray(memories.archive) ? memories.archive.map(normalizeImportedMemoryEntry).filter(entry => entry.text) : [],
+        },
+        core_traits: Array.isArray(stats?.core_traits)
+            ? stats.core_traits.map(normalizeImportedTraitEntry).filter(Boolean)
+            : [],
+    };
+}
+
+function mergeImportedCharacterStats(targetStats = {}, sourceStats = {}) {
+    const target = normalizeImportedCharacterStats(targetStats);
+    const source = normalizeImportedCharacterStats(sourceStats);
+    return normalizeImportedCharacterStats({
+        affinity: clampRelationshipValue((target.affinity || 0) + (source.affinity || 0)),
+        romance: clampRelationshipValue((target.romance || 0) + (source.romance || 0)),
+        status: target.status || source.status || '',
+        history: [...(target.history || []), ...(source.history || [])].slice(-24),
+        memories: {
+            soft: [...(target.memories?.soft || []), ...(source.memories?.soft || [])].slice(-4),
+            deep: [...(target.memories?.deep || []), ...(source.memories?.deep || [])],
+            archive: [...(target.memories?.archive || []), ...(source.memories?.archive || [])],
+        },
+        core_traits: [...(target.core_traits || []), ...(source.core_traits || [])],
+    });
+}
+
 function ensurePersonaStateShape(scopeState = {}) {
     if (!scopeState.char_bases || typeof scopeState.char_bases !== 'object') scopeState.char_bases = {};
     if (!scopeState.char_bases_romance || typeof scopeState.char_bases_romance !== 'object') scopeState.char_bases_romance = {};
@@ -73,6 +155,9 @@ function ensurePersonaStateShape(scopeState = {}) {
     if (!scopeState.char_registry || typeof scopeState.char_registry !== 'object') scopeState.char_registry = {};
     if (!Array.isArray(scopeState.merge_suggestions)) scopeState.merge_suggestions = [];
     scopeState.log_cutoff_index = parseInt(scopeState.log_cutoff_index, 10) || 0;
+    scopeState.snapshot_cutoff_index = parseInt(scopeState.snapshot_cutoff_index, 10) || 0;
+    if (!scopeState.snapshot_baseline || typeof scopeState.snapshot_baseline !== 'object') scopeState.snapshot_baseline = null;
+    if (!scopeState.snapshot_restore_state || typeof scopeState.snapshot_restore_state !== 'object') scopeState.snapshot_restore_state = null;
     if (!scopeState.label) scopeState.label = getCurrentPersonaLabel();
     return scopeState;
 }
@@ -120,6 +205,115 @@ export function bindActivePersonaState() {
     chat_metadata['bb_vn_merge_suggestions'] = scopeState.merge_suggestions;
     chat_metadata['bb_vn_log_cutoff_index'] = scopeState.log_cutoff_index || 0;
     return { scopeKey, scopeState };
+}
+
+export function exportActivePersonaSnapshot() {
+    const { scopeKey, scopeState } = bindActivePersonaState();
+    const chat = SillyTavern.getContext().chat || [];
+    const characters = {};
+
+    Object.entries(currentCalculatedStats || {}).forEach(([charName, stats]) => {
+        if (!charName || !stats || typeof stats !== 'object') return;
+        characters[charName] = normalizeImportedCharacterStats(stats);
+    });
+
+    return {
+        schema_version: 1,
+        module: MODULE_NAME,
+        exported_at: new Date().toISOString(),
+        scope_key: scopeKey,
+        persona_label: scopeState.label || getCurrentPersonaLabel(),
+        source_chat_length: Array.isArray(chat) ? chat.length : 0,
+        data: {
+            char_bases: cloneJsonData(scopeState.char_bases, {}),
+            char_bases_romance: cloneJsonData(scopeState.char_bases_romance, {}),
+            ignored_chars: cloneJsonData(scopeState.ignored_chars, []),
+            platonic_chars: cloneJsonData(scopeState.platonic_chars, []),
+            char_registry: cloneJsonData(scopeState.char_registry, {}),
+            merge_suggestions: cloneJsonData(scopeState.merge_suggestions, []),
+            global_log: cloneJsonData(chat_metadata['bb_vn_global_log'], []),
+            story_moments: cloneJsonData(currentStoryMoments, []),
+            characters,
+        },
+    };
+}
+
+export function importActivePersonaSnapshot(rawSnapshot = '') {
+    const parsedSnapshot = typeof rawSnapshot === 'string' ? JSON.parse(String(rawSnapshot || '')) : rawSnapshot;
+    const snapshotData = parsedSnapshot?.data && typeof parsedSnapshot.data === 'object' ? parsedSnapshot.data : parsedSnapshot;
+    if (!snapshotData || typeof snapshotData !== 'object') throw new Error('INVALID_SNAPSHOT');
+    if (!snapshotData.characters || typeof snapshotData.characters !== 'object') throw new Error('INVALID_SNAPSHOT_CHARACTERS');
+
+    const { scopeState } = bindActivePersonaState();
+    const chat = SillyTavern.getContext().chat || [];
+    const normalizedCharacters = {};
+    Object.entries(snapshotData.characters).forEach(([charName, stats]) => {
+        const safeName = String(charName || '').trim();
+        if (!safeName || isCollectiveEntityName(safeName)) return;
+        normalizedCharacters[safeName] = normalizeImportedCharacterStats(stats);
+    });
+
+    scopeState.snapshot_restore_state = {
+        char_bases: cloneJsonData(scopeState.char_bases, {}),
+        char_bases_romance: cloneJsonData(scopeState.char_bases_romance, {}),
+        ignored_chars: cloneJsonData(scopeState.ignored_chars, []),
+        platonic_chars: cloneJsonData(scopeState.platonic_chars, []),
+        char_registry: cloneJsonData(scopeState.char_registry, {}),
+        merge_suggestions: cloneJsonData(scopeState.merge_suggestions, []),
+        global_log: cloneJsonData(scopeState.global_log, []),
+        log_cutoff_index: parseInt(scopeState.log_cutoff_index, 10) || 0,
+    };
+
+    scopeState.char_bases = cloneJsonData(snapshotData.char_bases, {});
+    scopeState.char_bases_romance = cloneJsonData(snapshotData.char_bases_romance, {});
+    scopeState.ignored_chars = cloneJsonData(snapshotData.ignored_chars, []);
+    scopeState.platonic_chars = cloneJsonData(snapshotData.platonic_chars, []);
+    scopeState.char_registry = cloneJsonData(snapshotData.char_registry, {});
+    scopeState.merge_suggestions = cloneJsonData(snapshotData.merge_suggestions, []);
+    scopeState.snapshot_baseline = {
+        characters: normalizedCharacters,
+        global_log: cloneJsonData(snapshotData.global_log, []),
+        story_moments: cloneJsonData(snapshotData.story_moments, []),
+        char_bases: cloneJsonData(snapshotData.char_bases, {}),
+        char_bases_romance: cloneJsonData(snapshotData.char_bases_romance, {}),
+    };
+    scopeState.snapshot_cutoff_index = Array.isArray(chat) ? chat.length : 0;
+    scopeState.log_cutoff_index = Array.isArray(chat) ? chat.length : 0;
+    if (parsedSnapshot?.persona_label) scopeState.label = String(parsedSnapshot.persona_label);
+
+    bindActivePersonaState();
+    return {
+        characters: Object.keys(normalizedCharacters).length,
+        cutoffIndex: scopeState.snapshot_cutoff_index,
+    };
+}
+
+export function clearActivePersonaSnapshot() {
+    const { scopeState } = bindActivePersonaState();
+    const hadSnapshot = !!scopeState.snapshot_baseline;
+    const restoreState = scopeState.snapshot_restore_state && typeof scopeState.snapshot_restore_state === 'object'
+        ? scopeState.snapshot_restore_state
+        : null;
+
+    if (restoreState) {
+        scopeState.char_bases = cloneJsonData(restoreState.char_bases, {});
+        scopeState.char_bases_romance = cloneJsonData(restoreState.char_bases_romance, {});
+        scopeState.ignored_chars = cloneJsonData(restoreState.ignored_chars, []);
+        scopeState.platonic_chars = cloneJsonData(restoreState.platonic_chars, []);
+        scopeState.char_registry = cloneJsonData(restoreState.char_registry, {});
+        scopeState.merge_suggestions = cloneJsonData(restoreState.merge_suggestions, []);
+        scopeState.global_log = cloneJsonData(restoreState.global_log, []);
+        scopeState.log_cutoff_index = parseInt(restoreState.log_cutoff_index, 10) || 0;
+    }
+
+    scopeState.snapshot_baseline = null;
+    scopeState.snapshot_cutoff_index = 0;
+    scopeState.snapshot_restore_state = null;
+    if (!restoreState) {
+        scopeState.log_cutoff_index = 0;
+    }
+    bindActivePersonaState();
+    return hadSnapshot;
 }
 
 function saveActivePersonaCutoff() {
@@ -328,6 +522,32 @@ export function mergeCharacterRecords(fromName = '', toName = '') {
         chat_metadata['bb_vn_platonic_chars'] = scopeState.platonic_chars;
     }
 
+    if (scopeState.snapshot_baseline?.characters && typeof scopeState.snapshot_baseline.characters === 'object') {
+        const snapshotChars = scopeState.snapshot_baseline.characters;
+        if (snapshotChars[fromPrimary]) {
+            snapshotChars[toPrimary] = snapshotChars[toPrimary]
+                ? mergeImportedCharacterStats(snapshotChars[toPrimary], snapshotChars[fromPrimary])
+                : normalizeImportedCharacterStats(snapshotChars[fromPrimary]);
+            delete snapshotChars[fromPrimary];
+        }
+        if (scopeState.snapshot_baseline.char_bases && typeof scopeState.snapshot_baseline.char_bases === 'object') {
+            const snapshotTargetBase = scopeState.snapshot_baseline.char_bases[toPrimary] ?? 0;
+            const snapshotSourceBase = scopeState.snapshot_baseline.char_bases[fromPrimary] ?? 0;
+            if ((snapshotTargetBase === 0 || snapshotTargetBase === undefined) && snapshotSourceBase !== 0) {
+                scopeState.snapshot_baseline.char_bases[toPrimary] = snapshotSourceBase;
+            }
+            delete scopeState.snapshot_baseline.char_bases[fromPrimary];
+        }
+        if (scopeState.snapshot_baseline.char_bases_romance && typeof scopeState.snapshot_baseline.char_bases_romance === 'object') {
+            const snapshotTargetRomance = scopeState.snapshot_baseline.char_bases_romance[toPrimary] ?? 0;
+            const snapshotSourceRomance = scopeState.snapshot_baseline.char_bases_romance[fromPrimary] ?? 0;
+            if ((snapshotTargetRomance === 0 || snapshotTargetRomance === undefined) && snapshotSourceRomance !== 0) {
+                scopeState.snapshot_baseline.char_bases_romance[toPrimary] = snapshotSourceRomance;
+            }
+            delete scopeState.snapshot_baseline.char_bases_romance[fromPrimary];
+        }
+    }
+
     scopeState.merge_suggestions = scopeState.merge_suggestions.filter(item =>
         item.target_id !== source.id &&
         normalizeCharacterLookupName(item.source || '') !== normalizeCharacterLookupName(fromPrimary)
@@ -457,6 +677,97 @@ export function getUnforgettableImpact(memories = []) {
 export function getUnforgettableRoleStatus(memories = []) {
     void memories;
     return '';
+}
+
+function getAffinityTierKey(affinity = 0) {
+    if (affinity <= -50) return 'enemy';
+    if (affinity < -10) return 'hostile';
+    if (affinity <= 10) return 'neutral';
+    if (affinity <= 50) return 'friendly';
+    if (affinity <= 80) return 'friend';
+    return 'close';
+}
+
+function resolveStableRelationshipStatus(candidateStatus = '', previousStatus = '', previousAffinity = 0, nextAffinity = 0, options = {}) {
+    const incoming = sanitizeRelationshipStatus(candidateStatus);
+    const previous = sanitizeRelationshipStatus(previousStatus);
+    const hasIncoming = isValidUserFacingStatus(incoming);
+    const hasPrevious = isValidUserFacingStatus(previous);
+    const allowOverride = options?.allowOverride === true;
+
+    if (!hasIncoming) return hasPrevious ? previous : '';
+    if (!hasPrevious) return incoming;
+    if (allowOverride) return incoming;
+
+    const previousTierKey = getAffinityTierKey(previousAffinity);
+    const nextTierKey = getAffinityTierKey(nextAffinity);
+    if (previousTierKey !== nextTierKey) return incoming;
+
+    return previous;
+}
+
+function hasAmbivalentRomanceConflictMarkers(reason = '', emotion = '', status = '') {
+    const text = `${String(reason || '')} ${String(emotion || '')} ${String(status || '')}`.toLowerCase();
+    if (!text.trim()) return false;
+
+    const explicitConflictRegex = /(опасн\w*\s+влеч|болезнен\w*\s+(?:тяга|влеч)|тянет\s+вопреки|страх\s*(?:,|и)\s*желан|страх\s*(?:,|и)\s*влеч|ненавист\w*\s*(?:,|и)\s*желан|противореч\w*\s+влеч|запрет\w*\s+влеч|одержим\w*\s+влеч|токсич\w*\s+влеч|dark attraction|dangerous fascination|fear and desire|drawn despite harm)/i;
+    if (explicitConflictRegex.test(text)) return true;
+
+    const conflictMarkerRegex = /(опас|страх|пуга|угроз|стыд|вина|болезн|больно|ран|жесток|груб|насил|принуж|манипул|одерж|токс|ревност|агресс|ненавист|конфликт|противореч|амбив|запрет|темн|шок)/i;
+    const attractionMarkerRegex = /(влеч|тянет|манит|желан|страст|притяг|симпат|интерес|романт|люб|химия|возбуж|искуш|близост)/i;
+    return conflictMarkerRegex.test(text) && attractionMarkerRegex.test(text);
+}
+
+function normalizeMixedAffinityRomanceDeltas(friendshipDelta = 0, romanceDelta = 0, reason = '', emotion = '', status = '') {
+    if (!(friendshipDelta < 0 && romanceDelta > 0)) {
+        return { friendshipDelta, romanceDelta, preservedConflict: false };
+    }
+
+    const preservedConflict = hasAmbivalentRomanceConflictMarkers(reason, emotion, status);
+    if (preservedConflict) {
+        return { friendshipDelta, romanceDelta, preservedConflict: true };
+    }
+
+    return {
+        friendshipDelta: 0,
+        romanceDelta,
+        preservedConflict: false,
+    };
+}
+
+function getDominantImpactEntry(friendshipDelta = 0, romanceDelta = 0) {
+    const impacts = [];
+    if (friendshipDelta !== 0) impacts.push({ delta: friendshipDelta, kind: 'friendship' });
+    if (romanceDelta !== 0) impacts.push({ delta: romanceDelta, kind: 'romance' });
+    if (impacts.length === 0) return null;
+    if (impacts.length === 1) return impacts[0];
+    return Math.abs(romanceDelta) > Math.abs(friendshipDelta)
+        ? impacts.find(entry => entry.kind === 'romance') || impacts[0]
+        : impacts.find(entry => entry.kind === 'friendship') || impacts[0];
+}
+
+function getRecordedImpactEntries(friendshipDelta = 0, romanceDelta = 0) {
+    const impacts = [];
+    if (friendshipDelta !== 0) impacts.push({ delta: friendshipDelta, kind: 'friendship' });
+    if (romanceDelta !== 0) impacts.push({ delta: romanceDelta, kind: 'romance' });
+    if (impacts.length <= 1) return impacts;
+
+    const signs = new Set(impacts.map(entry => Math.sign(entry.delta)).filter(sign => sign !== 0));
+    if (signs.size <= 1) {
+        const dominant = getDominantImpactEntry(friendshipDelta, romanceDelta);
+        return dominant ? [dominant] : [];
+    }
+
+    const selectedBySign = new Map();
+    impacts.forEach(entry => {
+        const sign = Math.sign(entry.delta);
+        const current = selectedBySign.get(sign);
+        if (!current || Math.abs(entry.delta) > Math.abs(current.delta)) {
+            selectedBySign.set(sign, entry);
+        }
+    });
+
+    return impacts.filter(entry => selectedBySign.get(Math.sign(entry.delta)) === entry);
 }
 
 export function appendCharacterMemory(charStats, delta, reason, moodlet = '') {
@@ -692,8 +1003,41 @@ export function recalculateAllStats(isNewMessage = false) {
     const newStats = {};
     setCurrentCalculatedStats(newStats);
     currentStoryMoments.length = 0;
-    scopeState.global_log = [];
+    const snapshotBaseline = scopeState.snapshot_baseline && typeof scopeState.snapshot_baseline === 'object'
+        ? scopeState.snapshot_baseline
+        : null;
+    scopeState.global_log = cloneJsonData(snapshotBaseline?.global_log, []);
     chat_metadata['bb_vn_global_log'] = scopeState.global_log;
+    const baselineStoryMoments = Array.isArray(snapshotBaseline?.story_moments)
+        ? cloneJsonData(snapshotBaseline.story_moments, []).slice(-30)
+        : [];
+    baselineStoryMoments.forEach(moment => currentStoryMoments.push(moment));
+    const baselineCharacters = snapshotBaseline?.characters && typeof snapshotBaseline.characters === 'object'
+        ? snapshotBaseline.characters
+        : {};
+    const baselineBaseMap = snapshotBaseline?.char_bases && typeof snapshotBaseline.char_bases === 'object'
+        ? snapshotBaseline.char_bases
+        : {};
+    const baselineRomanceBaseMap = snapshotBaseline?.char_bases_romance && typeof snapshotBaseline.char_bases_romance === 'object'
+        ? snapshotBaseline.char_bases_romance
+        : {};
+    Object.entries(baselineCharacters).forEach(([charName, stats]) => {
+        const safeName = String(charName || '').trim();
+        if (!safeName || isCollectiveEntityName(safeName)) return;
+        if (Array.isArray(chat_metadata['bb_vn_ignored_chars']) && chat_metadata['bb_vn_ignored_chars'].includes(safeName)) return;
+
+        const normalizedStats = normalizeImportedCharacterStats(stats);
+        const currentBase = parseInt(chat_metadata['bb_vn_char_bases']?.[safeName], 10);
+        const importedBase = parseInt(baselineBaseMap?.[safeName], 10);
+        const currentRomanceBase = parseInt(chat_metadata['bb_vn_char_bases_romance']?.[safeName], 10);
+        const importedRomanceBase = parseInt(baselineRomanceBaseMap?.[safeName], 10);
+        const affinityOffset = (Number.isNaN(currentBase) ? 0 : currentBase) - (Number.isNaN(importedBase) ? 0 : importedBase);
+        const romanceOffset = (Number.isNaN(currentRomanceBase) ? 0 : currentRomanceBase) - (Number.isNaN(importedRomanceBase) ? 0 : importedRomanceBase);
+
+        normalizedStats.affinity = clampRelationshipValue((normalizedStats.affinity || 0) + affinityOffset);
+        normalizedStats.romance = clampRelationshipValue((normalizedStats.romance || 0) + romanceOffset);
+        newStats[safeName] = normalizedStats;
+    });
     const chat = SillyTavern.getContext().chat;
     let latestChoiceContext = null;
     const newlyDiscoveredChars = [];
@@ -730,8 +1074,10 @@ export function recalculateAllStats(isNewMessage = false) {
     }
 
     const journalCutoffIndex = getJournalCutoffIndex(chat);
+    const statsCutoffIndex = Math.min(parseInt(scopeState.snapshot_cutoff_index, 10) || 0, chat.length);
 
     chat.forEach((msg, idx) => {
+        if (idx < statsCutoffIndex) return;
         const shouldRecordJournal = idx >= journalCutoffIndex;
         if (msg?.is_user && chat_metadata['bb_vn_pending_choice_context']) {
             if (tryBindPendingChoiceContextToMessage(msg)) needsSave = true;
@@ -867,13 +1213,22 @@ export function recalculateAllStats(isNewMessage = false) {
                 if (!charName || isCollectiveEntityName(charName)) return;
                 if (chat_metadata['bb_vn_ignored_chars'].includes(charName)) return;
 
-                const f_delta = parseImpactDelta(update.friendship_impact || update.impact_level);
+                let f_delta = parseImpactDelta(update.friendship_impact || update.impact_level);
                 let r_delta = parseImpactDelta(update.romance_impact || update.romantic_impact || update.love_impact);
                 if (!chat_metadata['bb_vn_platonic_chars']) chat_metadata['bb_vn_platonic_chars'] = [];
                 if (chat_metadata['bb_vn_platonic_chars'].includes(charName)) r_delta = 0;
 
                 const currentStatus = update.role_dynamic || update.status || ""; 
                 const currentEmotion = update.emotion || update.moodlet || "";
+                const normalizedMixedDelta = normalizeMixedAffinityRomanceDeltas(
+                    f_delta,
+                    r_delta,
+                    update.reason || "",
+                    currentEmotion,
+                    currentStatus,
+                );
+                f_delta = normalizedMixedDelta.friendshipDelta;
+                r_delta = normalizedMixedDelta.romanceDelta;
                 
                 if (!newStats[charName]) {
                     let base = 0, baseRomance = 0, isBrandNew = false;
@@ -898,29 +1253,50 @@ export function recalculateAllStats(isNewMessage = false) {
                 if (newStats[charName].romance > 100) newStats[charName].romance = 100;
                 if (newStats[charName].romance < -100) newStats[charName].romance = -100;
 
-                const safeStatus = coerceUserFacingStatus(currentStatus, newStats[charName].affinity, previousStatus, f_delta);
+                const isManualStatusOverride = update.reason === 'Ручная смена статуса' || currentEmotion === 'дебаг';
+                const safeStatus = resolveStableRelationshipStatus(
+                    currentStatus,
+                    previousStatus,
+                    previousAffinity,
+                    newStats[charName].affinity,
+                    { allowOverride: isManualStatusOverride },
+                );
                 if (safeStatus) newStats[charName].status = safeStatus;
 
                 const moodlet = sanitizeMoodlet(currentEmotion);
-                const isRomanceShift = Math.abs(r_delta) > Math.abs(f_delta);
-                const dominantDelta = isRomanceShift ? r_delta : f_delta;
-                
-                newStats[charName].history.push({ delta: dominantDelta, reason: update.reason || "", moodlet });
-                appendCharacterMemory(newStats[charName], dominantDelta, update.reason || "", moodlet);
+                const dominantImpact = getDominantImpactEntry(f_delta, r_delta);
+                const dominantDelta = dominantImpact?.delta || 0;
+                const recordedImpacts = getRecordedImpactEntries(f_delta, r_delta);
+
+                if (dominantImpact) {
+                    newStats[charName].history.push({ delta: dominantDelta, reason: update.reason || "", moodlet });
+                }
+                recordedImpacts.forEach(impact => {
+                    appendCharacterMemory(newStats[charName], impact.delta, update.reason || "", moodlet);
+                });
 
                 const previousTier = getTierInfo(previousAffinity).label;
                 const newTier = getTierInfo(newStats[charName].affinity).label;
                 let toastMoment = null;
                 if (shouldRecordJournal && previousTier !== newTier) toastMoment = pickToastMoment(toastMoment, maybeAddStoryMoment({ type: 'tier-shift', char: charName, title: 'Сдвиг в отношениях', text: `${charName}: статус изменился с «${previousTier}» на «${newTier}».` }));
 
-                if (shouldRecordJournal && Math.abs(dominantDelta) >= 2 && update.reason) {
-                    const shift = getShiftDescriptor(dominantDelta, moodlet);
-                    let momentType = dominantDelta > 0 ? 'soft-positive' : 'soft-negative';
-                    if (isRomanceShift) momentType = dominantDelta > 0 ? 'romance-positive' : 'romance-negative';
-                    toastMoment = pickToastMoment(toastMoment, maybeAddStoryMoment({ type: momentType, char: charName, title: shift.full, text: `${charName}: ${update.reason}` }));
-                }
+                if (shouldRecordJournal && update.reason) {
+                    recordedImpacts.forEach(impact => {
+                        if (Math.abs(impact.delta) >= 2) {
+                            const shift = getShiftDescriptor(impact.delta, moodlet);
+                            const momentType = impact.kind === 'romance'
+                                ? (impact.delta > 0 ? 'romance-positive' : 'romance-negative')
+                                : (impact.delta > 0 ? 'soft-positive' : 'soft-negative');
+                            const moment = maybeAddStoryMoment({ type: momentType, char: charName, title: shift.full, text: `${charName}: ${update.reason}` });
+                            if (impact === dominantImpact) toastMoment = pickToastMoment(toastMoment, moment);
+                        }
 
-                if (shouldRecordJournal && Math.abs(dominantDelta) >= 15 && update.reason) toastMoment = pickToastMoment(toastMoment, maybeAddStoryMoment({ type: dominantDelta > 0 ? 'deep-positive' : 'deep-negative', char: charName, title: 'Незабываемое событие', text: `${charName}: ${update.reason}` }));
+                        if (Math.abs(impact.delta) >= 15) {
+                            const moment = maybeAddStoryMoment({ type: impact.delta > 0 ? 'deep-positive' : 'deep-negative', char: charName, title: 'Незабываемое событие', text: `${charName}: ${update.reason}` });
+                            if (impact === dominantImpact) toastMoment = pickToastMoment(toastMoment, moment);
+                        }
+                    });
+                }
                 if (dominantDelta !== 0 && isNewMessage && idx === chat.length - 1 && toastMoment) showStoryMomentToast(toastMoment);
 
                 if (shouldRecordJournal && (f_delta !== 0 || r_delta !== 0)) {

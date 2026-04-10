@@ -131,7 +131,7 @@ export function showStoryMomentToast(moment) {
     if (!moment) return;
 
     const toastMap = {
-        'deep-positive': { badge: 'Дневник', variant: 'milestone', icon: 'fa-solid fa-stars', accent: '#c084fc' },
+        'deep-positive': { badge: 'Дневник', variant: 'milestone', icon: 'fa-solid fa-sparkles', accent: '#c084fc' },
         'deep-negative': { badge: 'Дневник', variant: 'alert', icon: 'fa-solid fa-bolt', accent: '#fb7185' },
         'soft-positive': { badge: 'Дневник', variant: 'positive', icon: 'fa-solid fa-book-open-reader', accent: '#4ade80' },
         'soft-negative': { badge: 'Дневник', variant: 'negative', icon: 'fa-solid fa-feather-pointed', accent: '#f87171' },
