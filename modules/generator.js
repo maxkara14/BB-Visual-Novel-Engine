@@ -21,6 +21,15 @@ import { injectCombinedSocialPrompt } from './social.js';
 
 let lastCustomApiFallbackNoticeAt = 0;
 const MIN_RENDERABLE_OPTIONS = 2;
+const CUSTOM_API_HEALTH_EVENT = 'bb-vn-custom-api-health';
+
+function emitCustomApiHealth(detail = {}) {
+    try {
+        window.dispatchEvent(new CustomEvent(CUSTOM_API_HEALTH_EVENT, { detail }));
+    } catch (error) {
+        console.debug('[BB VN][debug] custom api health event skipped', error);
+    }
+}
 
 function maybeNotifyCustomApiFallback() {
     const now = Date.now();
@@ -80,6 +89,15 @@ export async function generateFastPrompt(promptText, options = {}) {
             const finishReason = data?.choices?.[0]?.finish_reason || '';
             const content = data?.choices?.[0]?.message?.content || "";
             if (!content.trim()) throw new Error("Прокси вернул пустой текст (Сработал фильтр).");
+            emitCustomApiHealth({
+                state: 'connected',
+                url: s.customApiUrl || '',
+                key: s.customApiKey || '',
+                model: s.customApiModel || '',
+                message: s.customApiModel
+                    ? `Кастомная модель ${s.customApiModel} ответила успешно.`
+                    : 'Кастомная модель ответила успешно.',
+            });
             if (includeMeta) {
                 return {
                     content,
@@ -94,6 +112,15 @@ export async function generateFastPrompt(promptText, options = {}) {
         } catch (e) {
             if (e.name === 'AbortError') throw new Error("Отменено пользователем");
             console.warn(`[BB VN] Ошибка кастомного API (${e.message}), перехват на основной API...`);
+            emitCustomApiHealth({
+                state: 'error',
+                url: s.customApiUrl || '',
+                key: s.customApiKey || '',
+                model: s.customApiModel || '',
+                message: s.customApiModel
+                    ? `Запрос к ${s.customApiModel} сорвался. Генерация временно ушла на основную модель.`
+                    : 'Запрос к кастомной модели сорвался. Генерация временно ушла на основную модель.',
+            });
             maybeNotifyCustomApiFallback();
             const fallbackContent = await runMainGen(promptText);
             if (includeMeta) {

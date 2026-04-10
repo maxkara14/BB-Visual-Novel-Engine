@@ -179,6 +179,10 @@ export function setupExtensionSettings() {
                 <div id="bb-vn-custom-api-block" style="display: ${s.useCustomApi ? 'flex' : 'none'}; flex-direction: column; gap: 8px; margin-top: 8px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
                     <input type="text" id="bb-vn-cfg-url" class="text_pole" placeholder="URL" value="${s.customApiUrl || ''}">
                     <input type="password" id="bb-vn-cfg-key" class="text_pole" placeholder="API Ключ" value="${s.customApiKey || ''}">
+                    <div id="bb-vn-custom-api-status" class="bb-custom-api-status is-idle">
+                        <span class="bb-custom-api-status-dot"></span>
+                        <span class="bb-custom-api-status-text">Подключение не проверено</span>
+                    </div>
                     <button id="bb-vn-btn-connect" class="menu_button"><i class="fa-solid fa-plug"></i>&nbsp; Подключиться</button>
                     <select id="bb-vn-cfg-model" class="text_pole" ${!s.customApiModel ? 'disabled' : ''}><option value="${s.customApiModel || ''}">${s.customApiModel || 'Модели не загружены'}</option></select>
                 </div>
@@ -237,6 +241,89 @@ export function setupExtensionSettings() {
     const target = document.querySelector("#extensions_settings2") || document.querySelector("#extensions_settings");
     if (target) target.insertAdjacentHTML('beforeend', settingsHtml);
 
+    let lastVerifiedCustomApiFingerprint = '';
+    let customApiRuntimeState = '';
+    let customApiRuntimeMessage = '';
+    const customApiStatusClasses = ['is-idle', 'is-pending', 'is-saved', 'is-connected', 'is-error', 'is-disabled'];
+
+    const buildCustomApiFingerprint = (url = '', key = '') => `${String(url || '').trim()}::${String(key || '').trim()}`;
+    const clearCustomApiRuntimeState = () => {
+        customApiRuntimeState = '';
+        customApiRuntimeMessage = '';
+    };
+
+    const setCustomApiStatus = (state = 'idle', text = '') => {
+        const status = jQuery('#bb-vn-custom-api-status');
+        if (!status.length) return;
+        status.removeClass(customApiStatusClasses.join(' ')).addClass(`is-${state}`);
+        status.find('.bb-custom-api-status-text').text(text);
+    };
+
+    const setCustomApiModelPlaceholder = (label = 'Модели не загружены', value = '') => {
+        const select = jQuery('#bb-vn-cfg-model').empty();
+        select.append(`<option value="${String(value || '').replace(/"/g, '&quot;')}">${label}</option>`);
+        select.prop('disabled', true);
+    };
+
+    const syncCustomApiVisualState = () => {
+        const useCustomApi = !!extension_settings[MODULE_NAME].useCustomApi;
+        const rawUrl = String(jQuery('#bb-vn-cfg-url').val() || '').trim();
+        const rawKey = String(jQuery('#bb-vn-cfg-key').val() || '').trim();
+        const selectedModel = String(extension_settings[MODULE_NAME].customApiModel || jQuery('#bb-vn-cfg-model').val() || '').trim();
+        const currentFingerprint = buildCustomApiFingerprint(rawUrl, rawKey);
+
+        if (!useCustomApi) {
+            setCustomApiStatus('disabled', 'Кастомное подключение выключено.');
+            return;
+        }
+        if (!rawUrl) {
+            clearCustomApiRuntimeState();
+            setCustomApiStatus('idle', 'Укажите URL для проверки подключения.');
+            setCustomApiModelPlaceholder('Сначала укажите URL');
+            return;
+        }
+        if (!rawKey) {
+            clearCustomApiRuntimeState();
+            setCustomApiStatus('idle', 'Добавьте API-ключ для проверки подключения.');
+            setCustomApiModelPlaceholder('Нужен API-ключ');
+            return;
+        }
+        if (currentFingerprint && currentFingerprint === lastVerifiedCustomApiFingerprint) {
+            if (customApiRuntimeState === 'error') {
+                setCustomApiStatus('error', customApiRuntimeMessage || 'Последний запрос к кастомной модели сорвался. Генерация ушла на основную модель.');
+                return;
+            }
+            setCustomApiStatus('connected', selectedModel ? `Подключено: ${selectedModel}` : 'Подключение подтверждено.');
+            return;
+        }
+
+        clearCustomApiRuntimeState();
+        if (selectedModel) {
+            setCustomApiModelPlaceholder(`${selectedModel} · требуется переподключение`, selectedModel);
+            setCustomApiStatus('saved', `Сохранена модель ${selectedModel}. Нажмите «Подключиться», чтобы проверить соединение.`);
+            return;
+        }
+
+        setCustomApiModelPlaceholder('Подключение не проверено');
+        setCustomApiStatus('idle', 'Подключение не проверено. Нажмите «Подключиться».');
+    };
+
+    const customApiHealthHandler = (event) => {
+        const detail = event?.detail && typeof event.detail === 'object' ? event.detail : {};
+        const runtimeFingerprint = buildCustomApiFingerprint(detail.url || '', detail.key || '');
+        const currentFingerprint = buildCustomApiFingerprint(jQuery('#bb-vn-cfg-url').val(), jQuery('#bb-vn-cfg-key').val());
+        if (runtimeFingerprint && currentFingerprint && runtimeFingerprint !== currentFingerprint) return;
+        customApiRuntimeState = detail.state === 'error' ? 'error' : 'connected';
+        customApiRuntimeMessage = String(detail.message || '').trim();
+        syncCustomApiVisualState();
+    };
+
+    if (window.bbVnCustomApiHealthHandler) {
+        window.removeEventListener('bb-vn-custom-api-health', window.bbVnCustomApiHealthHandler);
+    }
+    window.bbVnCustomApiHealthHandler = customApiHealthHandler;
+    window.addEventListener('bb-vn-custom-api-health', customApiHealthHandler);
+
     const applyModelOptions = (models = [], preferredModel = '') => {
         const select = jQuery('#bb-vn-cfg-model').empty();
         const safeModels = Array.isArray(models)
@@ -277,14 +364,33 @@ export function setupExtensionSettings() {
     jQuery('#bb-vn-cfg-usecustom').on('change', function() { 
         const isChecked = jQuery(this).is(':checked'); extension_settings[MODULE_NAME].useCustomApi = isChecked;
         if (isChecked) jQuery('#bb-vn-custom-api-block').slideDown(200); else jQuery('#bb-vn-custom-api-block').slideUp(200);
-        saveSettingsDebounced(); 
+        if (!isChecked) lastVerifiedCustomApiFingerprint = '';
+        clearCustomApiRuntimeState();
+        saveSettingsDebounced();
+        syncCustomApiVisualState();
     });
-    jQuery('#bb-vn-cfg-url, #bb-vn-cfg-key').on('change input', () => { extension_settings[MODULE_NAME].customApiUrl = jQuery('#bb-vn-cfg-url').val(); extension_settings[MODULE_NAME].customApiKey = jQuery('#bb-vn-cfg-key').val(); saveSettingsDebounced(); });
-    jQuery(document).on('change', '#bb-vn-cfg-model', function() { extension_settings[MODULE_NAME].customApiModel = jQuery(this).val(); saveSettingsDebounced(); });
+    jQuery('#bb-vn-cfg-url, #bb-vn-cfg-key').on('change input', () => {
+        extension_settings[MODULE_NAME].customApiUrl = jQuery('#bb-vn-cfg-url').val();
+        extension_settings[MODULE_NAME].customApiKey = jQuery('#bb-vn-cfg-key').val();
+        if (buildCustomApiFingerprint(extension_settings[MODULE_NAME].customApiUrl, extension_settings[MODULE_NAME].customApiKey) !== lastVerifiedCustomApiFingerprint) {
+            lastVerifiedCustomApiFingerprint = '';
+        }
+        clearCustomApiRuntimeState();
+        saveSettingsDebounced();
+        syncCustomApiVisualState();
+    });
+    jQuery(document).on('change', '#bb-vn-cfg-model', function() {
+        extension_settings[MODULE_NAME].customApiModel = jQuery(this).val();
+        clearCustomApiRuntimeState();
+        saveSettingsDebounced();
+        syncCustomApiVisualState();
+    });
     jQuery('#bb-vn-cfg-usemacro').on('change', function() { extension_settings[MODULE_NAME].useMacro = jQuery(this).is(':checked'); saveSettingsDebounced(); injectCombinedSocialPrompt(); });
 
     jQuery('#bb-vn-btn-connect').on('click', async function() {
         const btn = jQuery(this); btn.html('...');
+        clearCustomApiRuntimeState();
+        setCustomApiStatus('pending', 'Проверяем подключение и загружаем модели...');
         try {
             const rawUrl = String(jQuery('#bb-vn-cfg-url').val() || '').trim();
             const rawKey = String(jQuery('#bb-vn-cfg-key').val() || '').trim();
@@ -302,16 +408,30 @@ export function setupExtensionSettings() {
                 applyModelOptions(modelIds, extension_settings[MODULE_NAME].customApiModel || '');
                 extension_settings[MODULE_NAME].useCustomApi = true;
                 jQuery('#bb-vn-cfg-usecustom').prop('checked', true);
+                lastVerifiedCustomApiFingerprint = buildCustomApiFingerprint(rawUrl, rawKey);
+                clearCustomApiRuntimeState();
+                const activeModel = String(extension_settings[MODULE_NAME].customApiModel || jQuery('#bb-vn-cfg-model').val() || '').trim();
+                setCustomApiStatus('connected', activeModel
+                    ? `Подключено: ${activeModel}. Найдено моделей: ${modelIds.length}.`
+                    : `Подключено. Найдено моделей: ${modelIds.length}.`);
                 saveSettingsDebounced();
                 notifySuccess("Модели загружены!");
             } else {
                 throw new Error('Список моделей пустой');
             }
         } catch (e) {
+            lastVerifiedCustomApiFingerprint = '';
+            clearCustomApiRuntimeState();
+            const savedModel = String(extension_settings[MODULE_NAME].customApiModel || '').trim();
+            if (savedModel) setCustomApiModelPlaceholder(`${savedModel} · подключение не подтверждено`, savedModel);
+            else setCustomApiModelPlaceholder('Подключение не удалось');
+            setCustomApiStatus('error', 'Ошибка подключения. Проверьте URL, ключ и доступность API.');
             console.error('[BB VN] Ошибка подключения custom API:', e);
             notifyError("Ошибка подключения или пустой список моделей.");
         } finally { btn.html('Подключиться'); }
     });
+
+    syncCustomApiVisualState();
 
     jQuery('#bb-dbg-add-pts').on('click', () => injectDebugData('major_positive'));
     jQuery('#bb-dbg-sub-pts').on('click', () => injectDebugData('major_negative'));
