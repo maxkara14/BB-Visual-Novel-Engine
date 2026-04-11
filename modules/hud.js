@@ -1,5 +1,5 @@
 /* global SillyTavern */
-import { callPopup, characters, chat_metadata, getThumbnailUrl, saveChatDebounced } from '../../../../../script.js';
+import { callPopup, characters, chat_metadata, getThumbnailUrl, saveChatDebounced, saveSettingsDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { MODULE_NAME } from './constants.js';
 import { currentCalculatedStats, currentStoryMoments, socialParseDebug } from './state.js';
@@ -17,6 +17,7 @@ const CROPPER_STYLE_ID = 'bb-vne-cropper-style';
 let hudVisibilityRetryTimer = null;
 let cropperAssetsPromise = null;
 let activeAvatarCropper = null;
+const HUD_STYLE_ORDER = ['firm', 'glass'];
 
 function setHudPopupPriority(active) { document.body.classList.toggle('bb-hud-popup-active', Boolean(active)); }
 function hasContextInitialized(context) { return !!context && (Object.prototype.hasOwnProperty.call(context, 'chatId') || Object.prototype.hasOwnProperty.call(context, 'chat')); }
@@ -24,6 +25,10 @@ function hasActiveChatContext(context) { const chatId = context?.chatId; return 
 function isDevModeEnabled() { const host = String(globalThis?.location?.hostname || '').toLowerCase(); return host === 'localhost' || host === '127.0.0.1' || host === '::1' || globalThis?.BB_VN_DEV === true; }
 function normalizeName(value = '') { return String(value || '').trim().toLowerCase().replace(/\s+/g, ' '); }
 function initials(name = '') { const words = String(name || '').trim().split(/\s+/).filter(Boolean); return words.length ? words.slice(0, 2).map(it => it[0].toUpperCase()).join('') : '?'; }
+function getHudStyle() { const value = String(extension_settings?.[MODULE_NAME]?.hudStyle || 'firm').trim().toLowerCase(); return HUD_STYLE_ORDER.includes(value) ? value : 'firm'; }
+function getHudStyleLabel(styleName = '') { return styleName === 'glass' ? 'GLASS STYLE' : 'WOOD STYLE'; }
+function applyHudStyle(styleName = getHudStyle()) { const hud = document.getElementById('bb-social-hud'); const toastContainer = document.getElementById('bb-social-toast-container'); if (hud) hud.dataset.style = styleName; if (toastContainer) toastContainer.dataset.style = styleName; document.body?.setAttribute('data-bb-hud-style', styleName); const labelNode = document.querySelector('.bb-hud-style-toggle'); if (labelNode) labelNode.textContent = getHudStyleLabel(styleName); }
+function cycleHudStyle() { const currentStyle = getHudStyle(); const currentIndex = HUD_STYLE_ORDER.indexOf(currentStyle); const nextStyle = HUD_STYLE_ORDER[(currentIndex + 1) % HUD_STYLE_ORDER.length] || 'firm'; extension_settings[MODULE_NAME].hudStyle = nextStyle; saveSettingsDebounced(); applyHudStyle(nextStyle); notifyInfo(`Стиль HUD переключён: ${getHudStyleLabel(nextStyle)}.`); }
 function customAvatarUrl(charName = '') { return String(chat_metadata['bb_vn_char_custom_avatars']?.[charName] || '').trim(); }
 function customAvatarThumbUrl() { return ''; }
 function avatarUrl(charName = '') { const custom = customAvatarUrl(charName); if (custom) return custom; const key = normalizeName(charName); const item = characters.find(c => normalizeName(c?.name) === key) || characters.find(c => { const n = normalizeName(c?.name); return n && (n.includes(key) || key.includes(n)); }); return item?.avatar && item.avatar !== 'none' ? getThumbnailUrl('avatar', item.avatar) : ''; }
@@ -34,7 +39,7 @@ function renderMemoryEntry(text = '', tone = 'neutral', meta = '') { const safeT
 function renderSoft(memory = {}) { return renderMemoryEntry(memory?.text || '', String(memory?.tone || 'neutral'), memory?.tone === 'positive' ? 'Мягкий положительный след' : memory?.tone === 'negative' ? 'Мягкий отрицательный след' : 'Мягкий след'); }
 function renderDeep(memory = {}) { const text = String(memory?.text || '').trim(); if (!text) return ''; return memory?.tone === 'dual' ? renderMemoryEntry(text, 'dual', 'Противоречивое незабываемое событие') : renderMemoryEntry(text, String(memory?.tone || 'neutral'), 'Незабываемое событие'); }
 function barStyle(value = 0, color = '#93c5fd') { const num = Math.max(-100, Math.min(100, parseInt(value, 10) || 0)); return num >= 0 ? `left:50%;width:${Math.abs(num) / 2}%;background:linear-gradient(90deg,rgba(255,255,255,0),${color});box-shadow:0 0 18px ${color};` : `right:50%;width:${Math.abs(num) / 2}%;background:linear-gradient(270deg,rgba(255,255,255,0),${color});box-shadow:0 0 18px ${color};`; }
-function progress(left, center, right, fill, accent = '', icon = '') { const style = accent ? ` style="color:${accent};position:relative;display:flex;justify-content:space-between;align-items:center;"` : ' style="position:relative;display:flex;justify-content:space-between;align-items:center;"'; return `<div class="bb-progress-wrapper"><div class="bb-progress-labels"${style}><span>${escapeHtml(left)}</span><span class="bb-label-center" style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;white-space:nowrap;">${icon}${escapeHtml(center)}</span><span>${escapeHtml(right)}</span></div><div class="bb-progress-bg"><div class="bb-progress-center-line"></div><div class="bb-progress-fill" style="${fill}"></div></div></div>`; }
+function progress(left, center, right, fill, accent = '', icon = '', extraClass = '') { const className = ['bb-progress-labels', extraClass].filter(Boolean).join(' '); const style = accent ? ` style="color:${accent};position:relative;display:flex;justify-content:space-between;align-items:center;"` : ' style="position:relative;display:flex;justify-content:space-between;align-items:center;"'; return `<div class="bb-progress-wrapper"><div class="${className}"${style}><span>${escapeHtml(left)}</span><span class="bb-label-center" style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;white-space:nowrap;">${icon}${escapeHtml(center)}</span><span>${escapeHtml(right)}</span></div><div class="bb-progress-bg"><div class="bb-progress-center-line"></div><div class="bb-progress-fill" style="${fill}"></div></div></div>`; }
 function avatarPreviewMarkup(charName = '') { return `<div class="bb-popup-avatar-preview-inner">${renderAvatar(charName)}</div>`; }
 function ensureCustomAvatarMap() { if (!chat_metadata['bb_vn_char_custom_avatars'] || typeof chat_metadata['bb_vn_char_custom_avatars'] !== 'object') chat_metadata['bb_vn_char_custom_avatars'] = {}; return chat_metadata['bb_vn_char_custom_avatars']; }
 function ensureCropperAssets() {
@@ -121,6 +126,7 @@ function renderTraitEntry(entry = {}) {
     const description = hasHeadline ? raw.slice(colonIndex + 1).trim() : raw;
     return `<div class="bb-char-trait-entry ${escapeHtml(tone)}"><div class="bb-char-trait-icon"><i class="fa-solid fa-gem"></i></div><div class="bb-char-trait-body">${title ? `<div class="bb-char-trait-name">${escapeHtml(title)}</div>` : ''}<div class="bb-char-trait-text">${escapeHtml(description)}</div></div></div>`;
 }
+function isDiaryMomentType(type = '') { return ['soft-positive', 'soft-negative', 'deep-positive', 'deep-negative'].includes(String(type || '').trim()); }
 function crystalRowMarkup(count = 0, type = 'positive', charName = '') {
     const safeCount = Math.max(0, Math.min(5, Number(count) || 0));
     const isPositive = type === 'positive';
@@ -193,7 +199,7 @@ function model(charName) {
             ? `<div class="bb-crystal-tracker bb-crystal-tracker-popup">${crystalRows.join('')}</div>`
             : '<div class="bb-char-popup-empty">Кристаллы для новой черты пока не собраны.</div>',
         affinityBar: barStyle(affinity, tier.color),
-        romanceBar: barStyle(romance, '#b54e85'),
+        romanceBar: barStyle(romance, '#9e6676'),
     };
 }
 function closePopup() { document.getElementById('dialogue_popup_ok')?.click(); }
@@ -268,7 +274,7 @@ function popupHtml(m) {
                     <div class="bb-char-popup-section-title">Шкалы отношений</div>
                     <div class="bb-char-popup-section-body">
                         ${progress('Ненависть', 'Равнодушие', 'Семья', m.affinityBar)}
-                        ${m.romance !== 0 ? progress('Неприязнь', 'Влечение', 'Любовь', m.romanceBar, '#b54e85', '<i class="fa-solid fa-heart" style="font-size:12px;margin-right:4px;"></i>') : '<div class="bb-char-popup-empty">Романтическая шкала пока не активна.</div>'}
+                        ${m.romance !== 0 ? progress('Неприязнь', 'Влечение', 'Любовь', m.romanceBar, '#9e6676', '<i class="fa-solid fa-heart" style="font-size:12px;margin-right:4px;"></i>', 'bb-progress-labels-romance') : '<div class="bb-char-popup-empty">Романтическая шкала пока не активна.</div>'}
                     </div>
                 </div>
             </div>
@@ -376,45 +382,18 @@ function bindPopupActions(charName) {
         const actions = cropSlot.querySelector('.bb-char-popup-avatar-actions');
         if (actions) actions.innerHTML = '<button type="button" class="menu_button bb-popup-avatar-apply"><i class="fa-solid fa-crop-simple"></i>&ensp;Применить</button><button type="button" class="menu_button bb-popup-avatar-cancel"><i class="fa-solid fa-xmark"></i>&ensp;Отмена</button>';
     }
-    const avatarThumbInput = null;
     root.querySelector('.bb-popup-avatar-pick')?.addEventListener('click', () => avatarInput?.click());
-    root.querySelector('.bb-popup-avatar-thumb-pick')?.addEventListener('click', () => avatarThumbInput?.click());
     avatarInput?.addEventListener('change', async () => {
         const file = avatarInput.files?.[0];
         if (!file) return;
         try {
             await openAvatarCropSession(root, file);
             notifyInfo('Выберите нужную область и нажмите «Применить».');
-            return;
-            const avatarMap = ensureCustomAvatarMap();
-            avatarMap[charName] = dataUrl;
-            saveChatDebounced();
-            renderSocialHud();
-            refreshPopupAvatar(root, charName);
-            notifySuccess('Аватар персонажа сохранён и сжат.');
         } catch (error) {
             void error;
             notifyError('Не удалось обработать изображение.');
         } finally {
             avatarInput.value = '';
-        }
-    });
-    avatarThumbInput?.addEventListener('change', async () => {
-        const file = avatarThumbInput.files?.[0];
-        if (!file) return;
-        try {
-            const dataUrl = await compressAvatarFile(file);
-            if (!chat_metadata['bb_vn_char_custom_avatar_thumbs'] || typeof chat_metadata['bb_vn_char_custom_avatar_thumbs'] !== 'object') chat_metadata['bb_vn_char_custom_avatar_thumbs'] = {};
-            chat_metadata['bb_vn_char_custom_avatar_thumbs'][charName] = dataUrl;
-            saveChatDebounced();
-            renderSocialHud();
-            refreshPopupAvatar(root, charName);
-            notifySuccess('Миниатюра персонажа сохранена.');
-        } catch (error) {
-            void error;
-            notifyError('Не удалось обработать миниатюру.');
-        } finally {
-            avatarThumbInput.value = '';
         }
     });
     root.querySelector('.bb-popup-avatar-apply')?.addEventListener('click', () => {
@@ -452,15 +431,6 @@ function bindPopupActions(charName) {
         refreshPopupAvatar(root, charName);
         notifyInfo('Кастомный аватар удалён.');
     });
-    root.querySelector('.bb-popup-avatar-thumb-clear')?.addEventListener('click', () => {
-        if (!chat_metadata['bb_vn_char_custom_avatar_thumbs']) return;
-        delete chat_metadata['bb_vn_char_custom_avatar_thumbs'][charName];
-        saveChatDebounced();
-        renderSocialHud();
-        refreshPopupAvatar(root, charName);
-        notifyInfo('Миниатюра персонажа удалена.');
-    });
-
     root.querySelectorAll('.bb-popup-crystallize-btn').forEach(button => {
         button.addEventListener('click', async () => {
             bindActivePersonaState();
@@ -529,9 +499,11 @@ export function renderSocialHud() {
     const visibleCharacters = names.length;
     const topCharacterName = visibleCharacters ? names[0] : '';
     const topAffinity = topCharacterName ? currentCalculatedStats[topCharacterName].affinity : 0;
-    const deepMomentsCount = currentStoryMoments.filter(moment => String(moment.type || '').includes('deep')).length;
+    const diaryMoments = currentStoryMoments.filter(moment => isDiaryMomentType(moment?.type));
+    const systemMoments = currentStoryMoments.filter(moment => !isDiaryMomentType(moment?.type));
+    const deepMomentsCount = diaryMoments.filter(moment => String(moment.type || '').includes('deep')).length;
     const activeChoiceTone = extension_settings[MODULE_NAME].emotionalChoiceFraming ? ((shouldShowLastUsedTone ? chat_metadata['bb_vn_last_used_choice_context']?.tone : chat_metadata['bb_vn_choice_context']?.tone) || 'не активен') : 'выключен';
-    const latestMoment = currentStoryMoments.length ? currentStoryMoments[currentStoryMoments.length - 1] : null;
+    const latestSystemMoment = systemMoments.length ? systemMoments[systemMoments.length - 1] : null;
     const debugStatus = socialParseDebug?.status || 'idle';
     const debugText = socialParseDebug?.details || 'Нет данных';
     const debugLabel = debugStatus === 'parsed' ? 'HTML найден' : debugStatus === 'injecting' ? 'Макрос внедрён' : debugStatus === 'stored' ? 'HTML сохранён' : debugStatus === 'checking' ? 'Проверка' : debugStatus === 'error' ? 'HTML не распознан' : debugStatus === 'missing' ? 'HTML не найден' : 'Ожидание';
@@ -549,14 +521,14 @@ export function renderSocialHud() {
     const logBox = document.getElementById('bb-hud-log');
     if (logBox) {
         const logs = chat_metadata['bb_vn_global_log'] || [];
-        const preview = `<div class="bb-panel-hero bb-panel-hero-system"><div class="bb-panel-kicker">Журнал</div><div class="bb-panel-headline">Системный журнал</div><div class="bb-panel-subtitle">Здесь показаны изменения отношений и текущий инжектируемый prompt.</div><div class="bb-panel-stat-grid"><div class="bb-panel-stat"><span class="bb-panel-stat-label">Событий</span><strong>${logs.length}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Активный тон</span><strong>${escapeHtml(activeChoiceTone)}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Последнее событие</span><strong>${escapeHtml(latestMoment?.title || '—')}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Social HTML</span><strong>${escapeHtml(debugLabel)}</strong></div></div><div class="bb-panel-subtitle" style="margin-top:8px;">${escapeHtml(debugText)}</div></div><details class="bb-prompt-card"><summary class="bb-prompt-summary"><span>🧠 Inject Prompt</span><button type="button" class="menu_button bb-copy-prompt-btn"><i class="fa-solid fa-copy"></i>&nbsp; Копировать</button></summary><div class="bb-prompt-hint">Это текущий инжект, собранный из актуального состояния чата. После нового выбора VN или следующего хода он может измениться.</div><pre class="bb-prompt-pre">${escapeHtml(getCombinedSocial())}</pre></details>`;
+        const preview = `<div class="bb-panel-hero bb-panel-hero-system"><div class="bb-panel-kicker">Система</div><div class="bb-panel-headline">Служебный журнал</div><div class="bb-panel-subtitle">Здесь живут сдвиги отношений, системные метки и текущий inject prompt. Личные следы и воспоминания вынесены в дневник.</div><div class="bb-panel-stat-grid"><div class="bb-panel-stat"><span class="bb-panel-stat-label">Событий</span><strong>${logs.length}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Активный тон</span><strong>${escapeHtml(activeChoiceTone)}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Последнее событие</span><strong>${escapeHtml(latestSystemMoment?.title || '—')}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Social HTML</span><strong>${escapeHtml(debugLabel)}</strong></div></div><div class="bb-panel-subtitle" style="margin-top:8px;">${escapeHtml(debugText)}</div></div><details class="bb-prompt-card"><summary class="bb-prompt-summary"><span>🧠 Inject Prompt</span><button type="button" class="menu_button bb-copy-prompt-btn"><i class="fa-solid fa-copy"></i>&nbsp; Копировать</button></summary><div class="bb-prompt-hint">Это текущий инжект, собранный из актуального состояния чата. После нового выбора VN или следующего хода он может измениться.</div><pre class="bb-prompt-pre">${escapeHtml(getCombinedSocial())}</pre></details>`;
         if (!logs.length) logBox.innerHTML = `${preview}<div class="bb-empty-hud">Журнал событий пуст.</div>`; else { let logHtml = '<div class="bb-system-log-list">'; [...logs].reverse().forEach(log => { logHtml += `<div class="bb-glog-item ${log.type}"><span class="bb-glog-time">[${log.time}]</span><span class="bb-glog-text">${log.text}</span></div>`; }); logHtml += '</div>'; logBox.innerHTML = preview + logHtml; }
         logBox.querySelector('.bb-copy-prompt-btn')?.addEventListener('click', async () => { try { await navigator.clipboard.writeText(getCombinedSocial()); notifySuccess('Prompt скопирован!'); } catch (error) { void error; notifyError('Ошибка копирования.'); } });
     }
     const momentsBox = document.getElementById('bb-hud-moments');
     if (momentsBox) {
-        if (!currentStoryMoments.length) momentsBox.innerHTML = `<div class="bb-panel-hero bb-panel-hero-diary"><div class="bb-panel-kicker">Дневник событий</div><div class="bb-panel-headline">Дневник ещё пуст</div><div class="bb-panel-subtitle">Здесь будут сохраняться важные изменения.</div></div><div class="bb-empty-hud">Памятные моменты пока не накопились.</div>`;
-        else { let html = `<div class="bb-panel-hero bb-panel-hero-diary"><div class="bb-panel-kicker">Дневник событий</div><div class="bb-panel-headline">События</div><div class="bb-panel-subtitle">Важные события, зафиксированные по ходу чата.</div><div class="bb-panel-stat-grid"><div class="bb-panel-stat"><span class="bb-panel-stat-label">Записей</span><strong>${currentStoryMoments.length}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Последняя</span><strong>${escapeHtml(currentStoryMoments[currentStoryMoments.length - 1]?.title || '—')}</strong></div></div></div><div class="bb-diary-stack">`; [...currentStoryMoments].reverse().forEach((moment, index) => { html += `<div class="bb-moment-card ${escapeHtml(moment.type || 'neutral')}"><div class="bb-moment-pin"></div><div class="bb-moment-header"><div class="bb-moment-meta"><span class="bb-moment-stamp">Запись ${currentStoryMoments.length - index}</span><span class="bb-moment-char">${escapeHtml(moment.char || 'Сцена')}</span></div><span class="bb-moment-title">${escapeHtml(moment.title)}</span></div><div class="bb-moment-divider"></div><div class="bb-moment-body"><div class="bb-moment-text">${escapeHtml(moment.text)}</div></div></div>`; }); momentsBox.innerHTML = `${html}</div>`; }
+        if (!diaryMoments.length) momentsBox.innerHTML = `<div class="bb-panel-hero bb-panel-hero-diary"><div class="bb-panel-kicker">Дневник</div><div class="bb-panel-headline">Пока чистые страницы</div><div class="bb-panel-subtitle">Здесь остаются только мягкие и незабываемые следы, а системные сдвиги живут отдельно.</div></div><div class="bb-empty-hud">Рукописных записей пока не появилось.</div>`;
+        else { let html = `<div class="bb-panel-hero bb-panel-hero-diary"><div class="bb-panel-kicker">Дневник</div><div class="bb-panel-headline">Личные записи</div><div class="bb-panel-subtitle">Здесь остаются только мягкие и незабываемые следы: без сдвигов статуса, служебных пометок и системных записей.</div></div><div class="bb-diary-stack">`; [...diaryMoments].reverse().forEach((moment, index) => { html += `<div class="bb-moment-card ${escapeHtml(moment.type || 'neutral')}"><div class="bb-moment-pin"></div><div class="bb-moment-header"><div class="bb-moment-meta"><span class="bb-moment-stamp">${diaryMoments.length - index}.</span><span class="bb-moment-char">${escapeHtml(moment.char || 'Сцена')}</span></div></div><div class="bb-moment-body"><div class="bb-moment-text">${escapeHtml(moment.text)}</div></div></div>`; }); momentsBox.innerHTML = `${html}</div>`; }
     }
     syncToastContainerWithHud();
 }
@@ -576,10 +548,12 @@ export function closeSocialHud() { jQuery('#bb-social-hud').removeClass('open');
 
 export function ensureHudContainer() {
     if (document.getElementById('bb-social-hud')) return;
-    jQuery('body').append(`<button type="button" id="bb-social-hud-backdrop" aria-label="Закрыть HUD"></button><button type="button" id="bb-social-hud-mobile-launcher" aria-label="Открыть HUD"><i class="fa-solid fa-users-viewfinder"></i><span>VNE</span></button><div id="bb-social-hud"><div id="bb-social-hud-toggle" title="VNE HUD"><i class="fa-solid fa-users-viewfinder"></i><span class="bb-toggle-label">VNE</span><i class="fa-solid fa-chevron-left" id="bb-hud-arrow"></i></div><div class="bb-hud-header"><div class="bb-hud-header-top"><span class="bb-hud-badge">Visual Novel Engine</span><div class="bb-hud-status-row"><span class="bb-hud-live-dot"><i class="fa-solid fa-circle"></i> активно</span><button type="button" class="bb-hud-mobile-close" aria-label="Закрыть HUD"><i class="fa-solid fa-xmark"></i></button></div></div><div class="bb-hud-title">VNE</div><div class="bb-hud-subtitle">персонажи · журнал · дневник событий</div></div><div class="bb-hud-tabs"><div class="bb-hud-tab active" data-tab="chars"><i class="fa-solid fa-heart-pulse"></i><span>Персонажи</span></div><div class="bb-hud-tab" data-tab="log"><i class="fa-solid fa-terminal"></i><span>Система</span></div><div class="bb-hud-tab" data-tab="moments"><i class="fa-solid fa-book-open"></i><span>Дневник</span></div></div><div class="bb-hud-content active" id="bb-hud-chars"></div><div class="bb-hud-content" id="bb-hud-log"></div><div class="bb-hud-content" id="bb-hud-moments"></div></div>`);
+    jQuery('body').append(`<button type="button" id="bb-social-hud-backdrop" aria-label="Закрыть HUD"></button><button type="button" id="bb-social-hud-mobile-launcher" aria-label="Открыть HUD"><i class="fa-solid fa-users-viewfinder"></i><span>VNE</span></button><div id="bb-social-hud"><div id="bb-social-hud-toggle" title="VNE HUD"><i class="fa-solid fa-users-viewfinder"></i><span class="bb-toggle-label">VNE</span><i class="fa-solid fa-chevron-left" id="bb-hud-arrow"></i></div><div class="bb-hud-header"><div class="bb-hud-header-top"><button type="button" class="bb-hud-badge bb-hud-style-toggle">WOOD STYLE</button><div class="bb-hud-status-row"><span class="bb-hud-live-dot">Visual Novel Engine</span><button type="button" class="bb-hud-mobile-close" aria-label="Закрыть HUD"><i class="fa-solid fa-xmark"></i></button></div></div><div class="bb-hud-title">VNE</div><div class="bb-hud-subtitle">персонажи · дневник · система</div></div><div class="bb-hud-tabs"><div class="bb-hud-tab active" data-tab="chars"><i class="fa-solid fa-heart-pulse"></i><span>Персонажи</span></div><div class="bb-hud-tab" data-tab="moments"><i class="fa-solid fa-book-open"></i><span>Дневник</span></div><div class="bb-hud-tab" data-tab="log"><i class="fa-solid fa-terminal"></i><span>Система</span></div></div><div class="bb-hud-content active" id="bb-hud-chars"></div><div class="bb-hud-content" id="bb-hud-moments"></div><div class="bb-hud-content" id="bb-hud-log"></div></div>`);
     jQuery('.bb-hud-tab').on('click', function() { jQuery('.bb-hud-tab').removeClass('active'); jQuery('.bb-hud-content').removeClass('active'); jQuery(this).addClass('active'); jQuery(`#bb-hud-${jQuery(this).data('tab')}`).addClass('active'); });
+    jQuery(document).off('click.bbHudStyle', '.bb-hud-style-toggle').on('click.bbHudStyle', '.bb-hud-style-toggle', function(e) { e.preventDefault(); cycleHudStyle(); });
     jQuery('#bb-social-hud-toggle, #bb-social-hud-mobile-launcher').on('click', () => { if (jQuery('#bb-social-hud').hasClass('open')) closeSocialHud(); else openSocialHud(); });
     jQuery('#bb-social-hud-backdrop, .bb-hud-mobile-close').on('click', closeSocialHud);
+    applyHudStyle();
     const toggle = document.getElementById('bb-social-hud-toggle'); let timer = null; const scheduleIdle = () => { if (!toggle) return; clearTimeout(timer); toggle.classList.remove('bb-toggle-idle'); if (window.innerWidth <= 760) timer = setTimeout(() => toggle.classList.add('bb-toggle-idle'), 1500); }; scheduleIdle(); if (toggle) ['pointerdown', 'touchstart', 'mouseenter', 'focus'].forEach(eventName => toggle.addEventListener(eventName, scheduleIdle));
     window.addEventListener('resize', () => { if (window.innerWidth > 760) jQuery('#bb-social-hud-backdrop').removeClass('open'); syncToastContainerWithHud(); scheduleIdle(); });
 }

@@ -127,27 +127,66 @@ export function pickToastMoment(currentMoment, nextMoment) {
         : currentMoment;
 }
 
+function getMomentDetailText(moment) {
+    const rawText = String(moment?.text || '').trim();
+    const charName = String(moment?.char || '').trim();
+    const prefix = charName ? `${charName}: ` : '';
+    return prefix && rawText.startsWith(prefix) ? rawText.slice(prefix.length).trim() : rawText;
+}
+
+function joinAtmosphericText(lead, detail = '') {
+    const cleanLead = String(lead || '').trim();
+    const cleanDetail = String(detail || '').trim();
+    return cleanDetail ? `${cleanLead} ${cleanDetail}` : cleanLead;
+}
+
+function buildStoryToastCopy(moment) {
+    const charName = String(moment?.char || 'этот персонаж').trim() || 'этот персонаж';
+    const detail = getMomentDetailText(moment);
+
+    switch (moment?.type) {
+        case 'deep-positive':
+            return { title: 'Незабываемое событие', text: joinAtmosphericText(`Для ${charName} это останется глубоко в памяти.`, detail) };
+        case 'deep-negative':
+            return { title: 'Тяжёлое воспоминание', text: joinAtmosphericText(`Для ${charName} это останется тяжёлым воспоминанием.`, detail) };
+        case 'soft-positive':
+            return { title: 'Новая запись', text: joinAtmosphericText(`В дневнике появилась тёплая заметка о ${charName}.`, detail) };
+        case 'soft-negative':
+            return { title: 'Тревожная запись', text: joinAtmosphericText(`В дневнике осталась колкая заметка о ${charName}.`, detail) };
+        case 'tier-shift':
+            return { title: 'Поворот в отношениях', text: joinAtmosphericText(`Связь с ${charName} перешла на новую ступень.`, detail) };
+        case 'status-shift':
+            return { title: 'Смена статуса', text: joinAtmosphericText(`${charName} теперь смотрит на вас немного иначе.`, detail) };
+        case 'intro':
+            return { title: 'Новая связь', text: `В круге ваших связей появился ${charName}.` };
+        case 'romance-positive':
+            return { title: 'Сердечный отклик', text: joinAtmosphericText(`Между вами и ${charName} остался тёплый романтический след.`, detail) };
+        case 'romance-negative':
+            return { title: 'Раненое чувство', text: joinAtmosphericText(`Между вами и ${charName} остался болезненный романтический след.`, detail) };
+        default:
+            return { title: moment?.title || 'Новая запись', text: joinAtmosphericText(`В истории связи появилась новая отметка о ${charName}.`, detail) };
+    }
+}
+
 export function showStoryMomentToast(moment) {
     if (!moment) return;
 
     const toastMap = {
-        'deep-positive': { badge: 'Дневник', variant: 'milestone', icon: 'fa-solid fa-sparkles', accent: '#c084fc' },
-        'deep-negative': { badge: 'Дневник', variant: 'alert', icon: 'fa-solid fa-bolt', accent: '#fb7185' },
-        'soft-positive': { badge: 'Дневник', variant: 'positive', icon: 'fa-solid fa-book-open-reader', accent: '#4ade80' },
-        'soft-negative': { badge: 'Дневник', variant: 'negative', icon: 'fa-solid fa-feather-pointed', accent: '#f87171' },
-        'tier-shift': { badge: 'Маршрут', variant: 'system', icon: 'fa-solid fa-arrow-trend-up', accent: '#60a5fa' },
-        'status-shift': { badge: 'Маршрут', variant: 'milestone', icon: 'fa-solid fa-user-pen', accent: '#f59e0b' },
-        'intro': { badge: 'Трекер', variant: 'system', icon: 'fa-solid fa-user-plus', accent: '#93c5fd' },
-        'romance-positive': { badge: 'Влечение', variant: 'milestone', icon: 'fa-solid fa-heart', accent: '#f472b6' },
-        'romance-negative': { badge: 'Отторжение', variant: 'alert', icon: 'fa-solid fa-heart-crack', accent: '#e11d48' },
+        'deep-positive': { badge: 'Память', variant: 'milestone', icon: 'fa-solid fa-sparkles', accent: '#85718a' },
+        'deep-negative': { badge: 'Память', variant: 'alert', icon: 'fa-solid fa-bolt', accent: '#9a6762' },
+        'soft-positive': { badge: 'Дневник', variant: 'positive', icon: 'fa-solid fa-book-open-reader', accent: '#6f8f72' },
+        'soft-negative': { badge: 'Дневник', variant: 'negative', icon: 'fa-solid fa-feather-pointed', accent: '#9a6762' },
+        'tier-shift': { badge: 'Связи', variant: 'system', icon: 'fa-solid fa-arrow-trend-up', accent: '#73808d' },
+        'status-shift': { badge: 'Связи', variant: 'milestone', icon: 'fa-solid fa-user-pen', accent: '#a17a4f' },
+        'intro': { badge: 'Персонажи', variant: 'system', icon: 'fa-solid fa-user-plus', accent: '#73808d' },
+        'romance-positive': { badge: 'Влечение', variant: 'milestone', icon: 'fa-solid fa-heart', accent: '#9a6f7e' },
+        'romance-negative': { badge: 'Влечение', variant: 'alert', icon: 'fa-solid fa-heart-crack', accent: '#8f5a64' },
     };
     const toastConfig = toastMap[moment.type] || toastMap['soft-positive'];
-    const rawText = String(moment.text || '');
-    const prefix = moment.char ? `${moment.char}: ` : '';
-    const text = prefix && rawText.startsWith(prefix) ? rawText : `${moment.char || 'Сцена'}: ${rawText}`;
+    const copy = buildStoryToastCopy(moment);
     showHudToast({
-        title: moment.title || 'Новая запись',
-        text,
+        title: copy.title,
+        text: copy.text,
         badge: toastConfig.badge,
         variant: toastConfig.variant,
         icon: toastConfig.icon,

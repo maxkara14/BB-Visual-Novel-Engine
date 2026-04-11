@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS = {
     customApiModel: '',
     useMacro: false,
     emotionalChoiceFraming: true,
+    hudStyle: 'firm',
 };
 
 export const SOCIAL_PROMPT = `[SYSTEM INSTRUCTION: VISUAL NOVEL ENGINE]

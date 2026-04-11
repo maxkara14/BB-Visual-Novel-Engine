@@ -609,8 +609,8 @@ export function getShiftDescriptor(delta, moodlet = '') {
     const normalizedMoodlet = sanitizeMoodlet(moodlet);
     const absDelta = Math.abs(delta);
     const color = delta > 0
-        ? (absDelta >= 9 ? '#c084fc' : absDelta >= 4 ? '#4ade80' : '#86efac')
-        : (delta < 0 ? (absDelta >= 9 ? '#fca5a5' : absDelta >= 4 ? '#f87171' : '#fda4af') : '#94a3b8');
+        ? (absDelta >= 9 ? '#5e7468' : absDelta >= 4 ? '#6e8873' : '#7f977f')
+        : (delta < 0 ? (absDelta >= 9 ? '#845853' : absDelta >= 4 ? '#966862' : '#af817e') : '#7d7a74');
     const logType = delta > 0 ? 'plus' : delta < 0 ? 'minus' : 'system';
     if (normalizedMoodlet) {
         return {

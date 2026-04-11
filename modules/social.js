@@ -630,12 +630,12 @@ export function injectCombinedSocialPrompt() {
 }
 
 export function getTierInfo(affinity) {
-    if (affinity <= -50) return { label: 'Враг', class: 'tier-enemy', color: '#ef4444' };
-    if (affinity < -10) return { label: 'Неприязнь', class: 'tier-enemy', color: '#f87171' };
-    if (affinity <= 10) return { label: 'Незнакомец', class: 'tier-neutral', color: '#a1a1aa' };
-    if (affinity <= 50) return { label: 'Приятель', class: 'tier-friend', color: '#4ade80' };
-    if (affinity <= 80) return { label: 'Друг', class: 'tier-friend', color: '#22c55e' };
-    return { label: 'Близкий', class: 'tier-close', color: '#c084fc' };
+    if (affinity <= -50) return { label: 'Враг', class: 'tier-enemy', color: '#865752' };
+    if (affinity < -10) return { label: 'Неприязнь', class: 'tier-enemy', color: '#a06d67' };
+    if (affinity <= 10) return { label: 'Незнакомец', class: 'tier-neutral', color: '#857a6d' };
+    if (affinity <= 50) return { label: 'Приятель', class: 'tier-friend', color: '#69866f' };
+    if (affinity <= 80) return { label: 'Друг', class: 'tier-friend', color: '#587660' };
+    return { label: 'Близкий', class: 'tier-close', color: '#7a6782' };
 }
 
 export function getUnforgettableImpact(memories = []) {
@@ -1304,7 +1304,7 @@ export function recalculateAllStats(isNewMessage = false) {
                     const logType = totalDelta > 0 ? 'plus' : (totalDelta < 0 ? 'minus' : 'system');
                     let pointsHtml = '';
                     if (f_delta !== 0) pointsHtml += `<div class="bb-glog-points" style="margin-right: 4px; padding: 4px 10px; border-radius: 8px;">🤝 Доверие: ${f_delta > 0 ? '+' : ''}${f_delta}</div>`;
-                    if (r_delta !== 0) pointsHtml += `<div class="bb-glog-points" style="color: #f472b6; border-color: rgba(244,114,182,0.35); background: rgba(190,24,93,0.28); margin-right: 4px; padding: 4px 10px; border-radius: 8px;">💖 Влечение: ${r_delta > 0 ? '+' : ''}${r_delta}</div>`;
+                    if (r_delta !== 0) pointsHtml += `<div class="bb-glog-points bb-glog-points-romance" style="margin-right: 4px; padding: 4px 10px; border-radius: 8px;">💖 Влечение: ${r_delta > 0 ? '+' : ''}${r_delta}</div>`;
                     let timeStr = "";
                     if (msg.send_date) { try { timeStr = new Date(msg.send_date).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); } catch(e) {} }
                     const logText = `<div class="bb-glog-main" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;"><span class="bb-glog-char">${escapeHtml(charName)}</span>${moodlet ? `<span class="bb-glog-delta" style="align-self: flex-start;">${escapeHtml(moodlet)}</span>` : ''}</div>${update.reason ? `<div class="bb-glog-reason" style="margin-top: 4px;">${escapeHtml(update.reason)}</div>` : ''}<div style="display:flex; flex-wrap:wrap; margin-top:6px;">${pointsHtml}</div>`;
