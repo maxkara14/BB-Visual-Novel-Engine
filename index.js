@@ -176,7 +176,7 @@ jQuery(async () => {
         eventSource.on(event_types.MESSAGE_DELETED, () => { restoreVNOptions(false); recalculateAllStats(); });
         eventSource.on(event_types.MESSAGE_SWIPED, () => { restoreVNOptions(false); recalculateAllStats(); });
         eventSource.on(event_types.MESSAGE_UPDATED, () => { recalculateAllStats(); });
-        eventSource.on(event_types.GENERATION_STOPPED, () => { recalculateAllStats(); });
+        eventSource.on(event_types.GENERATION_STOPPED, () => { recalculateAllStats(true); });
         
         if (event_types.CHARACTER_MESSAGE_RENDERED) {
             eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, () => { recalculateAllStats(); });

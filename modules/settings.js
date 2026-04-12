@@ -509,7 +509,15 @@ export function setupExtensionSettings() {
     });
 
     jQuery('#bb-dbg-toast').on('click', () => {
-        const types = ['system', 'positive', 'negative', 'milestone', 'alert'];
+        const sample = [
+            { title: 'Тестовый сигнал', text: 'Проверка системного уведомления.', badge: 'Дебаг', variant: 'system', icon: 'fa-solid fa-bug' },
+            { title: 'Память отозвалась', text: 'Так выглядит тематический toast памяти.', badge: 'Дебаг', variant: 'memory', icon: 'fa-solid fa-book-open-reader' },
+            { title: 'Связь потеплела', text: 'Так выглядит toast сближения.', badge: 'Дебаг', variant: 'bond', icon: 'fa-solid fa-handshake-angle' },
+            { title: 'Искра сработала', text: 'Так выглядит романтический toast.', badge: 'Дебаг', variant: 'romance', icon: 'fa-solid fa-heart' },
+            { title: 'Надлом маршрута', text: 'Так выглядит тревожный toast разлада.', badge: 'Дебаг', variant: 'fracture', icon: 'fa-solid fa-heart-crack' },
+            { title: 'Редкий момент', text: 'Так выглядит усиленный toast крупного события.', badge: 'Дебаг', variant: 'legendary', icon: 'fa-solid fa-gem' },
+        ][Math.floor(Math.random() * 6)];
+        const types = ['system', 'memory', 'bond', 'romance', 'fracture', 'legendary'];
         showHudToast({ title: 'Тест', text: 'Проверка уведомлений', badge: 'Дебаг', variant: types[Math.floor(Math.random()*types.length)], icon: 'fa-solid fa-bug' });
     });
 

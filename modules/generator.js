@@ -268,6 +268,218 @@ function isValidTraitResult(value = '') {
     return traitDescription.length >= 8;
 }
 
+function sanitizeCharacterDescriptionResult(value = '') {
+    return String(value || '')
+        .replace(/```[\s\S]*?```/g, ' ')
+        .replace(/^["'«»„“]+|["'«»„“]+$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 520);
+}
+
+function isValidCharacterDescriptionResult(value = '') {
+    const text = sanitizeCharacterDescriptionResult(value);
+    if (!text || text.length < 60) return false;
+    if (/[{}\[\]]/.test(text)) return false;
+    if (isLikelyModelRefusalText(text)) return false;
+    return true;
+}
+
+function sanitizeStructuredCharacterDescriptionResult(value = '') {
+    return String(value || '')
+        .replace(/```[\s\S]*?```/g, ' ')
+        .replace(/^["'«»„“]+|["'«»„“]+$/g, '')
+        .replace(/\r/g, '')
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .join('\n');
+}
+
+function isValidStructuredCharacterDescriptionResult(value = '') {
+    const text = sanitizeStructuredCharacterDescriptionResult(value);
+    if (!text || text.length < 140) return false;
+    if (/[{}\[\]]/.test(text)) return false;
+    if (isLikelyModelRefusalText(text)) return false;
+    return text.includes(':');
+}
+
+function collectCharacterDescriptionPromptContext() {
+    try {
+        const context = SillyTavern.getContext?.();
+        const chat = Array.isArray(context?.chat) ? context.chat : [];
+        const userName = String(context?.substituteParams?.('{{user}}') || 'пользователь').trim() || 'пользователь';
+        const personaText = String(context?.substituteParams?.('{{persona}}') || '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 900);
+
+        let remainingChars = 3600;
+        const recentLines = [];
+        for (const message of chat.slice(-10).reverse()) {
+            const rawText = String(message?.mes || message?.text || '')
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (!rawText) continue;
+
+            const speaker = message?.is_user
+                ? userName
+                : String(message?.name || 'Сцена').trim() || 'Сцена';
+            const line = `${speaker}: ${rawText}`;
+            if (line.length > remainingChars && recentLines.length > 0) break;
+            recentLines.unshift(line.slice(0, remainingChars));
+            remainingChars -= line.length + 1;
+            if (remainingChars <= 0) break;
+        }
+
+        return {
+            userName,
+            personaText,
+            recentChat: recentLines.join('\n'),
+        };
+    } catch (error) {
+        void error;
+        return {
+            userName: 'пользователь',
+            personaText: '',
+            recentChat: '',
+        };
+    }
+}
+
+async function generateStructuredCharacterDescription({ charName = '', stats = {}, currentDescription = '' } = {}) {
+    const safeCharName = String(charName || '').trim() || 'персонаж';
+    const affinity = parseInt(stats?.affinity, 10) || 0;
+    const romance = parseInt(stats?.romance, 10) || 0;
+    const status = String(stats?.status || '').trim() || 'нейтральный фактор';
+    const memories = stats?.memories && typeof stats.memories === 'object' ? stats.memories : {};
+    const coreTraits = Array.isArray(stats?.core_traits)
+        ? stats.core_traits
+            .map(item => String(item?.trait || '').trim())
+            .filter(Boolean)
+            .slice(0, 5)
+        : [];
+    const notableMemories = [
+        ...(Array.isArray(memories.deep) ? memories.deep.slice(-4) : []),
+        ...(Array.isArray(memories.soft) ? memories.soft.slice(-3) : []),
+    ]
+        .map(memory => String(memory?.text || '').trim())
+        .filter(Boolean)
+        .slice(0, 5);
+    const historySummary = Array.isArray(stats?.history)
+        ? stats.history.slice(-6).map(entry => {
+            const delta = parseInt(entry?.delta, 10) || 0;
+            const reason = String(entry?.reason || '').replace(/\s+/g, ' ').trim();
+            return `${delta > 0 ? '+' : ''}${delta}${reason ? ` :: ${reason}` : ''}`;
+        }).filter(Boolean)
+        : [];
+    const currentProfile = String(currentDescription || '').trim().slice(0, 1200);
+    const { userName, personaText, recentChat } = collectCharacterDescriptionPromptContext();
+
+    const prompt = `Собери полезный профиль персонажа для prompt-инжекта в ролевом чате.
+
+Нужно создать не художественный абзац, а удобную памятку по персонажу, чтобы модель лучше держала его образ.
+Опирайся на историю чата, персону пользователя, текущую динамику отношений и уже накопленные факты.
+
+[ФОРМАТ ОТВЕТА]
+Верни только готовый профиль на русском языке, без markdown, без пояснений и без вступления.
+Сделай 7-8 строк в формате:
+Имя: ...
+Возраст / этап жизни: ...
+Роль в истории: ...
+Внешний образ: ...
+Характер и манера: ...
+Биография и контекст: ...
+Отношение к ${userName}: ...
+Что важно учитывать в сценах: ...
+
+[ПРАВИЛА]
+1. Если данных недостаточно, прямо пиши "не указано напрямую" или "данных пока мало", а не выдумывай.
+2. Можно аккуратно обобщать чат, но нельзя придумывать конкретные факты, которых не было.
+3. Желательно держать итог компактным и содержательным, обычно в районе 700-1400 символов, но это мягкая рекомендация, а не жёсткий лимит.
+4. Профиль должен быть полезен для будущих сцен, а не пересказывать чат дословно.
+5. Учитывай, как персонаж воспринимает именно пользователя и его персону.
+
+[ДАННЫЕ О ПЕРСОНАЖЕ]
+Имя: ${safeCharName}
+Статус связи: ${status}
+Доверие: ${affinity > 0 ? '+' : ''}${affinity}
+Романтическая линия: ${romance > 0 ? '+' : ''}${romance}
+Черты: ${coreTraits.length > 0 ? coreTraits.join('; ') : 'нет явных данных'}
+Значимые события: ${notableMemories.length > 0 ? notableMemories.join(' | ') : 'нет явных данных'}
+Последние сдвиги: ${historySummary.length > 0 ? historySummary.join(' | ') : 'нет данных'}
+Текущее описание: ${currentProfile || 'пусто'}
+
+[ПЕРСОНА ПОЛЬЗОВАТЕЛЯ]
+${personaText || 'не указана'}
+
+[НЕДАВНИЙ ФРАГМЕНТ ЧАТА]
+${recentChat || 'нет доступных сообщений'}`;
+
+    const generated = await generateFastPrompt(prompt, { responseFormat: 'text' });
+    const result = sanitizeStructuredCharacterDescriptionResult(generated);
+    if (!isValidStructuredCharacterDescriptionResult(result)) {
+        throw new Error('INVALID_CHARACTER_DESCRIPTION_RESULT');
+    }
+    return result;
+}
+
+export async function generateCharacterDescription({ charName = '', stats = {}, currentDescription = '' } = {}) {
+    return await generateStructuredCharacterDescription({ charName, stats, currentDescription });
+    const safeCharName = String(charName || '').trim() || 'персонаж';
+    const affinity = parseInt(stats?.affinity, 10) || 0;
+    const romance = parseInt(stats?.romance, 10) || 0;
+    const status = String(stats?.status || '').trim() || 'нейтральный фактор';
+    const memories = stats?.memories && typeof stats.memories === 'object' ? stats.memories : {};
+    const coreTraits = Array.isArray(stats?.core_traits)
+        ? stats.core_traits
+            .map(item => String(item?.trait || '').trim())
+            .filter(Boolean)
+            .slice(0, 4)
+        : [];
+    const notableMemories = [
+        ...(Array.isArray(memories.deep) ? memories.deep.slice(-3) : []),
+        ...(Array.isArray(memories.soft) ? memories.soft.slice(-2) : []),
+    ]
+        .map(memory => String(memory?.text || '').trim())
+        .filter(Boolean)
+        .slice(0, 4);
+    const trendText = Array.isArray(stats?.history) && stats.history.length > 1
+        ? 'история отношений уже накопилась и менялась по ходу сюжета'
+        : 'история отношений пока короткая';
+    const currentProfile = String(currentDescription || '').trim();
+
+    const prompt = `Собери краткое описание персонажа для ролевого prompt-инжекта.
+
+Нужно описать, как ${safeCharName} воспринимает пользователя и какие черты особенно важны в текущем сюжете.
+
+[ДАННЫЕ]
+Имя: ${safeCharName}
+Статус связи: ${status}
+Доверие: ${affinity > 0 ? '+' : ''}${affinity}
+Романтическая линия: ${romance > 0 ? '+' : ''}${romance}
+Динамика: ${trendText}
+Черты: ${coreTraits.length > 0 ? coreTraits.join('; ') : 'нет явных данных'}
+Значимые события: ${notableMemories.length > 0 ? notableMemories.join(' | ') : 'нет явных данных'}
+Текущее описание: ${currentProfile || 'пусто'}
+
+[ПРАВИЛА]
+1. Верни только итоговый текст без заголовков, markdown и комментариев.
+2. Пиши по-русски.
+3. Сделай 2-4 предложения, примерно 220-450 символов.
+4. Описывай характер, отношение к пользователю, заметные поведенческие акценты и эмоциональный тон.
+5. Не пиши от первого лица.
+6. Не выдумывай новые факты вне этих данных, но можно аккуратно обобщать их в цельный профиль.
+7. Текст должен подходить для прямой вставки в prompt о персонаже.`;
+
+    const generated = await generateFastPrompt(prompt, { responseFormat: 'text' });
+    const result = sanitizeCharacterDescriptionResult(generated);
+    if (!isValidCharacterDescriptionResult(result)) {
+        throw new Error('INVALID_CHARACTER_DESCRIPTION_RESULT');
+    }
+    return result;
+}
+
 export async function crystallizeTraitFromMemories({ charName = '', userName = '', memories =[], isPositive = true } = {}) {
     const selectedMemories = Array.isArray(memories) ? memories.slice(-5) :[];
     if (selectedMemories.length < 5) {

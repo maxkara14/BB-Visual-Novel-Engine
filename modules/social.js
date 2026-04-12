@@ -7,7 +7,7 @@ import {
     setCurrentCalculatedStats,
     setSocialParseDebug
 } from './state.js';
-import { MODULE_NAME, SOCIAL_PROMPT } from './constants.js';
+import { MODULE_NAME, SOCIAL_PROMPT, TOAST_MAX_VISIBLE } from './constants.js';
 import { 
     sanitizeMoodlet, 
     getMemoryBucket, 
@@ -22,7 +22,7 @@ import {
     normalizeTraitResponse,
     isLikelyModelRefusalText
 } from './utils.js';
-import { showStoryMomentToast, notifySuccess, notifyInfo, notifyError, pickToastMoment } from './toasts.js';
+import { showStoryMomentToast, notifySuccess, notifyInfo, notifyError, pickToastMoment, getMomentToastPriority } from './toasts.js';
 import { buildChoiceContextPrompt, getActiveChoiceContext, tryBindPendingChoiceContextToMessage } from './generator.js';
 
 function normalizeCharacterLookupName(name = '') {
@@ -42,6 +42,42 @@ function hashString(input = '') {
         hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
     }
     return Math.abs(hash >>> 0).toString(36);
+}
+
+const shownLiveToastKeys = [];
+
+function hasShownLiveToast(key = '') {
+    return shownLiveToastKeys.includes(String(key || ''));
+}
+
+function rememberLiveToast(key = '') {
+    const normalizedKey = String(key || '').trim();
+    if (!normalizedKey) return;
+    const existingIndex = shownLiveToastKeys.indexOf(normalizedKey);
+    if (existingIndex !== -1) shownLiveToastKeys.splice(existingIndex, 1);
+    shownLiveToastKeys.push(normalizedKey);
+    if (shownLiveToastKeys.length > 240) shownLiveToastKeys.shift();
+}
+
+function buildLiveToastKey(scopeKey = '', messageMeta = '', moment = {}) {
+    return hashString([
+        String(scopeKey || 'default'),
+        String(messageMeta || ''),
+        String(moment?.type || ''),
+        String(moment?.char || ''),
+        String(moment?.title || ''),
+        String(moment?.text || ''),
+    ].join('|'));
+}
+
+function queueLiveToastCandidate(queue = [], scopeKey = '', messageMeta = '', moment = null) {
+    if (!Array.isArray(queue) || !moment) return;
+    queue.push({
+        key: buildLiveToastKey(scopeKey, messageMeta, moment),
+        moment,
+        priority: getMomentToastPriority(moment.type),
+        order: queue.length,
+    });
 }
 
 function getCurrentPersonaText() {
@@ -75,6 +111,66 @@ function cloneJsonData(value, fallback) {
     }
 }
 
+function clampPercentValue(value = 0, fallback = 50) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return fallback;
+    return Math.max(0, Math.min(100, numeric));
+}
+
+function clampZoomValue(value = 100, fallback = 100) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return fallback;
+    return Math.max(80, Math.min(240, numeric));
+}
+
+function normalizeCharacterDescription(value = '') {
+    return String(value || '')
+        .replace(/\r/g, '')
+        .trim();
+}
+
+function normalizeAvatarCrop(value = {}) {
+    const crop = value && typeof value === 'object' ? value : {};
+    return {
+        x: clampPercentValue(crop.x, 50),
+        y: clampPercentValue(crop.y, 50),
+        zoom: clampZoomValue(crop.zoom, 100),
+    };
+}
+
+function getCharacterProfileFromEntry(entry = null) {
+    return {
+        description: normalizeCharacterDescription(entry?.description || ''),
+        avatar: String(entry?.avatar || '').trim(),
+        avatarCrop: normalizeAvatarCrop(entry?.avatarCrop),
+    };
+}
+
+function applyCharacterProfileToEntry(entry, updates = {}) {
+    if (!entry || typeof entry !== 'object' || !updates || typeof updates !== 'object') {
+        return getCharacterProfileFromEntry(entry);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'description')) {
+        entry.description = normalizeCharacterDescription(updates.description);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'avatar')) {
+        entry.avatar = String(updates.avatar || '').trim();
+        if (!entry.avatar) {
+            entry.avatarCrop = normalizeAvatarCrop();
+        }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'avatarCrop')) {
+        entry.avatarCrop = normalizeAvatarCrop(updates.avatarCrop);
+    } else if (!entry.avatarCrop || typeof entry.avatarCrop !== 'object') {
+        entry.avatarCrop = normalizeAvatarCrop();
+    }
+
+    return getCharacterProfileFromEntry(entry);
+}
+
 function clampRelationshipValue(value = 0) {
     const numeric = parseInt(value, 10);
     if (Number.isNaN(numeric)) return 0;
@@ -82,8 +178,13 @@ function clampRelationshipValue(value = 0) {
 }
 
 function normalizeImportedHistoryEntry(entry = {}) {
+    const delta = Math.max(-20, Math.min(20, parseInt(entry?.delta, 10) || 0));
+    const affinityDelta = parseInt(entry?.affinityDelta, 10);
+    const romanceDelta = parseInt(entry?.romanceDelta, 10);
     return {
-        delta: Math.max(-20, Math.min(20, parseInt(entry?.delta, 10) || 0)),
+        delta,
+        affinityDelta: Number.isNaN(affinityDelta) ? delta : Math.max(-20, Math.min(20, affinityDelta)),
+        romanceDelta: Number.isNaN(romanceDelta) ? 0 : Math.max(-20, Math.min(20, romanceDelta)),
         reason: String(entry?.reason || ''),
         moodlet: sanitizeMoodlet(entry?.moodlet || ''),
     };
@@ -396,9 +497,27 @@ function createCharacterRegistryEntry(scopeState, displayName) {
         primary_name: String(displayName || '').trim(),
         aliases: [String(displayName || '').trim()],
         created_at: Date.now(),
+        description: '',
+        avatar: '',
+        avatarCrop: normalizeAvatarCrop(),
     };
     scopeState.char_registry[entry.id] = entry;
     return entry;
+}
+
+export function getCharacterProfile(charName = '') {
+    const identity = resolveCharacterIdentity(charName, { allowCreate: false, allowSuggestions: false });
+    return getCharacterProfileFromEntry(identity?.entry || null);
+}
+
+export function updateCharacterProfile(charName = '', updates = {}) {
+    const identity = resolveCharacterIdentity(charName, { allowCreate: true, allowSuggestions: false });
+    if (!identity?.entry) return getCharacterProfileFromEntry(null);
+
+    const { scopeState } = bindActivePersonaState();
+    const profile = applyCharacterProfileToEntry(identity.entry, updates);
+    scopeState.char_registry[identity.entry.id] = identity.entry;
+    return profile;
 }
 
 export function resolveCharacterIdentity(rawName = '', options = {}) {
@@ -461,6 +580,15 @@ export function mergeCharacterRecords(fromName = '', toName = '') {
 
     const sourceNames = [sourceEntry.primary_name, ...(Array.isArray(sourceEntry.aliases) ? sourceEntry.aliases : [])];
     sourceNames.forEach(name => addAliasToEntry(targetEntry, name, scopeState));
+    const sourceProfile = getCharacterProfileFromEntry(sourceEntry);
+    const targetProfile = getCharacterProfileFromEntry(targetEntry);
+    if (!targetProfile.description && sourceProfile.description) {
+        targetEntry.description = sourceProfile.description;
+    }
+    if (!targetProfile.avatar && sourceProfile.avatar) {
+        targetEntry.avatar = sourceProfile.avatar;
+        targetEntry.avatarCrop = normalizeAvatarCrop(sourceProfile.avatarCrop);
+    }
 
     let count = 0;
     const chat = SillyTavern.getContext().chat;
@@ -571,6 +699,7 @@ export function getCombinedSocial() {
             const stats = currentCalculatedStats[char];
             const tier = getTierInfo(stats.affinity).label;
             const status = stats.status || getUnforgettableRoleStatus(stats.memories?.deep) || tier;
+            const profile = getCharacterProfile(char);
             
             const recent = (stats.memories?.soft || []).map(m => m.text).join('; ');
             const deepMemories = stats.memories?.deep || [];
@@ -580,6 +709,7 @@ export function getCombinedSocial() {
             const traitsText = coreTraits.length > 0 ? coreTraits.map(t => t.trait).join(' ') : '';
 
             combinedStr += `- ${char}: [Status: ${status}] [Trust: ${stats.affinity}] [Romance: ${stats.romance || 0}]`;
+            if (profile.description) combinedStr += ` [Profile: ${profile.description}]`;
             if (recent) combinedStr += ` [Recent: ${recent}]`;
             if (unforgettable) combinedStr += ` [Unforgettable: ${unforgettable}]`; 
             if (traitsText) combinedStr += ` [CORE TRAITS: ${traitsText}]`; 
@@ -596,6 +726,9 @@ export function getCombinedSocial() {
                 guideLines.push(`- Current Focus: ${impact.label}`);
                 guideLines.push(`- Unforgettable Directive: ${impact.prompt}`);
             }
+            if (profile.description) {
+                guideLines.push(`- Supplemental Profile: ${profile.description}`);
+            }
             if (coreTraits.length > 0) {
                 guideLines.push(`- CORE TRAIT (Permanent): ${traitsText}`);
                 guideLines.push(`- Trait Directive: These core traits are fundamental to their psychology and MUST dictate their underlying behavior and reactions to {{user}}.`);
@@ -608,7 +741,8 @@ export function getCombinedSocial() {
         combinedStr += `\n[NARRATIVE DIRECTIVES]:\n`;
         combinedStr += `1. Behavior: Dialogue and actions must strictly match the Status and Relationship Tier.\n`;
         combinedStr += `2. Memory: Characters must act based on 'Recent' (short-term mood) and 'Unforgettable' (permanent emotional anchor) memories.\n`;
-        combinedStr += `3. Name Consistency: When evaluating existing characters, use EXACTLY these names: ${characters.join(', ')}.`;
+        combinedStr += `3. Profile Notes: If a character has a Profile note, treat it as active supporting canon for this scene.\n`;
+        combinedStr += `4. Name Consistency: When evaluating existing characters, use EXACTLY these names: ${characters.join(', ')}.`;
 
         if (impactInstructions.length > 0) {
             combinedStr += `\n\n[UNFORGETTABLE IMPACT LOGIC]:\n${impactInstructions.join('\n')}\n`;
@@ -1001,6 +1135,7 @@ export async function handleNewCharacterInterviews(chars) {
 export function recalculateAllStats(isNewMessage = false) {
     const { scopeKey, scopeState } = bindActivePersonaState();
     const newStats = {};
+    const liveToastCandidates = [];
     setCurrentCalculatedStats(newStats);
     currentStoryMoments.length = 0;
     const snapshotBaseline = scopeState.snapshot_baseline && typeof scopeState.snapshot_baseline === 'object'
@@ -1239,7 +1374,9 @@ export function recalculateAllStats(isNewMessage = false) {
                     newStats[charName] = { affinity: base, romance: baseRomance, history: [], status: coerceUserFacingStatus(currentStatus, base, "", f_delta), memories: { soft: [], deep: [] }, core_traits: [] };
                     if (isBrandNew && shouldRecordJournal) {
                         const introMoment = maybeAddStoryMoment({ type: 'intro', char: charName, title: 'Новый контакт', text: `${charName} появился в трекере отношений.` });
-                        if (isNewMessage && idx === chat.length - 1) showStoryMomentToast(introMoment);
+                        if (idx === chat.length - 1) {
+                            queueLiveToastCandidate(liveToastCandidates, scopeKey, `${idx}|${msg.send_date || ''}|intro`, introMoment);
+                        }
                     }
                 }
 
@@ -1269,7 +1406,13 @@ export function recalculateAllStats(isNewMessage = false) {
                 const recordedImpacts = getRecordedImpactEntries(f_delta, r_delta);
 
                 if (dominantImpact) {
-                    newStats[charName].history.push({ delta: dominantDelta, reason: update.reason || "", moodlet });
+                    newStats[charName].history.push({
+                        delta: dominantDelta,
+                        affinityDelta: f_delta,
+                        romanceDelta: r_delta,
+                        reason: update.reason || "",
+                        moodlet,
+                    });
                 }
                 recordedImpacts.forEach(impact => {
                     appendCharacterMemory(newStats[charName], impact.delta, update.reason || "", moodlet);
@@ -1277,8 +1420,18 @@ export function recalculateAllStats(isNewMessage = false) {
 
                 const previousTier = getTierInfo(previousAffinity).label;
                 const newTier = getTierInfo(newStats[charName].affinity).label;
+                const messageMeta = `${idx}|${msg.send_date || ''}|${charName}|${update.reason || ''}|${f_delta}|${r_delta}`;
                 let toastMoment = null;
+                let queuedTierToast = false;
                 if (shouldRecordJournal && previousTier !== newTier) toastMoment = pickToastMoment(toastMoment, maybeAddStoryMoment({ type: 'tier-shift', char: charName, title: 'Сдвиг в отношениях', text: `${charName}: статус изменился с «${previousTier}» на «${newTier}».` }));
+
+                if (!queuedTierToast && shouldRecordJournal && previousTier !== newTier) {
+                    const tierMoment = currentStoryMoments[currentStoryMoments.length - 1] || null;
+                    if (idx === chat.length - 1 && tierMoment?.type === 'tier-shift' && tierMoment?.char === charName) {
+                        queueLiveToastCandidate(liveToastCandidates, scopeKey, `${messageMeta}|tier`, tierMoment);
+                        queuedTierToast = true;
+                    }
+                }
 
                 if (shouldRecordJournal && update.reason) {
                     recordedImpacts.forEach(impact => {
@@ -1289,15 +1442,18 @@ export function recalculateAllStats(isNewMessage = false) {
                                 : (impact.delta > 0 ? 'soft-positive' : 'soft-negative');
                             const moment = maybeAddStoryMoment({ type: momentType, char: charName, title: shift.full, text: `${charName}: ${update.reason}` });
                             if (impact === dominantImpact) toastMoment = pickToastMoment(toastMoment, moment);
+                            if (idx === chat.length - 1) queueLiveToastCandidate(liveToastCandidates, scopeKey, `${messageMeta}|${impact.kind}|${impact.delta}|soft`, moment);
                         }
 
                         if (Math.abs(impact.delta) >= 15) {
                             const moment = maybeAddStoryMoment({ type: impact.delta > 0 ? 'deep-positive' : 'deep-negative', char: charName, title: 'Незабываемое событие', text: `${charName}: ${update.reason}` });
                             if (impact === dominantImpact) toastMoment = pickToastMoment(toastMoment, moment);
+                            if (idx === chat.length - 1) queueLiveToastCandidate(liveToastCandidates, scopeKey, `${messageMeta}|${impact.kind}|${impact.delta}|deep`, moment);
                         }
                     });
                 }
-                if (dominantDelta !== 0 && isNewMessage && idx === chat.length - 1 && toastMoment) showStoryMomentToast(toastMoment);
+                void dominantDelta;
+                void toastMoment;
 
                 if (shouldRecordJournal && (f_delta !== 0 || r_delta !== 0)) {
                     const totalDelta = f_delta + r_delta;
@@ -1330,6 +1486,17 @@ export function recalculateAllStats(isNewMessage = false) {
             else newDeep.push(m);
         }
         stats.memories.deep = newDeep;
+    }
+
+    if (isNewMessage && liveToastCandidates.length > 0) {
+        liveToastCandidates
+            .filter(candidate => candidate?.moment && !hasShownLiveToast(candidate.key))
+            .sort((left, right) => (right.priority - left.priority) || (left.order - right.order))
+            .slice(0, TOAST_MAX_VISIBLE)
+            .forEach(candidate => {
+                showStoryMomentToast(candidate.moment);
+                rememberLiveToast(candidate.key);
+            });
     }
 
     if (latestChoiceContext) chat_metadata['bb_vn_last_used_choice_context'] = latestChoiceContext;
