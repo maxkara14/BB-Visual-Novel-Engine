@@ -89,16 +89,345 @@ function getCurrentPersonaText() {
     }
 }
 
-export function getCurrentPersonaScopeKey() {
+function getLegacyPersonaTextScopeKey() {
     const personaText = getCurrentPersonaText();
     if (!personaText) return 'default';
     return `persona_${hashString(personaText)}`;
 }
 
+function normalizePersonaIdentityName(value = '') {
+    return String(value || '')
+        .normalize('NFKC')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+}
+
+function normalizePersonaAvatarRef(value = '') {
+    return String(value || '')
+        .trim()
+        .replace(/\\/g, '/')
+        .replace(/[?#].*$/, '')
+        .toLowerCase();
+}
+
+function firstNonEmptyString(values = []) {
+    for (const value of values) {
+        const normalized = String(value || '').trim();
+        if (normalized) return normalized;
+    }
+    return '';
+}
+
+function getCurrentPersonaName() {
+    try {
+        const context = SillyTavern.getContext();
+        return firstNonEmptyString([
+            context?.substituteParams?.('{{user}}'),
+            context?.name1,
+            context?.user_name,
+            chat_metadata['persona_name'],
+            chat_metadata['user_name'],
+        ]);
+    } catch (error) {
+        void error;
+        return '';
+    }
+}
+
+function buildPersonaIdentityRef({ name = '', avatarRef = '' } = {}) {
+    const normalizedName = normalizePersonaIdentityName(name);
+    const normalizedAvatar = normalizePersonaAvatarRef(avatarRef);
+    if (normalizedName && normalizedAvatar) return `name:${normalizedName}|avatar:${normalizedAvatar}`;
+    if (normalizedAvatar) return `avatar:${normalizedAvatar}`;
+    if (normalizedName) return `name:${normalizedName}`;
+    return '';
+}
+
+function getPersonaIdentityFromMessage(msg = null) {
+    if (!msg || typeof msg !== 'object') return { name: '', avatarRef: '', ref: '' };
+    const name = firstNonEmptyString([
+        msg.name,
+        msg.display_name,
+        msg.user_name,
+        msg.original_name,
+        msg.extra?.display_name,
+        msg.extra?.user_name,
+    ]);
+    const avatarRef = firstNonEmptyString([
+        msg.force_avatar,
+        msg.original_avatar,
+        msg.avatar,
+        msg.user_avatar,
+        msg.extra?.force_avatar,
+        msg.extra?.original_avatar,
+        msg.extra?.avatar,
+        msg.extra?.user_avatar,
+    ]);
+    const ref = buildPersonaIdentityRef({ name, avatarRef });
+    return { name, avatarRef, ref };
+}
+
+function getLatestUserPersonaIdentityFromChat(chat = []) {
+    if (!Array.isArray(chat)) return null;
+    for (let idx = chat.length - 1; idx >= 0; idx--) {
+        const msg = chat[idx];
+        if (!msg?.is_user) continue;
+        const identity = getPersonaIdentityFromMessage(msg);
+        if (identity.ref || identity.name || identity.avatarRef) return identity;
+    }
+    return null;
+}
+
+function getCurrentPersonaAvatarRef() {
+    try {
+        const context = SillyTavern.getContext();
+        const chat = Array.isArray(context?.chat) ? context.chat : [];
+        const lastUserIdentity = getLatestUserPersonaIdentityFromChat(chat);
+        const directAvatar = firstNonEmptyString([
+            context?.user_avatar,
+            context?.userAvatar,
+            context?.avatar,
+            chat_metadata['persona_avatar'],
+            chat_metadata['user_avatar'],
+        ]);
+        if (directAvatar) return directAvatar;
+        return lastUserIdentity?.avatarRef || '';
+    } catch (error) {
+        void error;
+        return '';
+    }
+}
+
+function getCurrentPersonaIdentity() {
+    let context = null;
+    try {
+        context = SillyTavern.getContext();
+    } catch (error) {
+        void error;
+    }
+
+    const chat = Array.isArray(context?.chat) ? context.chat : [];
+    const lastUserIdentity = getLatestUserPersonaIdentityFromChat(chat);
+    const currentName = getCurrentPersonaName();
+    const currentAvatarRef = getCurrentPersonaAvatarRef();
+    const name = currentName || lastUserIdentity?.name || '';
+    const avatarRef = currentAvatarRef || (!currentName || normalizePersonaIdentityName(currentName) === normalizePersonaIdentityName(lastUserIdentity?.name || '')
+        ? (lastUserIdentity?.avatarRef || '')
+        : '');
+    const ref = buildPersonaIdentityRef({ name, avatarRef });
+    return { name, avatarRef, ref };
+}
+
 function getCurrentPersonaLabel() {
+    const personaName = getCurrentPersonaName();
+    if (personaName) return personaName.slice(0, 80);
     const personaText = getCurrentPersonaText();
     if (!personaText) return 'Default persona';
     return personaText.split(/\r?\n/).map(line => line.trim()).find(Boolean)?.slice(0, 80) || 'Persona';
+}
+
+function ensurePersonaBindingsStore() {
+    if (!chat_metadata['bb_vn_persona_bindings'] || typeof chat_metadata['bb_vn_persona_bindings'] !== 'object') {
+        chat_metadata['bb_vn_persona_bindings'] = {};
+    }
+    return chat_metadata['bb_vn_persona_bindings'];
+}
+
+function getScopeDataScore(scopeState = {}) {
+    if (!scopeState || typeof scopeState !== 'object') return 0;
+    let score = 0;
+    score += Object.keys(scopeState.char_bases || {}).length * 4;
+    score += Object.keys(scopeState.char_bases_romance || {}).length * 4;
+    score += Object.keys(scopeState.char_registry || {}).length * 3;
+    score += Array.isArray(scopeState.global_log) ? scopeState.global_log.length * 2 : 0;
+    score += Array.isArray(scopeState.ignored_chars) ? scopeState.ignored_chars.length : 0;
+    score += Array.isArray(scopeState.platonic_chars) ? scopeState.platonic_chars.length : 0;
+    score += Array.isArray(scopeState.merge_suggestions) ? scopeState.merge_suggestions.length : 0;
+    score += scopeState.snapshot_baseline?.characters ? Object.keys(scopeState.snapshot_baseline.characters).length * 6 : 0;
+    score += parseInt(scopeState.log_cutoff_index, 10) || 0;
+    score += parseInt(scopeState.snapshot_cutoff_index, 10) || 0;
+    return score;
+}
+
+function collectMessageScopeKeys(msg = null) {
+    const scopeKeys = [];
+    if (!msg || typeof msg !== 'object') return scopeKeys;
+    const collectFromMap = (map) => {
+        if (!map || typeof map !== 'object') return;
+        Object.values(map).forEach(entries => {
+            if (!Array.isArray(entries)) return;
+            entries.forEach(entry => {
+                const scope = String(entry?.scope || '').trim();
+                if (scope) scopeKeys.push(scope);
+            });
+        });
+    };
+    collectFromMap(msg.extra?.bb_social_swipes);
+    collectFromMap(msg.extra?.bb_vn_char_traits_swipes);
+    return scopeKeys;
+}
+
+function buildScopeOwnershipIndex(chat = []) {
+    if (!Array.isArray(chat) || chat.length === 0) return {};
+    const ownership = {};
+    let lastUserIdentity = null;
+
+    chat.forEach(msg => {
+        if (msg?.is_user) {
+            const identity = getPersonaIdentityFromMessage(msg);
+            if (identity.ref) lastUserIdentity = identity;
+            return;
+        }
+
+        if (!lastUserIdentity?.ref) return;
+        collectMessageScopeKeys(msg).forEach(scopeKey => {
+            if (!ownership[scopeKey]) ownership[scopeKey] = {};
+            ownership[scopeKey][lastUserIdentity.ref] = (ownership[scopeKey][lastUserIdentity.ref] || 0) + 1;
+        });
+    });
+
+    return ownership;
+}
+
+function getDominantPersonaRefForScope(ownership = {}, scopeKey = '') {
+    const variants = ownership?.[scopeKey];
+    if (!variants || typeof variants !== 'object') return null;
+    let bestRef = '';
+    let bestCount = 0;
+    let total = 0;
+    Object.entries(variants).forEach(([ref, count]) => {
+        const numericCount = parseInt(count, 10) || 0;
+        total += numericCount;
+        if (numericCount > bestCount) {
+            bestRef = ref;
+            bestCount = numericCount;
+        }
+    });
+    if (!bestRef) return null;
+    return { ref: bestRef, count: bestCount, total };
+}
+
+function buildStablePersonaScopeKey(identity = null, fallback = '') {
+    const basis = identity?.ref || fallback || `scope_${Date.now()}`;
+    return `persona_v2_${hashString(basis)}`;
+}
+
+function ensureUniqueScopeKey(scopes = {}, requestedKey = 'persona_v2_default') {
+    if (!scopes[requestedKey] || typeof scopes[requestedKey] === 'object') return requestedKey;
+    let index = 1;
+    let candidate = `${requestedKey}_${index}`;
+    while (scopes[candidate]) {
+        index += 1;
+        candidate = `${requestedKey}_${index}`;
+    }
+    return candidate;
+}
+
+function choosePersonaScopeCandidate(scopes, identity, legacyScopeKey, activeScopeKey, ownership) {
+    const candidates = new Map();
+    const addCandidate = (scopeKey, baseScore = 0) => {
+        if (!scopeKey || !scopes?.[scopeKey] || typeof scopes[scopeKey] !== 'object') return;
+        const dataScore = getScopeDataScore(scopes[scopeKey]);
+        const owner = getDominantPersonaRefForScope(ownership, scopeKey);
+        let score = Number(baseScore || 0) + Math.min(dataScore, 80);
+        if (dataScore === 0 && !owner?.ref) score -= 260;
+        if (identity?.ref && owner?.ref) {
+            if (owner.ref === identity.ref) score += 140 + Math.min(owner.count * 5, 60);
+            else score -= 180;
+        }
+        const existing = candidates.get(scopeKey);
+        if (!existing || score > existing.score) {
+            candidates.set(scopeKey, { scopeKey, score, dataScore, owner });
+        }
+    };
+
+    addCandidate(legacyScopeKey, 220);
+    addCandidate(activeScopeKey, 80);
+
+    Object.keys(scopes || {}).forEach(scopeKey => {
+        const owner = getDominantPersonaRefForScope(ownership, scopeKey);
+        if (identity?.ref && owner?.ref === identity.ref) {
+            addCandidate(scopeKey, 180 + Math.min(owner.count * 6, 70));
+        }
+    });
+
+    const nonEmptyScopes = Object.entries(scopes || {})
+        .filter(([, scopeState]) => getScopeDataScore(scopeState) > 0)
+        .map(([scopeKey]) => scopeKey);
+    if (nonEmptyScopes.length === 1) addCandidate(nonEmptyScopes[0], 25);
+
+    const ranked = [...candidates.values()].sort((a, b) => b.score - a.score);
+    const best = ranked[0] || null;
+    if (best && best.score >= 40) return best.scopeKey;
+
+    return ensureUniqueScopeKey(scopes, buildStablePersonaScopeKey(identity, legacyScopeKey));
+}
+
+function ensureResolvedPersonaScope() {
+    if (!chat_metadata['bb_vn_persona_states'] || typeof chat_metadata['bb_vn_persona_states'] !== 'object') {
+        chat_metadata['bb_vn_persona_states'] = {};
+    }
+
+    const scopes = chat_metadata['bb_vn_persona_states'];
+    const bindings = ensurePersonaBindingsStore();
+    const identity = getCurrentPersonaIdentity();
+    const identityRef = identity?.ref || `legacy:${getLegacyPersonaTextScopeKey()}`;
+    const legacyScopeKey = getLegacyPersonaTextScopeKey();
+    const activeScopeKey = String(chat_metadata['bb_vn_active_persona_scope'] || '').trim();
+    let binding = bindings[identityRef] && typeof bindings[identityRef] === 'object' ? bindings[identityRef] : null;
+
+    if (!binding || !binding.scope_key || !scopes[binding.scope_key]) {
+        const chat = SillyTavern.getContext().chat || [];
+        const ownership = buildScopeOwnershipIndex(chat);
+        const chosenScopeKey = choosePersonaScopeCandidate(scopes, identity, legacyScopeKey, activeScopeKey, ownership);
+        binding = {
+            scope_key: chosenScopeKey,
+            aliases: [],
+            persona_name: identity?.name || '',
+            persona_avatar: identity?.avatarRef || '',
+            updated_at: Date.now(),
+        };
+        bindings[identityRef] = binding;
+    }
+
+    if (!Array.isArray(binding.aliases)) binding.aliases = [];
+    if (legacyScopeKey && legacyScopeKey !== binding.scope_key && !binding.aliases.includes(legacyScopeKey)) {
+        binding.aliases.push(legacyScopeKey);
+    }
+    if (identity?.ref) {
+        const chat = SillyTavern.getContext().chat || [];
+        const ownership = buildScopeOwnershipIndex(chat);
+        Object.keys(scopes).forEach(candidateScopeKey => {
+            if (!candidateScopeKey || candidateScopeKey === binding.scope_key) return;
+            const owner = getDominantPersonaRefForScope(ownership, candidateScopeKey);
+            if (owner?.ref === identity.ref && !binding.aliases.includes(candidateScopeKey)) {
+                binding.aliases.push(candidateScopeKey);
+            }
+        });
+    }
+    binding.persona_name = identity?.name || binding.persona_name || '';
+    binding.persona_avatar = identity?.avatarRef || binding.persona_avatar || '';
+    binding.updated_at = Date.now();
+
+    if (!scopes[binding.scope_key] || typeof scopes[binding.scope_key] !== 'object') {
+        scopes[binding.scope_key] = {};
+    }
+
+    const scopeState = ensurePersonaStateShape(scopes[binding.scope_key]);
+    scopeState.label = binding.persona_name || scopeState.label || getCurrentPersonaLabel();
+
+    return {
+        scopeKey: binding.scope_key,
+        scopeState,
+        identity,
+        binding,
+        aliasSet: new Set([binding.scope_key, ...(binding.aliases || [])]),
+    };
+}
+
+export function getCurrentPersonaScopeKey() {
+    return ensureResolvedPersonaScope().scopeKey;
 }
 
 function cloneJsonData(value, fallback) {
@@ -264,19 +593,13 @@ function ensurePersonaStateShape(scopeState = {}) {
 }
 
 function ensureActivePersonaState() {
-    if (!chat_metadata['bb_vn_persona_states'] || typeof chat_metadata['bb_vn_persona_states'] !== 'object') {
-        chat_metadata['bb_vn_persona_states'] = {};
-    }
-
-    const scopeKey = getCurrentPersonaScopeKey();
+    const resolved = ensureResolvedPersonaScope();
     const scopes = chat_metadata['bb_vn_persona_states'];
-    if (!scopes[scopeKey] || typeof scopes[scopeKey] !== 'object') {
-        scopes[scopeKey] = {};
-    }
+    const scopeKey = resolved.scopeKey;
+    const scopeState = resolved.scopeState;
 
-    const scopeState = ensurePersonaStateShape(scopes[scopeKey]);
     if (!scopeState._legacy_migrated) {
-        const isFirstScope = Object.keys(scopes).length === 1;
+        const isFirstScope = Object.keys(scopes || {}).length === 1;
         if (isFirstScope) {
             if (chat_metadata['bb_vn_char_bases'] && Object.keys(scopeState.char_bases).length === 0) scopeState.char_bases = chat_metadata['bb_vn_char_bases'];
             if (chat_metadata['bb_vn_char_bases_romance'] && Object.keys(scopeState.char_bases_romance).length === 0) scopeState.char_bases_romance = chat_metadata['bb_vn_char_bases_romance'];
@@ -291,11 +614,11 @@ function ensureActivePersonaState() {
         scopeState._legacy_migrated = true;
     }
 
-    return { scopeKey, scopeState };
+    return { ...resolved, scopeKey, scopeState };
 }
 
 export function bindActivePersonaState() {
-    const { scopeKey, scopeState } = ensureActivePersonaState();
+    const { scopeKey, scopeState, aliasSet, identity, binding } = ensureActivePersonaState();
     chat_metadata['bb_vn_active_persona_scope'] = scopeKey;
     chat_metadata['bb_vn_char_bases'] = scopeState.char_bases;
     chat_metadata['bb_vn_char_bases_romance'] = scopeState.char_bases_romance;
@@ -305,7 +628,7 @@ export function bindActivePersonaState() {
     chat_metadata['bb_vn_char_registry'] = scopeState.char_registry;
     chat_metadata['bb_vn_merge_suggestions'] = scopeState.merge_suggestions;
     chat_metadata['bb_vn_log_cutoff_index'] = scopeState.log_cutoff_index || 0;
-    return { scopeKey, scopeState };
+    return { scopeKey, scopeState, aliasSet, identity, binding };
 }
 
 export function exportActivePersonaSnapshot() {
@@ -568,7 +891,7 @@ export function resolveCharacterIdentity(rawName = '', options = {}) {
 }
 
 export function mergeCharacterRecords(fromName = '', toName = '') {
-    const { scopeKey, scopeState } = bindActivePersonaState();
+    const { scopeKey, scopeState, aliasSet } = bindActivePersonaState();
     const source = resolveCharacterIdentity(fromName, { allowCreate: false, allowSuggestions: false });
     const target = resolveCharacterIdentity(toName, { allowCreate: true, allowSuggestions: false });
     if (!source || !target) return { ok: false, count: 0 };
@@ -598,7 +921,7 @@ export function mergeCharacterRecords(fromName = '', toName = '') {
                 for (const sId in msg.extra.bb_social_swipes) {
                     if (!Array.isArray(msg.extra.bb_social_swipes[sId])) continue;
                     msg.extra.bb_social_swipes[sId].forEach(update => {
-                        if (update?.scope && update.scope !== scopeKey) return;
+                        if (update?.scope && !aliasSet.has(update.scope)) return;
                         if (update?.char_id === source.id || entryOwnsName(sourceEntry, update?.name || '')) {
                             update.name = targetEntry.primary_name;
                             update.char_id = target.id;
@@ -612,7 +935,7 @@ export function mergeCharacterRecords(fromName = '', toName = '') {
                 for (const sId in msg.extra.bb_vn_char_traits_swipes) {
                     if (!Array.isArray(msg.extra.bb_vn_char_traits_swipes[sId])) continue;
                     msg.extra.bb_vn_char_traits_swipes[sId].forEach(trait => {
-                        if (trait?.scope && trait.scope !== scopeKey) return;
+                        if (trait?.scope && !aliasSet.has(trait.scope)) return;
                         if (trait?.char_id === source.id || entryOwnsName(sourceEntry, trait?.charName || '')) {
                             trait.charName = targetEntry.primary_name;
                             trait.char_id = target.id;
@@ -1133,7 +1456,7 @@ export async function handleNewCharacterInterviews(chars) {
 }
 
 export function recalculateAllStats(isNewMessage = false) {
-    const { scopeKey, scopeState } = bindActivePersonaState();
+    const { scopeKey, scopeState, aliasSet } = bindActivePersonaState();
     const newStats = {};
     const liveToastCandidates = [];
     setCurrentCalculatedStats(newStats);
@@ -1229,8 +1552,8 @@ export function recalculateAllStats(isNewMessage = false) {
         const msgTraits = msg.extra?.bb_vn_char_traits_swipes?.[swipeId];
         if (msgTraits && Array.isArray(msgTraits)) {
             msgTraits.forEach(t => {
-                if (t.scope && t.scope !== scopeKey) return;
-                if (!t.scope) {
+                if (t.scope && !aliasSet.has(t.scope)) return;
+                if (!t.scope || t.scope !== scopeKey) {
                     t.scope = scopeKey;
                     needsSave = true;
                 }
@@ -1329,8 +1652,8 @@ export function recalculateAllStats(isNewMessage = false) {
             };
 
             activeUpdates.forEach(update => {
-                if (update.scope && update.scope !== scopeKey) return;
-                if (!update.scope) {
+                if (update.scope && !aliasSet.has(update.scope)) return;
+                if (!update.scope || update.scope !== scopeKey) {
                     update.scope = scopeKey;
                     needsSave = true;
                 }

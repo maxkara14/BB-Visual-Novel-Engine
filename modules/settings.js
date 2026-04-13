@@ -110,22 +110,21 @@ export function wipeGlobalLog() {
 }
 
 export function wipeAllSocialData() {
-    const scopeKey = getCurrentPersonaScopeKey();
-    const { scopeState } = bindActivePersonaState();
+    const { scopeState, aliasSet } = bindActivePersonaState();
     const chat = SillyTavern.getContext().chat;
     if (!chat) return;
     chat.forEach(msg => {
         if (msg.extra && msg.extra.bb_social_swipes) {
             for (const sId in msg.extra.bb_social_swipes) {
                 if (!Array.isArray(msg.extra.bb_social_swipes[sId])) continue;
-                msg.extra.bb_social_swipes[sId] = msg.extra.bb_social_swipes[sId].filter(update => update?.scope && update.scope !== scopeKey);
+                msg.extra.bb_social_swipes[sId] = msg.extra.bb_social_swipes[sId].filter(update => update?.scope && !aliasSet.has(update.scope));
             }
         }
         if (msg.extra && msg.extra.bb_vn_options_swipes) delete msg.extra.bb_vn_options_swipes;
         if (msg.extra && msg.extra.bb_vn_char_traits_swipes) {
             for (const sId in msg.extra.bb_vn_char_traits_swipes) {
                 if (!Array.isArray(msg.extra.bb_vn_char_traits_swipes[sId])) continue;
-                msg.extra.bb_vn_char_traits_swipes[sId] = msg.extra.bb_vn_char_traits_swipes[sId].filter(trait => trait?.scope && trait.scope !== scopeKey);
+                msg.extra.bb_vn_char_traits_swipes[sId] = msg.extra.bb_vn_char_traits_swipes[sId].filter(trait => trait?.scope && !aliasSet.has(trait.scope));
             }
         }
     });
@@ -486,8 +485,7 @@ export function setupExtensionSettings() {
     });
 
     jQuery('#bb-dbg-reset-char').on('click', () => {
-        const scopeKey = getCurrentPersonaScopeKey();
-        const { scopeState } = bindActivePersonaState();
+        const { scopeState, aliasSet } = bindActivePersonaState();
         const name = String(jQuery('#bb-debug-char-name').val()).trim();
         if(!name) return notifyError("Укажите имя!");
         const resolved = resolveCharacterIdentity(name, { allowCreate: false, allowSuggestions: false });
@@ -501,8 +499,8 @@ export function setupExtensionSettings() {
         const chat = SillyTavern.getContext().chat;
         if(chat) {
             chat.forEach(msg => {
-                if(msg.extra?.bb_social_swipes) { for(const sId in msg.extra.bb_social_swipes) { if(Array.isArray(msg.extra.bb_social_swipes[sId])) msg.extra.bb_social_swipes[sId] = msg.extra.bb_social_swipes[sId].filter(u => (u?.scope && u.scope !== scopeKey) || u.name !== canonicalName); } }
-                if(msg.extra?.bb_vn_char_traits_swipes) { for(const sId in msg.extra.bb_vn_char_traits_swipes) { if(Array.isArray(msg.extra.bb_vn_char_traits_swipes[sId])) msg.extra.bb_vn_char_traits_swipes[sId] = msg.extra.bb_vn_char_traits_swipes[sId].filter(t => (t?.scope && t.scope !== scopeKey) || t.charName !== canonicalName); } }
+                if(msg.extra?.bb_social_swipes) { for(const sId in msg.extra.bb_social_swipes) { if(Array.isArray(msg.extra.bb_social_swipes[sId])) msg.extra.bb_social_swipes[sId] = msg.extra.bb_social_swipes[sId].filter(u => (u?.scope && !aliasSet.has(u.scope)) || u.name !== canonicalName); } }
+                if(msg.extra?.bb_vn_char_traits_swipes) { for(const sId in msg.extra.bb_vn_char_traits_swipes) { if(Array.isArray(msg.extra.bb_vn_char_traits_swipes[sId])) msg.extra.bb_vn_char_traits_swipes[sId] = msg.extra.bb_vn_char_traits_swipes[sId].filter(t => (t?.scope && !aliasSet.has(t.scope)) || t.charName !== canonicalName); } }
             });
         }
         saveChatDebounced(); recalculateAllStats(false); notifySuccess("Персонаж обнулен.");
