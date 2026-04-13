@@ -2,7 +2,7 @@
 import { chat_metadata, saveChatDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { MODULE_NAME } from './constants.js';
-import { currentCalculatedStats, currentStoryMoments, socialParseDebug } from './state.js';
+import { currentCalculatedStats, currentStoryMoments, socialParseDebug, setIsVnGenerationCancelled } from './state.js';
 import { 
     escapeHtml, 
     getToneClass, 
@@ -24,7 +24,7 @@ import {
     getCharacterProfile,
     updateCharacterProfile
 } from './social.js';
-import { crystallizeTraitFromMemories, generateCharacterDescription } from './generator.js';
+import { cancelVnGeneration, crystallizeTraitFromMemories, generateCharacterDescription, isVnGenerationAbortError } from './generator.js';
 
 const HUD_VISIBILITY_RETRY_MS = 120;
 let hudVisibilityRetryTimer = null;
@@ -35,6 +35,20 @@ const AVATAR_PREVIEW_HEIGHT = 264;
 const AVATAR_PREVIEW_DEBOUNCE_MS = 70;
 const CARD_BODY_ANIM_MS = 220;
 const CARD_EDITOR_ANIM_MS = 180;
+
+function resetDescriptionGenerationUi(editor) {
+    const scopedEditor = editor instanceof jQuery ? editor : jQuery(editor);
+    if (!scopedEditor?.length) return;
+
+    const generateButton = scopedEditor.find('.bb-btn-generate-description');
+    const cancelButton = scopedEditor.find('.bb-btn-cancel-description-generation');
+    const originalHtml = String(generateButton.attr('data-original-html') || '<i class="fa-solid fa-wand-magic-sparkles"></i>&ensp;По шаблону');
+
+    generateButton.prop('disabled', false).html(originalHtml).removeAttr('data-original-html');
+    cancelButton.prop('disabled', true).hide().html('<i class="fa-solid fa-xmark"></i>&ensp;Отмена');
+    scopedEditor.removeData('bbDescriptionGenerationRequestId');
+    scopedEditor.removeData('bbDescriptionGenerationCancelled');
+}
 
 function setHudPopupPriority(isPopupActive) {
     document.body.classList.toggle('bb-hud-popup-active', Boolean(isPopupActive));
@@ -650,6 +664,7 @@ function buildCharacterCardHtml(charName = '') {
                     <input type="hidden" class="bb-edit-generated-description" value="${escapeHtml(generatedDescription)}">
                     <div class="bb-editor-actions bb-editor-actions-tight" style="margin-top: 8px;">
                         <button type="button" class="menu_button bb-btn-generate-description" data-char="${escapeHtml(charName)}"><i class="fa-solid fa-wand-magic-sparkles"></i>&ensp;По шаблону</button>
+                        <button type="button" class="menu_button bb-btn-cancel-description-generation" style="display:none;"><i class="fa-solid fa-xmark"></i>&ensp;Отмена</button>
                         <button type="button" class="menu_button bb-btn-clear-description"><i class="fa-solid fa-eraser"></i>&ensp;Очистить</button>
                     </div>
                 </div>
@@ -926,15 +941,26 @@ export function renderSocialHud() {
                 e.stopPropagation();
                 const editor = jQuery(this).closest('.bb-char-editor');
                 const button = jQuery(this);
+                const cancelButton = editor.find('.bb-btn-cancel-description-generation');
                 const charName = String(button.attr('data-char') || '').trim();
                 const generatedFallback = String(editor.find('.bb-edit-generated-description').val() || '').trim();
                 const originalHtml = button.html();
+                const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+                setIsVnGenerationCancelled(false);
+                editor.data('bbDescriptionGenerationRequestId', requestId);
+                editor.data('bbDescriptionGenerationCancelled', false);
+                button.attr('data-original-html', originalHtml);
                 button.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i>&ensp;Генерация...');
+                cancelButton.prop('disabled', false).show().html('<i class="fa-solid fa-xmark"></i>&ensp;Отмена');
                 generateCharacterDescription({
                     charName,
                     stats: currentCalculatedStats[charName] || {},
                     currentDescription: String(editor.find('.bb-edit-description-input').val() || '').trim(),
                 }).then((generated) => {
+                    if (String(editor.data('bbDescriptionGenerationRequestId') || '') !== requestId) return;
+                    if (editor.data('bbDescriptionGenerationCancelled') === true) return;
+
                     const finalText = String(generated || '').trim() || generatedFallback;
                     if (!finalText) {
                         notifyError('Не удалось собрать описание персонажа.');
@@ -943,7 +969,12 @@ export function renderSocialHud() {
                     editor.find('.bb-edit-description-input').val(finalText);
                     notifyInfo('Описание персонажа обновлено. При желании его можно подправить вручную.');
                 }).catch((error) => {
+                    if (String(editor.data('bbDescriptionGenerationRequestId') || '') !== requestId) return;
                     console.error('[BB VN] Character description generation failed:', error);
+                    if (editor.data('bbDescriptionGenerationCancelled') === true || isVnGenerationAbortError(error)) {
+                        notifyInfo('Генерация описания отменена.');
+                        return;
+                    }
                     if (generatedFallback) {
                         editor.find('.bb-edit-description-input').val(generatedFallback);
                         notifyInfo('Модель не ответила, поэтому подставлен локальный шаблон описания.');
@@ -951,8 +982,26 @@ export function renderSocialHud() {
                         notifyError('Не удалось сгенерировать описание персонажа.');
                     }
                 }).finally(() => {
-                    button.prop('disabled', false).html(originalHtml);
+                    if (String(editor.data('bbDescriptionGenerationRequestId') || '') !== requestId) return;
+                    resetDescriptionGenerationUi(editor);
                 });
+            });
+
+            jQuery('.bb-btn-cancel-description-generation').off('click').on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const editor = jQuery(this).closest('.bb-char-editor');
+                if (!String(editor.data('bbDescriptionGenerationRequestId') || '').trim()) return;
+
+                editor.data('bbDescriptionGenerationCancelled', true);
+                editor.find('.bb-btn-generate-description')
+                    .prop('disabled', true)
+                    .html('<i class="fa-solid fa-spinner fa-spin"></i>&ensp;Останавливаем...');
+                jQuery(this)
+                    .prop('disabled', true)
+                    .html('<i class="fa-solid fa-spinner fa-spin"></i>&ensp;Отмена...');
+
+                cancelVnGeneration();
             });
 
             jQuery('.bb-btn-clear-description').off('click').on('click', function(e) {

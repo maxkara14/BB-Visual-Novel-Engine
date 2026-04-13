@@ -40,11 +40,32 @@ function maybeNotifyCustomApiFallback() {
 
 export async function runMainGen(promptText) {
     if (typeof generateQuietPrompt === 'function') {
-        return await generateQuietPrompt(promptText);
+        return await generateQuietPrompt({ quietPrompt: promptText });
     } else if (typeof window['generateQuietPrompt'] === 'function') {
-        return await window['generateQuietPrompt'](promptText);
+        return await window['generateQuietPrompt']({ quietPrompt: promptText });
     } else {
         throw new Error("Функция генерации Таверны не найдена. Обновите SillyTavern.");
+    }
+}
+
+export function isVnGenerationAbortError(error) {
+    const message = String(error?.message || error || '').toLowerCase();
+    return message.includes('abort')
+        || message.includes('cancel')
+        || message.includes('отмен');
+}
+
+export function cancelVnGeneration() {
+    setIsVnGenerationCancelled(true);
+
+    if (vnGenerationAbortController) {
+        vnGenerationAbortController.abort();
+    }
+
+    try {
+        SillyTavern.getContext?.().stopGeneration?.();
+    } catch (error) {
+        console.debug('[BB VN] stopGeneration failed:', error);
     }
 }
 
@@ -312,11 +333,11 @@ function collectCharacterDescriptionPromptContext() {
         const personaText = String(context?.substituteParams?.('{{persona}}') || '')
             .replace(/\s+/g, ' ')
             .trim()
-            .slice(0, 900);
+            .slice(0, 1400);
 
-        let remainingChars = 3600;
+        let remainingChars = 5600;
         const recentLines = [];
-        for (const message of chat.slice(-10).reverse()) {
+        for (const message of chat.slice(-18).reverse()) {
             const rawText = String(message?.mes || message?.text || '')
                 .replace(/\s+/g, ' ')
                 .trim();
@@ -347,6 +368,142 @@ function collectCharacterDescriptionPromptContext() {
     }
 }
 
+function clipPromptBlock(value = '', maxLength = 1200, { singleLine = false } = {}) {
+    let text = String(value || '')
+        .replace(/\r/g, '')
+        .trim();
+
+    if (!text) return '';
+
+    if (singleLine) {
+        text = text.replace(/\s+/g, ' ');
+    } else {
+        text = text
+            .split('\n')
+            .map(line => line.trim())
+            .filter(Boolean)
+            .join('\n')
+            .replace(/\n{3,}/g, '\n\n');
+    }
+
+    return text.slice(0, maxLength).trim();
+}
+
+function normalizeCharacterNameForMatch(value = '') {
+    return String(value || '')
+        .toLocaleLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function findMatchingContextCharacter(context, charName = '') {
+    const target = normalizeCharacterNameForMatch(charName);
+    if (!target || !Array.isArray(context?.characters)) return null;
+
+    for (let index = 0; index < context.characters.length; index++) {
+        const character = context.characters[index];
+        if (!character) continue;
+        if (normalizeCharacterNameForMatch(character.name) === target) {
+            return { character, chid: index };
+        }
+    }
+
+    return null;
+}
+
+async function collectCharacterDescriptionSourceContext({ charName = '', userName = '', personaText = '' } = {}) {
+    const context = SillyTavern.getContext?.();
+    const result = {
+        matchedCharacterName: '',
+        cardContext: '',
+        worldInfoText: '',
+    };
+
+    if (!context || typeof context !== 'object') {
+        return result;
+    }
+
+    const matched = findMatchingContextCharacter(context, charName);
+    let cardFields = null;
+
+    if (matched && typeof context.getCharacterCardFields === 'function') {
+        try {
+            cardFields = context.getCharacterCardFields({ chid: matched.chid }) || null;
+            result.matchedCharacterName = String(matched.character?.name || '').trim();
+        } catch (error) {
+            console.debug('[BB VN] Failed to resolve character card fields for profile generation:', error);
+        }
+    }
+
+    if (cardFields) {
+        const alternateGreetings = Array.isArray(cardFields.alternateGreetings)
+            ? cardFields.alternateGreetings
+                .map(item => clipPromptBlock(item, 320))
+                .filter(Boolean)
+                .slice(0, 2)
+            : [];
+
+        const cardLines = [
+            result.matchedCharacterName ? `Совпавшая карточка: ${result.matchedCharacterName}` : '',
+            cardFields.version ? `Версия карточки: ${clipPromptBlock(cardFields.version, 120, { singleLine: true })}` : '',
+            cardFields.description ? `Описание карточки: ${clipPromptBlock(cardFields.description, 1500)}` : '',
+            cardFields.personality ? `Характер из карточки: ${clipPromptBlock(cardFields.personality, 1000)}` : '',
+            cardFields.scenario ? `Сценарий / сеттинг: ${clipPromptBlock(cardFields.scenario, 1000)}` : '',
+            cardFields.creatorNotes ? `Creator notes: ${clipPromptBlock(cardFields.creatorNotes, 1200)}` : '',
+            cardFields.charDepthPrompt ? `Глубинный prompt карточки: ${clipPromptBlock(cardFields.charDepthPrompt, 900)}` : '',
+            cardFields.system ? `Системный prompt карточки: ${clipPromptBlock(cardFields.system, 900)}` : '',
+            cardFields.firstMessage ? `Первое сообщение: ${clipPromptBlock(cardFields.firstMessage, 700)}` : '',
+            cardFields.mesExamples ? `Примеры речи: ${clipPromptBlock(cardFields.mesExamples, 1200)}` : '',
+            alternateGreetings.length > 0 ? `Альтернативные приветствия: ${alternateGreetings.join(' | ')}` : '',
+        ].filter(Boolean);
+
+        result.cardContext = cardLines.join('\n');
+    }
+
+    if (typeof context.getWorldInfoPrompt === 'function') {
+        try {
+            const chat = Array.isArray(context.chat) ? context.chat : [];
+            const chatForWI = chat
+                .slice(-18)
+                .map(message => {
+                    const rawText = clipPromptBlock(message?.mes || message?.text || '', 420, { singleLine: true });
+                    if (!rawText) return '';
+
+                    const speaker = message?.is_user
+                        ? (String(userName || '').trim() || 'пользователь')
+                        : String(message?.name || 'Сцена').trim() || 'Сцена';
+                    return `${speaker}: ${rawText}`;
+                })
+                .filter(Boolean)
+                .reverse();
+
+            const globalScanData = {
+                personaDescription: clipPromptBlock(personaText, 1400),
+                characterDescription: clipPromptBlock(cardFields?.description, 1400),
+                characterPersonality: clipPromptBlock(cardFields?.personality, 1000),
+                characterDepthPrompt: clipPromptBlock(cardFields?.charDepthPrompt, 900),
+                scenario: clipPromptBlock(cardFields?.scenario, 1000),
+                creatorNotes: clipPromptBlock(cardFields?.creatorNotes, 1200),
+                trigger: 'quiet',
+            };
+
+            const wiPrompt = await context.getWorldInfoPrompt(
+                chatForWI,
+                Number(context.maxContext) || 4096,
+                true,
+                globalScanData,
+            );
+
+            result.worldInfoText = clipPromptBlock(wiPrompt?.worldInfoString || '', 3200);
+        } catch (error) {
+            console.debug('[BB VN] Failed to collect World Info context for profile generation:', error);
+        }
+    }
+
+    return result;
+}
+
 async function generateStructuredCharacterDescription({ charName = '', stats = {}, currentDescription = '' } = {}) {
     const safeCharName = String(charName || '').trim() || 'персонаж';
     const affinity = parseInt(stats?.affinity, 10) || 0;
@@ -373,17 +530,22 @@ async function generateStructuredCharacterDescription({ charName = '', stats = {
             return `${delta > 0 ? '+' : ''}${delta}${reason ? ` :: ${reason}` : ''}`;
         }).filter(Boolean)
         : [];
-    const currentProfile = String(currentDescription || '').trim().slice(0, 1200);
+    const currentProfile = clipPromptBlock(currentDescription, 1800);
     const { userName, personaText, recentChat } = collectCharacterDescriptionPromptContext();
+    const sourceContext = await collectCharacterDescriptionSourceContext({
+        charName: safeCharName,
+        userName,
+        personaText,
+    });
 
-    const prompt = `Собери полезный профиль персонажа для prompt-инжекта в ролевом чате.
+    const prompt = `Собери цельный профиль персонажа для prompt-инжекта в ролевом чате.
 
-Нужно создать не художественный абзац, а удобную памятку по персонажу, чтобы модель лучше держала его образ.
-Опирайся на историю чата, персону пользователя, текущую динамику отношений и уже накопленные факты.
+Нужно вернуть не художественный абзац, а удобную памятку по персонажу, чтобы модель держала законченный образ без двусмысленностей.
+Опирайся на историю чата, персону пользователя, динамику отношений, карточку персонажа, creator notes, примеры речи и релевантный world info / lorebook.
 
 [ФОРМАТ ОТВЕТА]
 Верни только готовый профиль на русском языке, без markdown, без пояснений и без вступления.
-Сделай 7-8 строк в формате:
+Сделай ровно 8 строк в формате:
 Имя: ...
 Возраст / этап жизни: ...
 Роль в истории: ...
@@ -394,11 +556,13 @@ async function generateStructuredCharacterDescription({ charName = '', stats = {
 Что важно учитывать в сценах: ...
 
 [ПРАВИЛА]
-1. Если данных недостаточно, прямо пиши "не указано напрямую" или "данных пока мало", а не выдумывай.
-2. Можно аккуратно обобщать чат, но нельзя придумывать конкретные факты, которых не было.
-3. Желательно держать итог компактным и содержательным, обычно в районе 700-1400 символов, но это мягкая рекомендация, а не жёсткий лимит.
-4. Профиль должен быть полезен для будущих сцен, а не пересказывать чат дословно.
-5. Учитывай, как персонаж воспринимает именно пользователя и его персону.
+1. Профиль должен быть законченным. Не пиши "не указано", "данных мало", "может быть", "возможно", "неясно" и другие заглушки.
+2. Если в источниках есть пробелы, аккуратно дострой образ до конца на основе уже известных фактов, тона сцены, world info, карточки и поведения персонажа.
+3. Домысливание разрешено только там, где оно не ломает явный канон. Явные факты из карточки, creator notes, world info и чата важнее домысливания.
+4. Если можно трактовать образ по-разному, выбери одну наиболее правдоподобную и согласованную версию, а не оставляй несколько вариантов.
+5. Профиль должен быть полезен для будущих сцен: давать внешность, манеру, прошлое, роль и текущее отношение к пользователю.
+6. Если текущее описание уже содержит полезные факты, сохрани их и расширь, а не игнорируй.
+7. Держи ответ компактным и насыщенным, обычно в пределах 900-1800 символов.
 
 [ДАННЫЕ О ПЕРСОНАЖЕ]
 Имя: ${safeCharName}
@@ -409,6 +573,12 @@ async function generateStructuredCharacterDescription({ charName = '', stats = {
 Значимые события: ${notableMemories.length > 0 ? notableMemories.join(' | ') : 'нет явных данных'}
 Последние сдвиги: ${historySummary.length > 0 ? historySummary.join(' | ') : 'нет данных'}
 Текущее описание: ${currentProfile || 'пусто'}
+
+[КАРТОЧКА / ДОПОЛНИТЕЛЬНЫЕ ИСТОЧНИКИ]
+${sourceContext.cardContext || 'Совпавшая карточка в текущем чате не найдена или дополнительных полей нет.'}
+
+[АКТИВНЫЙ WORLD INFO / LOREBOOK]
+${sourceContext.worldInfoText || 'Нет активированных записей world info для этого среза контекста.'}
 
 [ПЕРСОНА ПОЛЬЗОВАТЕЛЯ]
 ${personaText || 'не указана'}
