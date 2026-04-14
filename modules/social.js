@@ -702,7 +702,7 @@ function seedMergeSuggestionsFromRegistry(scopeState = {}) {
             }
 
             const beforeCount = Array.isArray(scopeState.merge_suggestions) ? scopeState.merge_suggestions.length : 0;
-            rememberMergeSuggestion(scopeState, source.primary_name, target, score);
+            rememberMergeSuggestion(scopeState, source.primary_name, target, score, { queuePrompt: false });
             if ((Array.isArray(scopeState.merge_suggestions) ? scopeState.merge_suggestions.length : 0) > beforeCount) {
                 changed = true;
             }
@@ -915,39 +915,54 @@ function scoreCharacterMatch(sourceName = '', candidateName = '') {
     return overlap / union;
 }
 
-function rememberMergeSuggestion(scopeState, sourceName, targetEntry, score) {
-    if (!scopeState || !targetEntry) return;
+function rememberMergeSuggestion(scopeState, sourceName, targetEntry, score, options = {}) {
+    if (!scopeState || !targetEntry) return null;
     if (!Array.isArray(scopeState.merge_suggestions)) scopeState.merge_suggestions = [];
+
+    const {
+        queuePrompt = true,
+    } = options || {};
 
     const normalizedSource = normalizeCharacterLookupName(sourceName);
     const normalizedTarget = normalizeCharacterLookupName(targetEntry.primary_name);
-    if (!normalizedSource || !normalizedTarget || normalizedSource === normalizedTarget) return;
+    if (!normalizedSource || !normalizedTarget || normalizedSource === normalizedTarget) return null;
 
-    const alreadyExists = scopeState.merge_suggestions.some(item =>
+    const existingSuggestion = scopeState.merge_suggestions.find(item =>
         (normalizeCharacterLookupName(item.source || '') === normalizedSource &&
             normalizeCharacterLookupName(item.target || '') === normalizedTarget)
         || (normalizeCharacterLookupName(item.source || '') === normalizedTarget &&
             normalizeCharacterLookupName(item.target || '') === normalizedSource)
     );
-    if (alreadyExists) return;
 
-    const suggestion = {
+    const suggestion = existingSuggestion || {
         source: String(sourceName || '').trim(),
         target: targetEntry.primary_name,
         target_id: targetEntry.id,
         score: Number(score || 0),
         at: Date.now(),
     };
-    scopeState.merge_suggestions.push(suggestion);
-    if (scopeState.merge_suggestions.length > 20) scopeState.merge_suggestions.shift();
-    notifyInfo(`Возможный дубль: «${suggestion.source}» похоже на «${suggestion.target}». Проверь объединение.`);
-    saveChatDebounced();
-    if (typeof window['bbRenderMergeSuggestionsList'] === 'function') {
-        window['bbRenderMergeSuggestionsList']();
+
+    suggestion.source = String(sourceName || '').trim();
+    suggestion.target = targetEntry.primary_name;
+    suggestion.target_id = targetEntry.id;
+    suggestion.score = Math.max(Number(suggestion.score || 0), Number(score || 0));
+    suggestion.at = Date.now();
+
+    if (!existingSuggestion) {
+        scopeState.merge_suggestions.push(suggestion);
+        if (scopeState.merge_suggestions.length > 20) scopeState.merge_suggestions.shift();
+        notifyInfo(`Возможный дубль: «${suggestion.source}» похоже на «${suggestion.target}». Проверь объединение.`);
+        saveChatDebounced();
+        if (typeof window['bbRenderMergeSuggestionsList'] === 'function') {
+            window['bbRenderMergeSuggestionsList']();
+        }
     }
-    if (Number(score || 0) >= 0.85) {
+
+    if (queuePrompt && Number(suggestion.score || 0) >= 0.82) {
         queueMergeSuggestionPrompt(suggestion);
     }
+
+    return suggestion;
 }
 
 function createCharacterRegistryEntry(scopeState, displayName) {
@@ -983,6 +998,7 @@ export function resolveCharacterIdentity(rawName = '', options = {}) {
     const {
         allowCreate = true,
         allowSuggestions = true,
+        autoAliasStrongMatch = !allowSuggestions,
     } = options || {};
 
     const { scopeState } = bindActivePersonaState();
@@ -1012,12 +1028,15 @@ export function resolveCharacterIdentity(rawName = '', options = {}) {
     });
 
     if (bestEntry && bestScore >= 0.82) {
-        addAliasToEntry(bestEntry, displayName, scopeState);
-        return { id: bestEntry.id, primaryName: bestEntry.primary_name, entry: bestEntry, created: false };
-    }
-
-    if (bestEntry && bestScore >= 0.55 && allowSuggestions) {
-        rememberMergeSuggestion(scopeState, displayName, bestEntry, bestScore);
+        if (allowSuggestions && !autoAliasStrongMatch) {
+            rememberMergeSuggestion(scopeState, displayName, bestEntry, bestScore, { queuePrompt: true });
+            if (!allowCreate) return null;
+        } else {
+            addAliasToEntry(bestEntry, displayName, scopeState);
+            return { id: bestEntry.id, primaryName: bestEntry.primary_name, entry: bestEntry, created: false };
+        }
+    } else if (bestEntry && bestScore >= 0.55 && allowSuggestions) {
+        rememberMergeSuggestion(scopeState, displayName, bestEntry, bestScore, { queuePrompt: false });
     }
 
     if (!allowCreate) return null;
