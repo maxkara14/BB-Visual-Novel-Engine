@@ -533,7 +533,7 @@ export function setupExtensionSettings() {
             { title: 'Редкий момент', text: 'Так выглядит усиленный toast крупного события.', badge: 'Дебаг', variant: 'legendary', icon: 'fa-solid fa-gem' },
         ][Math.floor(Math.random() * 6)];
         const types = ['system', 'memory', 'bond', 'romance', 'fracture', 'legendary'];
-        showHudToast({ title: 'Тест', text: 'Проверка уведомлений', badge: 'Дебаг', variant: types[Math.floor(Math.random()*types.length)], icon: 'fa-solid fa-bug' });
+        showHudToast(sample);
     });
 
     jQuery('#bb-social-export-btn').on('click', () => {

@@ -238,7 +238,7 @@ export function showStoryMomentToast(moment) {
     if (!moment) return;
 
     const toastMap = {
-        'deep-positive': { badge: 'Память', variant: 'memory', icon: 'fa-solid fa-sparkles', accent: '#c084fc' },
+        'deep-positive': { badge: 'Память', variant: 'memory', icon: 'fa-solid fa-star', accent: '#c084fc' },
         'deep-negative': { badge: 'Шрам', variant: 'fracture', icon: 'fa-solid fa-bolt', accent: '#fb7185' },
         'soft-positive': { badge: 'Отголосок', variant: 'bond', icon: 'fa-solid fa-book-open-reader', accent: '#4ade80' },
         'soft-negative': { badge: 'Осадок', variant: 'negative', icon: 'fa-solid fa-feather-pointed', accent: '#f87171' },
