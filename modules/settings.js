@@ -476,10 +476,27 @@ export function setupExtensionSettings() {
         saveChatDebounced(); recalculateAllStats(false); notifySuccess("Статус изменен.");
     });
 
-    jQuery('#bb-dbg-btn-merge').on('click', function() {
+    jQuery('#bb-dbg-btn-merge').on('click', async function() {
         bindActivePersonaState();
         const from = String(jQuery('#bb-dbg-merge-from').val()).trim(), to = String(jQuery('#bb-dbg-merge-to').val()).trim();
         if(!from || !to || from === to) return notifyError("Некорректные имена!");
+
+        let confirmed = false;
+        try {
+            confirmed = await SillyTavern.getContext().callPopup(
+                `<h3>Подтвердить слияние?</h3><p><strong>${from}</strong> будет объединён с <strong>${to}</strong>.</p><p><span style="font-size:12px; color:#94a3b8;">Это затронет журнал, память, связи и алиасы. Перед слиянием лучше сделать снапшот.</span></p>`,
+                'confirm'
+            );
+        } catch (error) {
+            console.warn('[BB VN] Failed to show merge confirmation popup', error);
+            confirmed = false;
+        }
+
+        if (!confirmed) {
+            notifyInfo('Слияние отменено.');
+            return;
+        }
+
         const result = mergeCharacterRecords(from, to);
         if(result.ok) { saveChatDebounced(); recalculateAllStats(false); renderMergeSuggestionsList(); notifySuccess(result.same ? `Это уже один и тот же персонаж: ${result.targetName}` : `Слито записей: ${result.count}`); } else notifyError("Персонаж не найден.");
     });

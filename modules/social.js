@@ -45,6 +45,9 @@ function hashString(input = '') {
 }
 
 const shownLiveToastKeys = [];
+const promptedMergeSuggestionKeys = new Set();
+const pendingMergeSuggestionQueue = [];
+let isProcessingMergeSuggestionQueue = false;
 
 function hasShownLiveToast(key = '') {
     return shownLiveToastKeys.includes(String(key || ''));
@@ -57,6 +60,58 @@ function rememberLiveToast(key = '') {
     if (existingIndex !== -1) shownLiveToastKeys.splice(existingIndex, 1);
     shownLiveToastKeys.push(normalizedKey);
     if (shownLiveToastKeys.length > 240) shownLiveToastKeys.shift();
+}
+
+
+function buildMergeSuggestionKey(sourceName = '', targetId = '', targetName = '') {
+    return hashString([normalizeCharacterLookupName(sourceName), String(targetId || '').trim(), normalizeCharacterLookupName(targetName)].join('|'));
+}
+
+async function processMergeSuggestionQueue() {
+    if (isProcessingMergeSuggestionQueue) return;
+    isProcessingMergeSuggestionQueue = true;
+    try {
+        while (pendingMergeSuggestionQueue.length > 0) {
+            const suggestion = pendingMergeSuggestionQueue.shift();
+            if (!suggestion?.source || !suggestion?.target) continue;
+
+            let confirmed = false;
+            try {
+                confirmed = await SillyTavern.getContext().callPopup(
+                    `<h3>Похожий персонаж найден</h3><p><strong>${escapeHtml(suggestion.source)}</strong> очень похож на <strong>${escapeHtml(suggestion.target)}</strong>.</p><p>Слить их сейчас в одного персонажа?</p><p><span style="font-size:12px; color:#94a3b8;">Перед слиянием лучше сделать бэкап снапшотом.</span></p>`,
+                    'confirm'
+                );
+            } catch (error) {
+                console.warn('[BB VN] Failed to show merge suggestion popup', error);
+                confirmed = false;
+            }
+
+            if (!confirmed) continue;
+
+            const result = mergeCharacterRecords(suggestion.source, suggestion.target);
+            if (result?.ok) {
+                saveChatDebounced();
+                recalculateAllStats(false);
+                if (typeof window['bbRenderMergeSuggestionsList'] === 'function') {
+                    window['bbRenderMergeSuggestionsList']();
+                }
+                notifySuccess(result.same ? `Это уже один и тот же персонаж: ${result.targetName}` : `Слито записей: ${result.count}`);
+            }
+        }
+    } finally {
+        isProcessingMergeSuggestionQueue = false;
+    }
+}
+
+function queueMergeSuggestionPrompt(suggestion = null) {
+    if (!suggestion?.source || !suggestion?.target) return;
+    const key = buildMergeSuggestionKey(suggestion.source, suggestion.target_id, suggestion.target);
+    if (promptedMergeSuggestionKeys.has(key)) return;
+    promptedMergeSuggestionKeys.add(key);
+    pendingMergeSuggestionQueue.push(suggestion);
+    window.setTimeout(() => {
+        void processMergeSuggestionQueue();
+    }, 0);
 }
 
 function buildLiveToastKey(scopeKey = '', messageMeta = '', moment = {}) {
@@ -592,6 +647,71 @@ function ensurePersonaStateShape(scopeState = {}) {
     return scopeState;
 }
 
+
+function getKnownCharacterNames(scopeState = {}) {
+    const names = new Set();
+    const pushName = (value) => {
+        const safeName = String(value || '').trim();
+        if (!safeName || isCollectiveEntityName(safeName)) return;
+        names.add(safeName);
+    };
+
+    Object.keys(scopeState?.char_bases || {}).forEach(pushName);
+    Object.keys(scopeState?.char_bases_romance || {}).forEach(pushName);
+    Object.keys(currentCalculatedStats || {}).forEach(pushName);
+    Object.keys(scopeState?.snapshot_baseline?.characters || {}).forEach(pushName);
+
+    return [...names];
+}
+
+function ensureRegistryCoverage(scopeState = {}) {
+    let changed = false;
+    getKnownCharacterNames(scopeState).forEach(name => {
+        const hasEntry = getRegistryEntries(scopeState).some(entry => entryOwnsName(entry, name));
+        if (hasEntry) return;
+        createCharacterRegistryEntry(scopeState, name);
+        changed = true;
+    });
+    return changed;
+}
+
+function seedMergeSuggestionsFromRegistry(scopeState = {}) {
+    const entries = getRegistryEntries(scopeState);
+    if (entries.length < 2) return false;
+
+    let changed = false;
+    for (let leftIndex = 0; leftIndex < entries.length; leftIndex++) {
+        for (let rightIndex = leftIndex + 1; rightIndex < entries.length; rightIndex++) {
+            const left = entries[leftIndex];
+            const right = entries[rightIndex];
+            if (!left?.primary_name || !right?.primary_name) continue;
+            const score = scoreCharacterMatch(left.primary_name, right.primary_name);
+            if (score < 0.55) continue;
+
+            const leftCreated = parseInt(left.created_at, 10) || 0;
+            const rightCreated = parseInt(right.created_at, 10) || 0;
+            let source = right;
+            let target = left;
+
+            if (rightCreated && leftCreated && rightCreated < leftCreated) {
+                source = left;
+                target = right;
+            } else if (!rightCreated && !leftCreated && String(right.primary_name).localeCompare(String(left.primary_name), 'ru') < 0) {
+                source = left;
+                target = right;
+            }
+
+            const beforeCount = Array.isArray(scopeState.merge_suggestions) ? scopeState.merge_suggestions.length : 0;
+            rememberMergeSuggestion(scopeState, source.primary_name, target, score);
+            if ((Array.isArray(scopeState.merge_suggestions) ? scopeState.merge_suggestions.length : 0) > beforeCount) {
+                changed = true;
+            }
+        }
+    }
+
+    return changed;
+}
+
 function ensureActivePersonaState() {
     const resolved = ensureResolvedPersonaScope();
     const scopes = chat_metadata['bb_vn_persona_states'];
@@ -619,6 +739,11 @@ function ensureActivePersonaState() {
 
 export function bindActivePersonaState() {
     const { scopeKey, scopeState, aliasSet, identity, binding } = ensureActivePersonaState();
+    const registryWasExpanded = ensureRegistryCoverage(scopeState);
+    const suggestionsWereSeeded = seedMergeSuggestionsFromRegistry(scopeState);
+    if (registryWasExpanded || suggestionsWereSeeded) {
+        saveChatDebounced();
+    }
     chat_metadata['bb_vn_active_persona_scope'] = scopeKey;
     chat_metadata['bb_vn_char_bases'] = scopeState.char_bases;
     chat_metadata['bb_vn_char_bases_romance'] = scopeState.char_bases_romance;
@@ -796,9 +921,13 @@ function rememberMergeSuggestion(scopeState, sourceName, targetEntry, score) {
 
     const normalizedSource = normalizeCharacterLookupName(sourceName);
     const normalizedTarget = normalizeCharacterLookupName(targetEntry.primary_name);
+    if (!normalizedSource || !normalizedTarget || normalizedSource === normalizedTarget) return;
+
     const alreadyExists = scopeState.merge_suggestions.some(item =>
-        normalizeCharacterLookupName(item.source || '') === normalizedSource &&
-        normalizeCharacterLookupName(item.target || '') === normalizedTarget
+        (normalizeCharacterLookupName(item.source || '') === normalizedSource &&
+            normalizeCharacterLookupName(item.target || '') === normalizedTarget)
+        || (normalizeCharacterLookupName(item.source || '') === normalizedTarget &&
+            normalizeCharacterLookupName(item.target || '') === normalizedSource)
     );
     if (alreadyExists) return;
 
@@ -812,6 +941,13 @@ function rememberMergeSuggestion(scopeState, sourceName, targetEntry, score) {
     scopeState.merge_suggestions.push(suggestion);
     if (scopeState.merge_suggestions.length > 20) scopeState.merge_suggestions.shift();
     notifyInfo(`Возможный дубль: «${suggestion.source}» похоже на «${suggestion.target}». Проверь объединение.`);
+    saveChatDebounced();
+    if (typeof window['bbRenderMergeSuggestionsList'] === 'function') {
+        window['bbRenderMergeSuggestionsList']();
+    }
+    if (Number(score || 0) >= 0.85) {
+        queueMergeSuggestionPrompt(suggestion);
+    }
 }
 
 function createCharacterRegistryEntry(scopeState, displayName) {
