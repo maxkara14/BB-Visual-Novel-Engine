@@ -1928,7 +1928,36 @@ body.bb-hud-popup-active #bb-social-toast-container {
         max-width: 100%;
     }
 
+    .bb-char-card.expanded .bb-char-body {
+        max-height: 3200px;
+    }
+
+    .bb-char-card.editor-open .bb-char-editor {
+        max-height: 2600px;
+    }
+
     .bb-avatar-editor-grid {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    .bb-avatar-editor-panel:first-child {
+        align-items: flex-start;
+    }
+
+    .bb-avatar-editor-panel:first-child .bb-avatar-preview {
+        width: min(112px, 42vw);
+        max-width: 112px;
+        min-width: 72px;
+        margin-right: auto;
+    }
+
+    .bb-char-editor > .bb-editor-actions {
+        flex-wrap: wrap;
+    }
+
+    .bb-char-editor > .bb-editor-actions .menu_button {
+        flex: 1 1 100% !important;
+        width: 100%;
+        min-width: 0;
     }
 }
