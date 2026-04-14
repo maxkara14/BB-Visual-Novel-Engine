@@ -702,7 +702,7 @@ function seedMergeSuggestionsFromRegistry(scopeState = {}) {
             }
 
             const beforeCount = Array.isArray(scopeState.merge_suggestions) ? scopeState.merge_suggestions.length : 0;
-            rememberMergeSuggestion(scopeState, source.primary_name, target, score, { queuePrompt: false });
+            rememberMergeSuggestion(scopeState, source.primary_name, target, score);
             if ((Array.isArray(scopeState.merge_suggestions) ? scopeState.merge_suggestions.length : 0) > beforeCount) {
                 changed = true;
             }
@@ -915,54 +915,39 @@ function scoreCharacterMatch(sourceName = '', candidateName = '') {
     return overlap / union;
 }
 
-function rememberMergeSuggestion(scopeState, sourceName, targetEntry, score, options = {}) {
-    if (!scopeState || !targetEntry) return null;
+function rememberMergeSuggestion(scopeState, sourceName, targetEntry, score) {
+    if (!scopeState || !targetEntry) return;
     if (!Array.isArray(scopeState.merge_suggestions)) scopeState.merge_suggestions = [];
-
-    const {
-        queuePrompt = true,
-    } = options || {};
 
     const normalizedSource = normalizeCharacterLookupName(sourceName);
     const normalizedTarget = normalizeCharacterLookupName(targetEntry.primary_name);
-    if (!normalizedSource || !normalizedTarget || normalizedSource === normalizedTarget) return null;
+    if (!normalizedSource || !normalizedTarget || normalizedSource === normalizedTarget) return;
 
-    const existingSuggestion = scopeState.merge_suggestions.find(item =>
+    const alreadyExists = scopeState.merge_suggestions.some(item =>
         (normalizeCharacterLookupName(item.source || '') === normalizedSource &&
             normalizeCharacterLookupName(item.target || '') === normalizedTarget)
         || (normalizeCharacterLookupName(item.source || '') === normalizedTarget &&
             normalizeCharacterLookupName(item.target || '') === normalizedSource)
     );
+    if (alreadyExists) return;
 
-    const suggestion = existingSuggestion || {
+    const suggestion = {
         source: String(sourceName || '').trim(),
         target: targetEntry.primary_name,
         target_id: targetEntry.id,
         score: Number(score || 0),
         at: Date.now(),
     };
-
-    suggestion.source = String(sourceName || '').trim();
-    suggestion.target = targetEntry.primary_name;
-    suggestion.target_id = targetEntry.id;
-    suggestion.score = Math.max(Number(suggestion.score || 0), Number(score || 0));
-    suggestion.at = Date.now();
-
-    if (!existingSuggestion) {
-        scopeState.merge_suggestions.push(suggestion);
-        if (scopeState.merge_suggestions.length > 20) scopeState.merge_suggestions.shift();
-        notifyInfo(`Возможный дубль: «${suggestion.source}» похоже на «${suggestion.target}». Проверь объединение.`);
-        saveChatDebounced();
-        if (typeof window['bbRenderMergeSuggestionsList'] === 'function') {
-            window['bbRenderMergeSuggestionsList']();
-        }
+    scopeState.merge_suggestions.push(suggestion);
+    if (scopeState.merge_suggestions.length > 20) scopeState.merge_suggestions.shift();
+    notifyInfo(`Возможный дубль: «${suggestion.source}» похоже на «${suggestion.target}». Проверь объединение.`);
+    saveChatDebounced();
+    if (typeof window['bbRenderMergeSuggestionsList'] === 'function') {
+        window['bbRenderMergeSuggestionsList']();
     }
-
-    if (queuePrompt && Number(suggestion.score || 0) >= 0.82) {
+    if (Number(score || 0) >= 0.85) {
         queueMergeSuggestionPrompt(suggestion);
     }
-
-    return suggestion;
 }
 
 function createCharacterRegistryEntry(scopeState, displayName) {
@@ -998,7 +983,6 @@ export function resolveCharacterIdentity(rawName = '', options = {}) {
     const {
         allowCreate = true,
         allowSuggestions = true,
-        autoAliasStrongMatch = !allowSuggestions,
     } = options || {};
 
     const { scopeState } = bindActivePersonaState();
@@ -1028,15 +1012,12 @@ export function resolveCharacterIdentity(rawName = '', options = {}) {
     });
 
     if (bestEntry && bestScore >= 0.82) {
-        if (allowSuggestions && !autoAliasStrongMatch) {
-            rememberMergeSuggestion(scopeState, displayName, bestEntry, bestScore, { queuePrompt: true });
-            if (!allowCreate) return null;
-        } else {
-            addAliasToEntry(bestEntry, displayName, scopeState);
-            return { id: bestEntry.id, primaryName: bestEntry.primary_name, entry: bestEntry, created: false };
-        }
-    } else if (bestEntry && bestScore >= 0.55 && allowSuggestions) {
-        rememberMergeSuggestion(scopeState, displayName, bestEntry, bestScore, { queuePrompt: false });
+        addAliasToEntry(bestEntry, displayName, scopeState);
+        return { id: bestEntry.id, primaryName: bestEntry.primary_name, entry: bestEntry, created: false };
+    }
+
+    if (bestEntry && bestScore >= 0.55 && allowSuggestions) {
+        rememberMergeSuggestion(scopeState, displayName, bestEntry, bestScore);
     }
 
     if (!allowCreate) return null;
@@ -1164,10 +1145,212 @@ export function mergeCharacterRecords(fromName = '', toName = '') {
     return { ok: true, count, targetName: toPrimary };
 }
 
+
+function stripHiddenSocialDataFromText(text = '') {
+    return String(text || '')
+        .replace(/<div[^>]*(?:class=["'][^"']*bb-vn-data[^"']*["']|style=["'][^"']*display\s*:\s*none[^"']*["'])[^>]*>[\s\S]*?<\/div>/gi, ' ')
+        .replace(/<bb-social-updates\b[^>]*>[\s\S]*?<\/bb-social-updates>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function getCanonicalCharacterNameWithoutMutation(rawName = '', scopeState = {}) {
+    const displayName = String(rawName || '').trim();
+    const normalized = normalizeCharacterLookupName(displayName);
+    if (!displayName || !normalized) return '';
+
+    const entries = getRegistryEntries(scopeState);
+    for (const entry of entries) {
+        if (entryOwnsName(entry, displayName)) {
+            return entry.primary_name;
+        }
+    }
+
+    let bestEntry = null;
+    let bestScore = 0;
+    entries.forEach(entry => {
+        const names = [entry.primary_name, ...(Array.isArray(entry.aliases) ? entry.aliases : [])];
+        names.forEach(candidateName => {
+            const score = scoreCharacterMatch(displayName, candidateName);
+            if (score > bestScore) {
+                bestScore = score;
+                bestEntry = entry;
+            }
+        });
+    });
+
+    if (bestEntry && bestScore >= 0.82) {
+        return bestEntry.primary_name;
+    }
+
+    return displayName;
+}
+
+function getKnownCharacterCandidateNames(charName = '', scopeState = {}) {
+    const canonical = getCanonicalCharacterNameWithoutMutation(charName, scopeState) || String(charName || '').trim();
+    const normalizedCanonical = normalizeCharacterLookupName(canonical);
+    const entry = getRegistryEntries(scopeState).find(item => normalizeCharacterLookupName(item?.primary_name || '') === normalizedCanonical);
+    const names = entry
+        ? [entry.primary_name, ...(Array.isArray(entry.aliases) ? entry.aliases : [])]
+        : [canonical];
+    return [...new Set(names.map(name => String(name || '').trim()).filter(Boolean))];
+}
+
+function textContainsCharacterReference(sourceText = '', charName = '', scopeState = {}) {
+    const normalizedText = ` ${normalizeCharacterLookupName(stripHiddenSocialDataFromText(sourceText))} `;
+    if (!normalizedText.trim()) return false;
+
+    return getKnownCharacterCandidateNames(charName, scopeState).some(candidateName => {
+        const candidate = normalizeCharacterLookupName(candidateName);
+        if (!candidate) return false;
+        if (candidate.length < 3) return false;
+        return normalizedText.includes(` ${candidate} `);
+    });
+}
+
+function getTrackedCharacterRoster(scopeState = {}) {
+    const roster = new Set();
+    const pushName = (value) => {
+        const safeName = String(value || '').trim();
+        if (!safeName || isCollectiveEntityName(safeName)) return;
+        roster.add(safeName);
+    };
+
+    Object.keys(currentCalculatedStats || {}).forEach(pushName);
+    Object.keys(chat_metadata['bb_vn_char_bases'] || {}).forEach(pushName);
+    Object.keys(chat_metadata['bb_vn_char_bases_romance'] || {}).forEach(pushName);
+    getKnownCharacterNames(scopeState).forEach(pushName);
+
+    return [...roster];
+}
+
+function collectRecentSceneCharacterScores(chat = [], uptoIndex = -1, scopeState = {}, aliasSet = new Set()) {
+    const scores = new Map();
+    const roster = getTrackedCharacterRoster(scopeState);
+    const bumpScore = (rawName = '', amount = 1) => {
+        const canonical = getCanonicalCharacterNameWithoutMutation(rawName, scopeState) || String(rawName || '').trim();
+        if (!canonical || isCollectiveEntityName(canonical)) return;
+        scores.set(canonical, (scores.get(canonical) || 0) + amount);
+    };
+
+    if (!Array.isArray(chat) || chat.length === 0 || uptoIndex < 0) {
+        return scores;
+    }
+
+    const startIndex = Math.max(0, uptoIndex - 8);
+    for (let idx = startIndex; idx <= uptoIndex; idx++) {
+        const msg = chat[idx];
+        if (!msg) continue;
+        const isCurrent = idx === uptoIndex;
+        const text = stripHiddenSocialDataFromText(msg.mes || '');
+        if (text) {
+            roster.forEach(charName => {
+                if (textContainsCharacterReference(text, charName, scopeState)) {
+                    bumpScore(charName, isCurrent ? 4 : 2);
+                }
+            });
+        }
+
+        const swipeId = msg.swipe_id || 0;
+        const allowLegacyFallback = !Array.isArray(msg?.swipes) || msg.swipes.length <= 1;
+        const msgUpdates = getStoredSwipeEntries(msg.extra?.bb_social_swipes, swipeId, allowLegacyFallback);
+        if (Array.isArray(msgUpdates)) {
+            msgUpdates.forEach(update => {
+                if (update?.scope && !aliasSet.has(update.scope)) return;
+                bumpScore(update?.name || '', isCurrent ? 3 : 1);
+            });
+        }
+
+        const msgTraits = msg.extra?.bb_vn_char_traits_swipes?.[swipeId];
+        if (Array.isArray(msgTraits)) {
+            msgTraits.forEach(trait => {
+                if (trait?.scope && !aliasSet.has(trait.scope)) return;
+                bumpScore(trait?.charName || '', isCurrent ? 2 : 1);
+            });
+        }
+    }
+
+    return scores;
+}
+
+function getPromptRelevantCharacters(scopeState = {}, aliasSet = new Set()) {
+    const trackedCharacters = Object.keys(currentCalculatedStats || {}).filter(name => name && !isCollectiveEntityName(name));
+    if (trackedCharacters.length <= 6) return trackedCharacters;
+
+    const chat = SillyTavern.getContext().chat || [];
+    const scores = collectRecentSceneCharacterScores(chat, chat.length - 1, scopeState, aliasSet);
+    const ranked = trackedCharacters
+        .map(name => ({
+            name,
+            score: scores.get(getCanonicalCharacterNameWithoutMutation(name, scopeState) || name) || 0,
+        }))
+        .sort((left, right) => (right.score - left.score) || left.name.localeCompare(right.name, 'ru'));
+
+    const relevant = ranked.filter(item => item.score > 0).slice(0, 8).map(item => item.name);
+    if (relevant.length > 0) return relevant;
+    return trackedCharacters.slice(0, 8);
+}
+
+function isKnownTrackedCharacterName(rawName = '', scopeState = {}) {
+    const canonical = getCanonicalCharacterNameWithoutMutation(rawName, scopeState);
+    if (!canonical) return false;
+    const normalizedCanonical = normalizeCharacterLookupName(canonical);
+    if (!normalizedCanonical) return false;
+
+    const hasCurrentStats = Object.keys(currentCalculatedStats || {}).some(name => normalizeCharacterLookupName(name) === normalizedCanonical);
+    const hasBase = Object.keys(chat_metadata['bb_vn_char_bases'] || {}).some(name => normalizeCharacterLookupName(name) === normalizedCanonical);
+    const hasRomanceBase = Object.keys(chat_metadata['bb_vn_char_bases_romance'] || {}).some(name => normalizeCharacterLookupName(name) === normalizedCanonical);
+    const hasRegistry = getKnownCharacterNames(scopeState).some(name => normalizeCharacterLookupName(name) === normalizedCanonical);
+
+    return hasCurrentStats || hasBase || hasRomanceBase || hasRegistry;
+}
+
+function filterStaleSceneUpdates(activeUpdates = [], msg = null, idx = -1, chat = [], scopeState = {}, aliasSet = new Set()) {
+    if (!Array.isArray(activeUpdates) || activeUpdates.length < 2 || idx < 0) {
+        return { updates: activeUpdates, changed: false, dropped: [] };
+    }
+
+    const currentText = stripHiddenSocialDataFromText(msg?.mes || '');
+    const sceneScores = collectRecentSceneCharacterScores(chat, idx, scopeState, aliasSet);
+    const meta = activeUpdates.map(update => {
+        const rawName = String(update?.name || '').trim();
+        const canonical = getCanonicalCharacterNameWithoutMutation(rawName, scopeState) || rawName;
+        const known = isKnownTrackedCharacterName(rawName, scopeState);
+        const directMention = rawName ? textContainsCharacterReference(currentText, rawName, scopeState) : false;
+        const evidence = sceneScores.get(canonical) || 0;
+        return { update, rawName, canonical, known, directMention, evidence };
+    });
+
+    const hasPotentialNewCharacter = meta.some(item => item.rawName && !item.known);
+    const hasAnchoredKnownCharacter = meta.some(item => item.known && (item.directMention || item.evidence > 0));
+    if (!hasPotentialNewCharacter && !hasAnchoredKnownCharacter) {
+        return { updates: activeUpdates, changed: false, dropped: [] };
+    }
+
+    const dropped = [];
+    const filtered = meta.filter(item => {
+        if (!item.known) return true;
+        if (item.directMention || item.evidence > 0) return true;
+        dropped.push(item);
+        return false;
+    });
+
+    if (filtered.length === 0 || filtered.length === activeUpdates.length) {
+        return { updates: activeUpdates, changed: false, dropped: [] };
+    }
+
+    return {
+        updates: filtered.map(item => item.update),
+        changed: true,
+        dropped,
+    };
+}
+
 export function getCombinedSocial() {
-    bindActivePersonaState();
+    const { scopeState, aliasSet } = bindActivePersonaState();
     let combinedStr = SOCIAL_PROMPT;
-    const characters = Object.keys(currentCalculatedStats);
+    const characters = getPromptRelevantCharacters(scopeState, aliasSet);
     
     if (characters.length > 0) {
         combinedStr += `\n\n[CURRENT RELATIONSHIP STATUS]:\n`;
@@ -1220,7 +1403,8 @@ export function getCombinedSocial() {
         combinedStr += `1. Behavior: Dialogue and actions must strictly match the Status and Relationship Tier.\n`;
         combinedStr += `2. Memory: Characters must act based on 'Recent' (short-term mood) and 'Unforgettable' (permanent emotional anchor) memories.\n`;
         combinedStr += `3. Profile Notes: If a character has a Profile note, treat it as active supporting canon for this scene.\n`;
-        combinedStr += `4. Name Consistency: When evaluating existing characters, use EXACTLY these names: ${characters.join(', ')}.`;
+        combinedStr += `4. Name Consistency: For already tracked characters, prefer these canonical names when they are actually relevant to the current scene: ${characters.join(', ')}.\n`;
+        combinedStr += `5. New Character Rule: If a genuinely new person appears in this specific turn and they are not one of the tracked names above, you MAY add a new character instead of forcing them into an old identity.`;
 
         if (impactInstructions.length > 0) {
             combinedStr += `\n\n[UNFORGETTABLE IMPACT LOGIC]:\n${impactInstructions.join('\n')}\n`;
@@ -1754,6 +1938,16 @@ export function recalculateAllStats(isNewMessage = false) {
         let activeUpdates = getStoredSwipeEntries(msg.extra?.bb_social_swipes, swipeId, allowLegacyFallback);
 
         if (activeUpdates && Array.isArray(activeUpdates)) {
+            const filteredSceneUpdates = filterStaleSceneUpdates(activeUpdates, msg, idx, chat, scopeState, aliasSet);
+            if (filteredSceneUpdates.changed) {
+                activeUpdates.splice(0, activeUpdates.length, ...filteredSceneUpdates.updates);
+                needsSave = true;
+                if (idx === lastAssistantIndex && filteredSceneUpdates.dropped.length > 0) {
+                    const droppedNames = filteredSceneUpdates.dropped.map(item => item.rawName || item.canonical).filter(Boolean);
+                    setSocialParseDebug('filtered', `Отброшены сомнительные обновления: ${droppedNames.join(', ')}`);
+                }
+            }
+
             const IMPACT_MAP = {
                 unforgivable: -20,
                 major_negative: -8,
