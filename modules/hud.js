@@ -625,7 +625,6 @@ function buildCharacterCardHtml(charName = '') {
                     <div class="bb-char-insight-tile"><span class="bb-char-insight-label">Мягкие следы</span><strong>${(memories.soft || []).length}</strong></div>
                     <div class="bb-char-insight-tile"><span class="bb-char-insight-label">Глубокие следы</span><strong>${allDeepMemories.length}</strong></div>
                 </div>
-                ${profile.description ? `<div class="bb-char-profile-card"><div class="bb-memory-title" style="color:#93c5fd;">Профиль для prompt</div><div class="bb-char-profile-copy">${escapeHtml(profile.description)}</div></div>` : ''}
                 ${(memories.soft.length > 0 || allDeepMemories.length > 0 || coreTraits.length > 0) ? `<div class="bb-char-log">
                     ${coreTraits.length > 0 ? `<div class="bb-memory-section" style="padding-top: 4px; margin-bottom: 8px;"><div class="bb-memory-title" style="color:#fbbf24;">Черты характера</div><div class="bb-memory-list bb-memory-list-deep">${traitsHtml}</div></div>` : ''}
                     ${memories.soft.length > 0 ? `<div class="bb-memory-section" style="padding-top: 4px;"><div class="bb-memory-title">Мягкие следы</div><div class="bb-memory-list">${softMemoriesHtml}</div></div>` : ''}
@@ -661,6 +660,7 @@ function buildCharacterCardHtml(charName = '') {
                     <div class="bb-editor-title">Описание персонажа для prompt</div>
                     <div class="bb-editor-hint">По умолчанию оно пустое. Если заполнить вручную или собрать по шаблону, описание будет добавляться в инжект.</div>
                     <textarea class="text_pole bb-edit-description-input" rows="4" style="width:100%; min-height: 92px; resize: vertical;">${escapeHtml(profile.description)}</textarea>
+                    <div class="bb-editor-hint" style="margin-top: 8px; margin-bottom: 0;">Описание видно только в настройках, чтобы не забивать блок со следами и незабываемыми событиями.</div>
                     <input type="hidden" class="bb-edit-generated-description" value="${escapeHtml(generatedDescription)}">
                     <div class="bb-editor-actions bb-editor-actions-tight" style="margin-top: 8px;">
                         <button type="button" class="menu_button bb-btn-generate-description" data-char="${escapeHtml(charName)}"><i class="fa-solid fa-wand-magic-sparkles"></i>&ensp;По шаблону</button>

@@ -29,13 +29,13 @@ export function renderVNOptionsFromData(parsedOptions, autoOpen = false) {
             : `<span class="bb-vn-target muted">Сцена в целом</span>`;
         
         const forecastHtml = useEmotionalChoiceFraming && opt.forecast
-            ? `<div class="bb-vn-forecast-hover"><div class="bb-vn-forecast-title">Прогноз</div><div class="bb-vn-forecast-text">${escapeHtml(opt.forecast)}</div></div>`
+            ? `<div class="bb-vn-forecast-hover" title="${escapeHtml(opt.forecast)}"><div class="bb-vn-forecast-title">Прогноз</div><div class="bb-vn-forecast-text">${escapeHtml(opt.forecast)}</div></div>`
             : '';
 
         optionsHtml += `
             <div class="bb-vn-option ${riskClass} ${toneClass}" data-intent="${escapeHtml(opt.intent)}" data-message="${encodeURIComponent(opt.message || '')}" data-tone="${escapeHtml(opt.tone || '')}" data-forecast="${escapeHtml(opt.forecast || '')}" data-targets="${encodeURIComponent(JSON.stringify(opt.targets ||[]))}">
-                <div class="bb-vn-op-topline"><span class="bb-vn-op-index">Сцена</span><div class="bb-vn-op-risk">${useEmotionalChoiceFraming ? 'Тон' : 'Риск'}: ${escapeHtml(metaLabel)}</div><div class="bb-vn-op-info-btn" title="Подробнее"><i class="fa-solid fa-info"></i></div></div>
-                <div class="bb-vn-op-head">${escapeHtml(opt.intent)}</div>
+                <div class="bb-vn-op-topline"><span class="bb-vn-op-index">Сцена</span><div class="bb-vn-op-risk">${useEmotionalChoiceFraming ? 'Тон' : 'Риск'}: ${escapeHtml(metaLabel)}</div><div class="bb-vn-op-info-btn" title="${escapeHtml(opt.forecast || 'Подробнее')}"><i class="fa-solid fa-info"></i></div></div>
+                <div class="bb-vn-op-head" title="${escapeHtml(opt.intent)}">${escapeHtml(opt.intent)}</div>
                 ${useEmotionalChoiceFraming ? `<div class="bb-vn-targets">${targetsText}</div>` : ''}
                 ${forecastHtml}
             </div>

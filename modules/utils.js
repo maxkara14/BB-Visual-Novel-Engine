@@ -100,6 +100,23 @@ export function sanitizeIntentLabel(intent = "", tone = "", risk = "") {
     return normalized.slice(0, 64);
 }
 
+
+
+export function sanitizeForecastLabel(forecast = "", risk = "") {
+    const raw = String(forecast || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!raw) return getLegacyForecastFromRisk(risk);
+
+    if (raw.length <= 96) return raw;
+
+    return raw
+        .slice(0, 95)
+        .replace(/[\s,.;:!?-]+$/g, '')
+        .trim() + '…';
+}
+
 export function normalizeGeneratedMessage(message = "") {
     return String(message || '')
         .replace(/\\\\n/g, '\n')
@@ -446,7 +463,7 @@ export function getLegacyForecastFromRisk(risk = "") {
 export function normalizeOptionData(option = {}) {
     const legacyRisk = option.risk || "";
     const tone = option.tone || getLegacyToneFromRisk(legacyRisk);
-    const forecast = option.forecast || getLegacyForecastFromRisk(legacyRisk);
+    const forecast = sanitizeForecastLabel(option.forecast || '', legacyRisk);
     const targets = Array.isArray(option.targets)
         ? option.targets.filter(Boolean)
         : typeof option.target === 'string' && option.target.trim()

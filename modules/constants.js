@@ -56,13 +56,13 @@ CRITICAL RULES FOR EMOTIONAL CHOICE FRAMING:
 1. "tone": Describe the emotional flavor of the answer in 1-2 Russian words. Think in placeholder terms like "SHORT_RUSSIAN_TONE".
 2. The "tone" MUST strongly affect the actual "message": vocabulary, body language, pacing, initiative, and inner monologue must all feel saturated with that tone.
 3. The 3 options must differ not only by action idea, but also by emotional delivery. Avoid producing three options that all feel emotionally similar.
-4. "forecast": A SHORT Russian hint for what this action may cause. Think in placeholder terms like "SHORT_RUSSIAN_OUTCOME_HINT".
+4. "forecast": A SHORT Russian hint for what this action may cause. Keep it compact: ideally 3-9 words and usually no longer than about 65 characters. Think in placeholder terms like "SHORT_RUSSIAN_OUTCOME_HINT".
 5. "forecast" must logically match the tone and action. Do not write a soft forecast for an aggressive action or vice versa.
 6. Prefer vivid, readable tones such as "\u043d\u0435\u0436\u043d\u043e", "\u0434\u0435\u0440\u0437\u043a\u043e", "\u0445\u043e\u043b\u043e\u0434\u043d\u043e", "\u043e\u043f\u0430\u0441\u043d\u043e", "\u0438\u0440\u043e\u043d\u0438\u0447\u043d\u043e", "\u0443\u044f\u0437\u0432\u0438\u043c\u043e", "\u043d\u0430\u043f\u043e\u0440\u0438\u0441\u0442\u043e", "\u043b\u0430\u0441\u043a\u043e\u0432\u043e", "\u0436\u0451\u0441\u0442\u043a\u043e" when they fit.
 7. If the scene allows it, make the tones meaningfully contrast with each other.
 8. "targets": Array of 1-3 character names that are most affected by this action. If no single character stands out, return an empty array.
 9. "risk": OPTIONAL legacy field for backward compatibility. If you include it, use "\u041d\u0438\u0437\u043a\u0438\u0439", "\u0421\u0440\u0435\u0434\u043d\u0438\u0439", or "\u0412\u044b\u0441\u043e\u043a\u0438\u0439". Do not make it the main focus.
-10. "intent": Must be a natural Russian phrase (2-5 words). Never use placeholders, ALL_CAPS tokens, snake_case, or English-only labels.
+10. "intent": Must be a natural Russian phrase (2-5 words), compact and button-friendly. Prefer roughly 2-4 words and avoid stretching beyond ~42 characters. Never use placeholders, ALL_CAPS tokens, snake_case, or English-only labels.
 
 CRITICAL JSON AND FORMATTING RULES:
 1. Return STRICTLY a valid JSON array. DO NOT output any conversational text outside the JSON.
