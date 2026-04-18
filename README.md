@@ -65,7 +65,7 @@
 
 Это помогает выбирать не просто “ещё один ответ”, а именно **сценическое направление эпизода**.
 
-<img width="941" height="212" alt="Ответы VN" src="https://github.com/user-attachments/assets/44cc1078-5337-46cf-be05-57df4bd01690" />
+<img width="942" height="236" alt="Screenshot_12" src="https://github.com/user-attachments/assets/90d3f105-93a5-4a94-8e5b-c1a4e1bd0c93" />
 
 ---
 
