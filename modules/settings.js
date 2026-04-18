@@ -1,7 +1,7 @@
  /* global SillyTavern */
 import { chat_metadata, saveChatDebounced, saveSettingsDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
-import { MODULE_NAME } from './constants.js';
+import { MODULE_NAME, normalizeVnReplyLength } from './constants.js';
 import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog, bindActivePersonaState, getCurrentPersonaScopeKey, mergeCharacterRecords, resolveCharacterIdentity, exportActivePersonaSnapshot, importActivePersonaSnapshot, clearActivePersonaSnapshot } from './social.js';
 import { notifySuccess, notifyInfo, notifyError, showHudToast } from './toasts.js';
 import { restoreVNOptions, clearSavedVNOptions } from './generator.js';
@@ -162,6 +162,7 @@ export function setupExtensionSettings() {
     if (document.getElementById('bb-social-settings-wrapper')) return;
     
     const s = extension_settings[MODULE_NAME];
+    const selectedReplyLength = normalizeVnReplyLength(s.vnReplyLength);
     const settingsHtml = `
         <div id="bb-social-settings-wrapper" class="inline-drawer">
             <div class="inline-drawer-toggle inline-drawer-header"><b>💖 BB Visual Novel Engine</b><div class="inline-drawer-icon fa-solid fa-chevron-down down"></div></div>
@@ -171,6 +172,15 @@ export function setupExtensionSettings() {
                     <label class="checkbox_label"><input type="checkbox" id="bb-vn-cfg-autosend" ${s.autoSend ? 'checked' : ''}><span>Авто-отправка при выборе</span></label>
                     <label class="checkbox_label"><input type="checkbox" id="bb-vn-cfg-autogen" ${s.autoGen ? 'checked' : ''}><span>Авто-показ вариантов действий</span></label>
                     <label class="checkbox_label"><input type="checkbox" id="bb-vn-cfg-emotional-choice" ${s.emotionalChoiceFraming ? 'checked' : ''}><span>Emotional Choice Framing</span></label>
+                    <div style="display:flex; flex-direction:column; gap:6px; margin-top: 4px; padding: 10px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
+                        <label for="bb-vn-cfg-reply-length" style="font-size: 12px; color: #cbd5e1; font-weight: 700;">Длина VN-ответа</label>
+                        <select id="bb-vn-cfg-reply-length" class="text_pole">
+                            <option value="short" ${selectedReplyLength === 'short' ? 'selected' : ''}>Короткий - быстрый темп</option>
+                            <option value="medium" ${selectedReplyLength === 'medium' ? 'selected' : ''}>Средний - баланс</option>
+                            <option value="long" ${selectedReplyLength === 'long' ? 'selected' : ''}>Длинный - больше сцены</option>
+                        </select>
+                        <span style="font-size: 11px; color: #94a3b8; line-height: 1.45;">Влияет и на длину вариантов действий, и на то, насколько активно VN продвигает следующий ответ.</span>
+                    </div>
                 </div>
                 <hr style="border-color: rgba(255,255,255,0.1); margin: 10px 0;">
                 <span style="font-size: 13px; color: #cbd5e1; font-weight:bold;">⚡ Custom API:</span>
@@ -355,6 +365,13 @@ export function setupExtensionSettings() {
     jQuery('#bb-vn-cfg-autogen').on('change', function() { extension_settings[MODULE_NAME].autoGen = jQuery(this).is(':checked'); saveSettingsDebounced(); });
     jQuery('#bb-vn-cfg-emotional-choice').on('change', function() {
         extension_settings[MODULE_NAME].emotionalChoiceFraming = jQuery(this).is(':checked');
+        saveSettingsDebounced();
+        clearSavedVNOptions();
+        restoreVNOptions(false);
+        injectCombinedSocialPrompt();
+    });
+    jQuery('#bb-vn-cfg-reply-length').on('change', function() {
+        extension_settings[MODULE_NAME].vnReplyLength = normalizeVnReplyLength(jQuery(this).val());
         saveSettingsDebounced();
         clearSavedVNOptions();
         restoreVNOptions(false);

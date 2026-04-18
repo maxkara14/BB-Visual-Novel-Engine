@@ -124,15 +124,8 @@ function buildAvatarStyle(profile = {}) {
     const avatar = String(profile?.avatar || '').trim();
     if (!avatar) return '';
 
-    const crop = profile?.avatarCrop && typeof profile.avatarCrop === 'object'
-        ? profile.avatarCrop
-        : { x: 50, y: 50, zoom: 100 };
     const safeAvatar = avatar.replace(/'/g, "\\'");
-    const focusX = Number.isFinite(Number(crop.x)) ? Number(crop.x) : 50;
-    const focusY = Number.isFinite(Number(crop.y)) ? Number(crop.y) : 50;
-    const zoom = Number.isFinite(Number(crop.zoom)) ? Number(crop.zoom) : 100;
-
-    return `background-image:url('${safeAvatar}'); background-position:${focusX}% ${focusY}%; background-size:${zoom}%;`;
+    return `background-image:url('${safeAvatar}'); background-position:center; background-size:cover;`;
 }
 
 function buildFixedAvatarPreviewStyle(avatarDataUrl = '') {
@@ -279,7 +272,7 @@ async function createCroppedAvatarDataUrl(sourceDataUrl = '', crop = {}, options
     const outputHeight = Math.max(220, parseInt(options.outputHeight, 10) || 440);
     const focusX = Math.max(0, Math.min(100, Number(crop?.x) || 50)) / 100;
     const focusY = Math.max(0, Math.min(100, Number(crop?.y) || 50)) / 100;
-    const zoom = Math.max(80, Math.min(240, Number(crop?.zoom) || 100)) / 100;
+    const zoom = Math.max(100, Math.min(320, Number(crop?.zoom) || 100)) / 100;
 
     const baseScale = Math.max(outputWidth / naturalWidth, outputHeight / naturalHeight);
     const effectiveScale = baseScale * zoom;
@@ -354,14 +347,14 @@ function syncCharacterEditorAvatarPreview(editor) {
         if (Number(editor.data('bbAvatarPreviewRequestId') || 0) !== requestId) return;
         const previewStyle = buildFixedAvatarPreviewStyle(previewDataUrl);
         if (!previewStyle) {
-            preview.addClass('is-empty');
+            preview.removeClass('has-image').addClass('is-empty').removeAttr('style');
             return;
         }
-        preview.addClass('has-image').attr('style', previewStyle);
+        preview.removeClass('is-empty').addClass('has-image').attr('style', previewStyle);
     }).catch((error) => {
         if (Number(editor.data('bbAvatarPreviewRequestId') || 0) !== requestId) return;
         console.error('[BB VN] Avatar preview sync failed:', error);
-        preview.addClass('is-empty');
+        preview.removeClass('has-image').addClass('is-empty').removeAttr('style');
     });
 }
 
@@ -633,13 +626,13 @@ function buildCharacterCardHtml(charName = '') {
             </div>
             <div class="bb-char-editor" style="cursor: default; border-top: 1px solid rgba(255,255,255,0.06); border-radius: 0 0 22px 22px; margin: 0; background: rgba(0,0,0,0.2);">
                 <div class="bb-editor-title">Настройки персонажа</div>
-                <div class="bb-editor-hint">Здесь можно задать стартовые значения, аватар и дополнительный профиль для prompt.</div>
+                <div class="bb-editor-hint">Здесь можно задать стартовые значения, аватар и профиль персонажа.</div>
                 <div class="bb-avatar-editor-grid">
                     <div class="bb-avatar-editor-panel">
                         <div class="bb-avatar-preview ${profile.avatar ? 'has-image' : 'is-empty'}" style="${buildAvatarStyle(profile)}">
                             <span class="bb-avatar-preview-initials">${escapeHtml(getCharacterInitials(charName))}</span>
                         </div>
-                        <input type="hidden" class="bb-edit-avatar-source" value="${escapeHtml(profile.avatar)}">
+                        <input type="hidden" class="bb-edit-avatar-source" value="${escapeHtml(profile.avatarSource || profile.avatar)}">
                         <input type="hidden" class="bb-edit-avatar-data" value="${escapeHtml(profile.avatar)}">
                         <input type="file" class="bb-avatar-upload-input" accept="image/*" style="display:none;">
                         <div class="bb-editor-actions bb-editor-actions-tight">
@@ -651,16 +644,14 @@ function buildCharacterCardHtml(charName = '') {
                         <div class="bb-editor-hint" style="margin-bottom: 8px;">Выберите, какая часть изображения видна на карточке.</div>
                         <label class="bb-slider-field"><span>Фокус по X</span><input type="range" min="0" max="100" step="1" class="bb-avatar-focus-x" value="${Number(profile.avatarCrop?.x ?? 50)}"></label>
                         <label class="bb-slider-field"><span>Фокус по Y</span><input type="range" min="0" max="100" step="1" class="bb-avatar-focus-y" value="${Number(profile.avatarCrop?.y ?? 50)}"></label>
-                        <label class="bb-slider-field"><span>Масштаб</span><input type="range" min="80" max="240" step="1" class="bb-avatar-focus-zoom" value="${Number(profile.avatarCrop?.zoom ?? 100)}"></label>
+                        <label class="bb-slider-field"><span>Масштаб</span><input type="range" min="100" max="320" step="1" class="bb-avatar-focus-zoom" value="${Number(profile.avatarCrop?.zoom ?? 100)}"></label>
                     </div>
                 </div>
                 <div style="display:flex; gap: 8px; margin-bottom: 10px;"><div style="flex:1;"><span style="font-size: 9px; color:#94a3b8; text-transform:uppercase;">База доверия:</span><input type="number" class="text_pole bb-edit-base-input" value="${baseAffinity}" style="width:100%; box-sizing:border-box;"></div><div style="flex:1;"><span style="font-size: 9px; color:#f472b6; text-transform:uppercase;">База романтики:</span><input type="number" class="text_pole bb-edit-romance-input" value="${baseRomance}" style="width:100%; box-sizing:border-box;"></div></div>
                 <label class="checkbox_label" style="margin-bottom: 10px;"><input type="checkbox" class="bb-edit-platonic-cb" ${isPlatonic ? 'checked' : ''}><span style="font-size: 11px; color:#fca5a5;">Строго платонически (блокирует флирт)</span></label>
                 <div class="bb-editor-section">
-                    <div class="bb-editor-title">Описание персонажа для prompt</div>
-                    <div class="bb-editor-hint">По умолчанию оно пустое. Если заполнить вручную или собрать по шаблону, описание будет добавляться в инжект.</div>
+                    <div class="bb-editor-title">Описание персонажа</div>
                     <textarea class="text_pole bb-edit-description-input" rows="4" style="width:100%; min-height: 92px; resize: vertical;">${escapeHtml(profile.description)}</textarea>
-                    <div class="bb-editor-hint" style="margin-top: 8px; margin-bottom: 0;">Описание видно только в настройках, чтобы не забивать блок со следами и незабываемыми событиями.</div>
                     <input type="hidden" class="bb-edit-generated-description" value="${escapeHtml(generatedDescription)}">
                     <div class="bb-editor-actions bb-editor-actions-tight" style="margin-top: 8px;">
                         <button type="button" class="menu_button bb-btn-generate-description" data-char="${escapeHtml(charName)}"><i class="fa-solid fa-wand-magic-sparkles"></i>&ensp;По шаблону</button>
@@ -901,6 +892,9 @@ export function renderSocialHud() {
                 const editor = jQuery(this).closest('.bb-char-editor');
                 editor.find('.bb-edit-avatar-source').val('');
                 editor.find('.bb-edit-avatar-data').val('');
+                editor.find('.bb-avatar-focus-x').val('50');
+                editor.find('.bb-avatar-focus-y').val('50');
+                editor.find('.bb-avatar-focus-zoom').val('100');
                 queueCharacterEditorAvatarPreview(editor, true);
             });
 
@@ -919,6 +913,9 @@ export function renderSocialHud() {
                     const dataUrl = await resizeImageFileToDataUrl(file);
                     editor.find('.bb-edit-avatar-source').val(dataUrl);
                     editor.find('.bb-edit-avatar-data').val('');
+                    editor.find('.bb-avatar-focus-x').val('50');
+                    editor.find('.bb-avatar-focus-y').val('50');
+                    editor.find('.bb-avatar-focus-zoom').val('100');
                     queueCharacterEditorAvatarPreview(editor, true);
                     notifyInfo('Аватар загружен. При необходимости подстройте кадр перед сохранением.');
                 } catch (error) {
@@ -1062,7 +1059,8 @@ export function renderSocialHud() {
                 updateCharacterProfile(charName, {
                     description,
                     avatar: finalAvatar,
-                    avatarCrop: finalAvatar ? { x: 50, y: 50, zoom: 100 } : avatarCrop,
+                    avatarSource,
+                    avatarCrop: finalAvatar ? avatarCrop : { x: 50, y: 50, zoom: 100 },
                 });
                 saveChatDebounced();
                 recalculateAllStats();
@@ -1131,7 +1129,7 @@ export function renderSocialHud() {
     if (logBox) {
         const logs = chat_metadata['bb_vn_global_log'] || [];
         const promptPreviewHtml = `
-            <div class="bb-panel-hero bb-panel-hero-system"><div class="bb-panel-kicker">Журнал</div><div class="bb-panel-headline">Системный журнал</div><div class="bb-panel-subtitle">Здесь показаны изменения отношений и текущий инжектируемый prompt.</div>
+            <div class="bb-panel-hero bb-panel-hero-system"><div class="bb-panel-kicker">Журнал</div><div class="bb-panel-headline">Системный журнал</div><div class="bb-panel-subtitle">Здесь показаны изменения отношений и текущий инжектируемый промпт.</div>
             <div class="bb-panel-stat-grid"><div class="bb-panel-stat"><span class="bb-panel-stat-label">Событий</span><strong>${logs.length}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Активный тон</span><strong>${escapeHtml(activeChoiceTone)}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Последнее событие</span><strong>${escapeHtml(latestMoment?.title || '—')}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Social HTML</span><strong>${escapeHtml(socialDebugLabel)}</strong></div></div><div class="bb-panel-subtitle" style="margin-top:8px;">${escapeHtml(socialDebugText)}</div></div>
             <details class="bb-prompt-card"><summary class="bb-prompt-summary"><span>🧠 Inject Prompt</span><button type="button" class="menu_button bb-copy-prompt-btn"><i class="fa-solid fa-copy"></i>&nbsp; Копировать</button></summary><div class="bb-prompt-hint">Это текущий инжект, собранный из актуального состояния чата. После нового выбора VN или следующего хода он может измениться.</div><pre class="bb-prompt-pre">${escapeHtml(getCombinedSocial())}</pre></details>
         `;

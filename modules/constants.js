@@ -8,7 +8,16 @@ export const DEFAULT_SETTINGS = {
     customApiModel: '',
     useMacro: false,
     emotionalChoiceFraming: true,
+    vnReplyLength: 'medium',
 };
+
+export function normalizeVnReplyLength(value = '') {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'short' || normalized === 'medium' || normalized === 'long') {
+        return normalized;
+    }
+    return DEFAULT_SETTINGS.vnReplyLength;
+}
 
 export const SOCIAL_PROMPT = `[SYSTEM INSTRUCTION: VISUAL NOVEL ENGINE]
 You are tracking how the characters feel about {{user}}.
@@ -50,7 +59,7 @@ export const OPTIONS_PROMPT = `Analyze the recent chat. Generate exactly 3 highl
 
 CRITICAL: Your generated messages MUST logically continue from the VERY LAST sentence of the [IMMEDIATE TRIGGER]. Do not ignore the character's final question, movement, or action. React directly to it.
 
-For EACH action, write a LONG, HIGHLY DETAILED roleplay message (2-4 paragraphs) from {{user}}'s perspective. Include rich sensory details, deep internal monologues, and complex actions. DO NOT just react passively; make {{user}} take initiative to progress the plot or shift the dynamic. Match {{user}}'s persona perfectly. Write in Russian.
+For EACH action, write a roleplay message from {{user}}'s perspective. The message must actively move the scene, show initiative, and match {{user}}'s persona perfectly. Write in Russian and obey the active length directive exactly.
 
 CRITICAL RULES FOR EMOTIONAL CHOICE FRAMING:
 1. "tone": Describe the emotional flavor of the answer in 1-2 Russian words. Think in placeholder terms like "SHORT_RUSSIAN_TONE".

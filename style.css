@@ -699,21 +699,133 @@ body.bb-hud-popup-active #bb-social-toast-container {
     color: #e2e8f0; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.9px;
     padding: 9px 11px; border-radius: 13px; text-align: center; cursor: pointer;
     box-shadow: 0 12px 24px rgba(0,0,0,0.22); transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+    animation: bbVnButtonGlow 3.6s ease-in-out infinite;
+}
+.bb-vn-main-btn::before {
+    content: '';
+    position: absolute;
+    top: -18%;
+    bottom: -18%;
+    left: -34%;
+    width: 22%;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(0) skewX(-18deg);
+    background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.04), rgba(255,255,255,0.18), rgba(255,255,255,0.04), rgba(255,255,255,0));
+    filter: blur(0.5px);
+    animation: bbVnButtonSheen 5.8s linear infinite;
 }
 .bb-vn-main-btn:hover { background: linear-gradient(180deg, rgba(23, 31, 46, 0.96), rgba(16, 23, 36, 0.94)); box-shadow: 0 14px 26px rgba(0,0,0,0.24); }
 .bb-vn-main-btn.loading { border-color: #f59e0b; color: #f59e0b; animation: pulseGlow 1.5s infinite; cursor: pointer; }
+.bb-vn-main-btn.loading::before { animation-play-state: paused; opacity: 0; }
 .bb-vn-main-btn.loading:hover { border-color: #ef4444; color: #ef4444; animation: none; box-shadow: 0 0 15px rgba(239, 68, 68, 0.3); }
 
 @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); } 50% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.6); } }
-
-#bb-vn-options-container { display: none; gap: 8px; width: 100%; overflow: visible; }
-#bb-vn-options-container.active {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-    gap: 8px;
-    align-items: stretch;
+@keyframes bbVnButtonSheen {
+    0%, 62% {
+        opacity: 0;
+        transform: translateX(0) skewX(-18deg);
+    }
+    68% {
+        opacity: 0.78;
+    }
+    82% {
+        opacity: 0.1;
+        transform: translateX(560%) skewX(-18deg);
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(560%) skewX(-18deg);
+    }
+}
+@keyframes bbVnButtonGlow {
+    0%, 100% {
+        box-shadow: 0 12px 24px rgba(0,0,0,0.22), 0 0 0 rgba(96, 165, 250, 0);
+        border-color: rgba(148, 163, 184, 0.22);
+    }
+    50% {
+        box-shadow: 0 14px 28px rgba(0,0,0,0.24), 0 0 18px rgba(96, 165, 250, 0.16);
+        border-color: rgba(125, 211, 252, 0.34);
+    }
+}
+@keyframes bbVnPanelReveal {
+    0% {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.985);
+        filter: blur(5px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+}
+@keyframes bbVnPanelHide {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-4px);
+        filter: blur(0);
+    }
+}
+@keyframes bbVnCardReveal {
+    0% {
+        opacity: 0;
+        transform: translateY(12px) scale(0.985);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+@keyframes bbVnCardHide {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.985);
+    }
 }
 
+#bb-vn-options-container { display: none; gap: 8px; width: 100%; overflow: visible; }
+#bb-vn-options-container.active,
+#bb-vn-options-container.is-closing {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    align-items: start;
+}
+#bb-vn-options-container.active {
+    transform-origin: top center;
+    animation: bbVnPanelReveal 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+#bb-vn-options-container.is-closing {
+    transform-origin: top center;
+    animation: bbVnPanelHide 0.22s ease forwards;
+    pointer-events: none;
+}
+#bb-vn-options-container.active .bb-vn-option,
+#bb-vn-options-container.active .bb-vn-utility-panel {
+    opacity: 0;
+    animation: bbVnCardReveal 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+#bb-vn-options-container.active .bb-vn-option:nth-child(1) { animation-delay: 0.03s; }
+#bb-vn-options-container.active .bb-vn-option:nth-child(2) { animation-delay: 0.07s; }
+#bb-vn-options-container.active .bb-vn-option:nth-child(3) { animation-delay: 0.11s; }
+#bb-vn-options-container.active .bb-vn-option:nth-child(4) { animation-delay: 0.15s; }
+#bb-vn-options-container.active .bb-vn-option:nth-child(5) { animation-delay: 0.19s; }
+#bb-vn-options-container.active .bb-vn-utility-panel:nth-child(1) { animation-delay: 0.18s; }
+#bb-vn-options-container.active .bb-vn-utility-panel:nth-child(2) { animation-delay: 0.21s; }
+#bb-vn-options-container.active .bb-vn-utility-panel:nth-child(3) { animation-delay: 0.24s; }
+#bb-vn-options-container.active .bb-vn-utility-panel:nth-child(4) { animation-delay: 0.27s; }
 .bb-vn-option {
     flex: 1;
     min-width: 0;
@@ -724,12 +836,12 @@ body.bb-hud-popup-active #bb-social-toast-container {
     cursor: pointer;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
     align-items: flex-start;
     text-align: left;
     transition: all 0.2s ease;
-    min-height: 118px; 
-    height: 100%;
+    min-height: 92px;
+    height: auto;
     box-sizing: border-box;
     position: relative;
     overflow: visible;
@@ -740,12 +852,19 @@ body.bb-hud-popup-active #bb-social-toast-container {
 .bb-vn-op-topline {
     width: 100%; 
     display: flex; 
-    justify-content: flex-start;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+    box-sizing: border-box;
+    min-width: 0;
+}
+.bb-vn-op-badges {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
     gap: 6px;
-    flex-wrap: wrap; 
-    padding-right: 30px; 
-    box-sizing: border-box;
 }
 .bb-vn-op-index {
     display: inline-flex; align-items: center; justify-content: center;
@@ -762,12 +881,14 @@ body.bb-hud-popup-active #bb-social-toast-container {
     line-height: 1.3;
     flex: 0 1 auto; 
     min-height: 20px;
-    max-width: calc(100% - 40px);
+    min-width: 0;
+    max-width: 100%;
     box-sizing: border-box;
     display: inline-flex;
     align-items: center;
     word-wrap: break-word;
     white-space: normal;
+    overflow-wrap: anywhere;
 }
 .bb-vn-op-head {
     width: 100%;
@@ -776,16 +897,16 @@ body.bb-hud-popup-active #bb-social-toast-container {
     overflow-wrap: anywhere; text-wrap: pretty;
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     overflow: hidden;
-    min-height: calc(1.35em * 3);
+    min-height: calc(1.35em * 2);
 }
 
 .bb-vn-targets { 
     display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 4px; 
     width: 100%; 
-    margin-top: auto; 
+    margin-top: 2px; 
 }
 .bb-vn-target {
     display: inline-flex; justify-content: center; align-items: center;
@@ -797,46 +918,65 @@ body.bb-hud-popup-active #bb-social-toast-container {
 }
 .bb-vn-target.muted { color: #94a3b8; }
 
-.bb-vn-utility-row { flex: 0 0 100%; display:flex; gap:8px; margin-top:2px; }
-.bb-vn-utility-card { text-align: left; }
-.bb-vn-utility-card .bb-vn-op-head { justify-content: flex-start; }
 .bb-vn-utility-row {
-    grid-column: 4;
-    grid-row: 1;
-    margin-top: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
+    grid-column: 1 / -1;
+    width: 100%;
+    margin-top: 4px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
     align-self: stretch;
 }
-.bb-vn-utility-compact {
-    flex: 0 0 auto;
-    width: 42px;
-    min-width: 42px;
-    height: 42px;
-    min-height: 42px;
-    padding: 0;
+.bb-vn-utility-panel {
+    min-width: 0;
+    min-height: 38px;
+    height: 38px;
+    padding: 0 10px;
     border-radius: 12px;
-    justify-content: center;
-    align-items: center;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: linear-gradient(180deg, rgba(15, 20, 30, 0.92), rgba(13, 18, 28, 0.9));
+    color: #dbe4f0;
     display: inline-flex;
-    margin-left: auto;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.75px;
+    line-height: 1;
+    cursor: pointer;
+    box-sizing: border-box;
+    box-shadow: 0 10px 18px rgba(0,0,0,0.18);
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
 }
-.bb-vn-utility-row #bb-vn-btn-cancel { margin-left: 0; }
-.bb-vn-utility-compact i { font-size: 15px; }
+.bb-vn-utility-panel:hover,
+.bb-vn-utility-panel:focus-visible {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 22px rgba(0,0,0,0.22);
+}
+.bb-vn-utility-panel i {
+    flex: 0 0 auto;
+    font-size: 13px;
+}
+.bb-vn-utility-panel span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .bb-vn-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
 
 /* === КНОПКА [ i ] ДЛЯ ПОДРОБНОСТЕЙ СЦЕНЫ === */
 .bb-vn-op-info-btn {
-    position: absolute; 
-    top: 10px;
-    right: 11px;
+    position: relative;
     display: inline-flex; align-items: center; justify-content: center;
     width: 24px; height: 24px; border-radius: 50%;
     background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
     color: #94a3b8; font-size: 11px; cursor: pointer;
     transition: all 0.2s ease; z-index: 5;
+    flex: 0 0 auto;
+    margin-left: auto;
 }
 .bb-vn-op-info-btn:hover, .bb-vn-option.info-expanded .bb-vn-op-info-btn {
     background: rgba(255,255,255,0.15); color: #f8fafc; transform: scale(1.1);
@@ -938,7 +1078,18 @@ body.bb-hud-popup-active #bb-social-toast-container {
     background: linear-gradient(180deg, rgba(15, 20, 30, 0.92), rgba(13, 18, 28, 0.9));
     border-color: rgba(148, 163, 184, 0.25) !important;
 }
+#bb-vn-btn-reroll span { color: #f8fafc; }
 #bb-vn-btn-reroll i { color: #fbbf24; }
+#bb-vn-btn-reroll-smart {
+    background: linear-gradient(180deg, rgba(15, 20, 30, 0.92), rgba(13, 18, 28, 0.9));
+    border-color: rgba(125, 211, 252, 0.28) !important;
+}
+#bb-vn-btn-reroll-smart span { color: #f8fafc; }
+#bb-vn-btn-reroll-smart i { color: #7dd3fc; }
+#bb-vn-btn-clear {
+    border-color: rgba(248, 113, 113, 0.2) !important;
+}
+#bb-vn-btn-clear i { color: #fda4af; }
 #bb-vn-btn-cancel {
     background: linear-gradient(180deg, rgba(15, 20, 30, 0.92), rgba(13, 18, 28, 0.9));
     border-color: rgba(148, 163, 184, 0.25) !important;
@@ -951,13 +1102,14 @@ body.bb-hud-popup-active #bb-social-toast-container {
         min-width: 0 !important;
         padding: 7px 9px !important;
         gap: 5px !important;
+        min-height: 82px;
     }
     #bb-vn-options-container.active {
-        grid-template-columns: minmax(0, 1fr) auto;
-        align-items: stretch;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
     }
     .bb-vn-option[data-intent] {
-        grid-column: 1;
+        grid-column: auto;
         width: 100%;
     }
     .bb-vn-op-head {
@@ -966,12 +1118,20 @@ body.bb-hud-popup-active #bb-social-toast-container {
         line-clamp: 2;
     }
     .bb-vn-op-topline {
-        flex-wrap: wrap; 
-        padding-right: 28px; 
+        gap: 6px;
+    }
+    .bb-vn-op-badges {
+        gap: 4px;
     }
     .bb-vn-op-risk {
         font-size: 8px;
         padding: 2px 6px;
+        max-width: 100%;
+    }
+    .bb-vn-op-info-btn {
+        width: 22px;
+        height: 22px;
+        font-size: 10px;
     }
     .bb-vn-targets {
         flex-direction: row;
@@ -988,18 +1148,21 @@ body.bb-hud-popup-active #bb-social-toast-container {
         flex: 0 0 auto;
     }
     .bb-vn-utility-row {
-        grid-column: 2;
-        grid-row: 1;
+        grid-column: 1 / -1;
         gap: 6px !important;
-        position: sticky;
-        top: 4px;
-        align-self: start;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
     }
-    #bb-vn-btn-reroll, #bb-vn-btn-cancel {
-        width: 40px;
-        min-width: 40px;
-        height: 40px;
-        min-height: 40px;
+    .bb-vn-utility-panel {
+        min-height: 36px;
+        height: 36px;
+        padding: 0 6px;
+        gap: 6px;
+        font-size: 9px;
+        letter-spacing: 0.45px;
+        border-radius: 11px;
+    }
+    .bb-vn-utility-panel i {
+        font-size: 12px;
     }
 }
 

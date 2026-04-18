@@ -504,7 +504,7 @@ function clampPercentValue(value = 0, fallback = 50) {
 function clampZoomValue(value = 100, fallback = 100) {
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) return fallback;
-    return Math.max(80, Math.min(240, numeric));
+    return Math.max(100, Math.min(320, numeric));
 }
 
 function normalizeCharacterDescription(value = '') {
@@ -526,6 +526,7 @@ function getCharacterProfileFromEntry(entry = null) {
     return {
         description: normalizeCharacterDescription(entry?.description || ''),
         avatar: String(entry?.avatar || '').trim(),
+        avatarSource: String(entry?.avatarSource || '').trim(),
         avatarCrop: normalizeAvatarCrop(entry?.avatarCrop),
     };
 }
@@ -542,8 +543,15 @@ function applyCharacterProfileToEntry(entry, updates = {}) {
     if (Object.prototype.hasOwnProperty.call(updates, 'avatar')) {
         entry.avatar = String(updates.avatar || '').trim();
         if (!entry.avatar) {
+            entry.avatarSource = '';
             entry.avatarCrop = normalizeAvatarCrop();
         }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'avatarSource')) {
+        entry.avatarSource = String(updates.avatarSource || '').trim();
+    } else if (!entry.avatarSource || typeof entry.avatarSource !== 'string') {
+        entry.avatarSource = '';
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'avatarCrop')) {
@@ -958,6 +966,7 @@ function createCharacterRegistryEntry(scopeState, displayName) {
         created_at: Date.now(),
         description: '',
         avatar: '',
+        avatarSource: '',
         avatarCrop: normalizeAvatarCrop(),
     };
     scopeState.char_registry[entry.id] = entry;
@@ -1046,6 +1055,7 @@ export function mergeCharacterRecords(fromName = '', toName = '') {
     }
     if (!targetProfile.avatar && sourceProfile.avatar) {
         targetEntry.avatar = sourceProfile.avatar;
+        targetEntry.avatarSource = sourceProfile.avatarSource || sourceProfile.avatar;
         targetEntry.avatarCrop = normalizeAvatarCrop(sourceProfile.avatarCrop);
     }
 

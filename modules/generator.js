@@ -1,14 +1,15 @@
 /* global SillyTavern */
 import { chat_metadata, saveChatDebounced, generateQuietPrompt } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
-import { MODULE_NAME, OPTIONS_PROMPT } from './constants.js';
+import { MODULE_NAME, OPTIONS_PROMPT, normalizeVnReplyLength } from './constants.js';
 import { 
     normalizeOptionData, 
     dedupeOptions, 
     escapeHtml,
     parseModelJson,
     normalizeTraitResponse,
-    isLikelyModelRefusalText
+    isLikelyModelRefusalText,
+    getToneClass,
 } from './utils.js';
 import { notifyInfo, notifyError } from './toasts.js';
 import { 
@@ -36,6 +37,109 @@ function maybeNotifyCustomApiFallback() {
     if (now - lastCustomApiFallbackNoticeAt < 8000) return;
     lastCustomApiFallbackNoticeAt = now;
     notifyInfo('Кастомная модель не ответила. Генерация продолжена на основной модели.');
+}
+function getActiveVnReplyLength() {
+    return normalizeVnReplyLength(extension_settings[MODULE_NAME]?.vnReplyLength);
+}
+
+function buildOptionLengthDirective(lengthPreset = '') {
+    switch (normalizeVnReplyLength(lengthPreset)) {
+        case 'short':
+            return 'Length preset: SHORT. Each "message" should still feel like a complete mini-scene: usually 1-2 compact paragraphs, about 450-900 Russian characters total. Include a quick scene setup, one clear action or short dialogue beat, and a neat stopping point. Keep it concise, but do not reduce it to a one-line reaction.';
+        case 'long':
+            return 'Length preset: LONG. Each "message" must read like a substantial VN scene fragment, not just an expanded reaction: usually 4-8 paragraphs, about 1800-3200 Russian characters total. Include multiple connected beats inside one reply: scene movement, physical action, dialogue exchange, emotional shift, and a clear end state or strong hook. Build an actual scene with actions, dialogue, and progression.';
+        case 'medium':
+        default:
+            return 'Length preset: MEDIUM. Each "message" should feel like one developed scene beat: usually 2-4 paragraphs, about 900-1600 Russian characters total. Balance action, dialogue, internal thought, and a noticeable consequence while keeping the pace active.';
+    }
+}
+
+function buildAssistantLengthDirective(lengthPreset = '') {
+    switch (normalizeVnReplyLength(lengthPreset)) {
+        case 'short':
+            return 'Keep the reply compact but complete: usually 1-2 concise paragraphs with a short setup, one concrete interaction or dialogue beat, and a clean stopping point. It should feel like a mini-scene, not a stub.';
+        case 'long':
+            return 'Write a substantial scene with multiple meaningful beats: usually 4-8 paragraphs. Include actions, dialogue, emotional movement, and visible consequences. The reply must materially advance the scene and feel like a real VN scene fragment.';
+        case 'medium':
+        default:
+            return 'Keep the reply medium in length: usually 2-4 paragraphs with one developed interaction, clear scene progression, and a noticeable consequence. Avoid filler, but let the scene breathe.';
+    }
+}
+
+function normalizeOptionsGenerationRequest(request = []) {
+    if (Array.isArray(request)) {
+        return {
+            excludedIntents: request.map(item => String(item || '').trim()).filter(Boolean),
+            excludedTones: [],
+            guidance: '',
+            mode: 'default',
+        };
+    }
+
+    if (request && typeof request === 'object') {
+        return {
+            excludedIntents: Array.isArray(request.excludedIntents)
+                ? request.excludedIntents.map(item => String(item || '').trim()).filter(Boolean)
+                : [],
+            excludedTones: Array.isArray(request.excludedTones)
+                ? request.excludedTones.map(item => String(item || '').trim()).filter(Boolean)
+                : [],
+            guidance: String(request.guidance || request.wish || '').trim(),
+            mode: String(request.mode || 'default').trim() || 'default',
+        };
+    }
+
+    return {
+        excludedIntents: [],
+        excludedTones: [],
+        guidance: String(request || '').trim(),
+        mode: 'default',
+    };
+}
+
+function canonicalizeToneKey(tone = '') {
+    const normalizedTone = String(tone || '')
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!normalizedTone) return '';
+
+    const toneClass = getToneClass(normalizedTone);
+    if (toneClass && toneClass !== 'tone-neutral') {
+        return toneClass;
+    }
+
+    return normalizedTone.split(' ').slice(0, 2).join(' ');
+}
+
+function hasWeakToneDiversity(options = []) {
+    if (!Array.isArray(options) || options.length < 2) return false;
+    const toneKeys = options
+        .map(option => canonicalizeToneKey(normalizeOptionData(option).tone))
+        .filter(Boolean);
+    if (toneKeys.length < 2) return false;
+    return new Set(toneKeys).size < Math.min(options.length, 3);
+}
+
+function summarizeOptionsForPrompt(options = []) {
+    return options.map((option, index) => {
+        const normalized = normalizeOptionData(option);
+        const tone = String(normalized.tone || '').trim() || 'без тона';
+        const intent = String(normalized.intent || '').trim() || `Вариант ${index + 1}`;
+        const forecast = String(normalized.forecast || '').trim();
+        const messagePreview = String(normalized.message || '').replace(/\s+/g, ' ').trim().slice(0, 140);
+        return `${index + 1}. [tone=${tone}] [intent=${intent}]${forecast ? ` [forecast=${forecast}]` : ''}${messagePreview ? ` :: ${messagePreview}` : ''}`;
+    }).join('\n');
+}
+
+function persistOptionsForCurrentSwipe(chat, options = []) {
+    const lastMsg = chat[chat.length - 1];
+    const swipeId = lastMsg.swipe_id || 0;
+    if (!lastMsg.extra) lastMsg.extra = {};
+    if (!lastMsg.extra.bb_vn_options_swipes) lastMsg.extra.bb_vn_options_swipes = {};
+    lastMsg.extra.bb_vn_options_swipes[swipeId] = options;
+    saveChatDebounced();
 }
 
 export async function runMainGen(promptText) {
@@ -271,6 +375,45 @@ ${existingSummary}`;
     }
 
     return distinctOptions.slice(0, 3);
+}
+
+async function diversifyOptionTones(basePrompt = '', existingOptions = []) {
+    const normalizedOptions = dedupeOptions(Array.isArray(existingOptions) ? existingOptions : []);
+    if (!hasWeakToneDiversity(normalizedOptions)) {
+        return normalizedOptions.slice(0, 3);
+    }
+
+    const diversifyPrompt = `${basePrompt}
+
+[TONE DIVERSITY RETRY]
+The previous set was rejected because the tones repeated or felt too similar.
+Generate a completely fresh set of EXACTLY 3 replacement options.
+
+Hard rules:
+1. All 3 "tone" values must be clearly different from each other.
+2. Do NOT reuse the same emotional family twice. Avoid pairs like two soft tones, two cold tones, or two aggressive tones together.
+3. The "forecast" must match the tone and the action.
+4. Keep the intents clearly distinct and proactive.
+5. Return ONLY a valid JSON array with the same schema.
+
+[REJECTED SET]
+${summarizeOptionsForPrompt(normalizedOptions)}`;
+
+    const diversifiedResult = await generateFastPrompt(diversifyPrompt, { responseFormat: 'json', includeMeta: true });
+    const diversifiedText = typeof diversifiedResult === 'string'
+        ? diversifiedResult
+        : diversifiedResult?.content || '';
+    const parsedDiversified = extractOptionsFromGeneration(diversifiedText);
+    if (!parsedDiversified.ok || !Array.isArray(parsedDiversified.options) || parsedDiversified.options.length === 0) {
+        return normalizedOptions.slice(0, 3);
+    }
+
+    const filledDiversified = await fillMissingOptions(basePrompt, parsedDiversified.options);
+    if (!hasWeakToneDiversity(filledDiversified)) {
+        return filledDiversified.slice(0, 3);
+    }
+
+    return normalizedOptions.slice(0, 3);
 }
 
 function isValidTraitResult(value = '') {
@@ -766,6 +909,7 @@ export function buildChoiceContextPrompt() {
     const choiceContext = getActiveChoiceContext();
     if (!choiceContext || !choiceContext.intent) return '';
     const useEmotionalChoiceFraming = !!extension_settings[MODULE_NAME]?.emotionalChoiceFraming;
+    const responseLengthDirective = buildAssistantLengthDirective(getActiveVnReplyLength());
 
     const targets = Array.isArray(choiceContext.targets) && choiceContext.targets.length > 0
         ? choiceContext.targets.join(', ')
@@ -783,6 +927,7 @@ EXECUTION PROTOCOL:
 1. Do not ignore, soften away, or overwrite the chosen action.
 2. Advance the scene immediately instead of stalling or looping in place.
 3. Keep the response natural to the scene without forcing extra tone or forecast framing.
+4. LENGTH & PACING: ${responseLengthDirective}
 `.trim();
     }
 
@@ -798,6 +943,7 @@ EXECUTION PROTOCOL:
 1. FOCUS: ${targets !== 'general scene' ? `Make sure ${targets} reacts strongly to this.` : 'Shift the entire scene dynamic based on the forecast.'}
 2. OUTCOME: You are FORBIDDEN from stalling. The "FORCED OUTCOME" must actually happen or clearly begin to manifest in this very response.
 3. THEME: Adapt your vocabulary, pacing, and character reactions to perfectly match the "${choiceContext.tone || 'neutral'}" tone.
+4. LENGTH & PACING: ${responseLengthDirective}
 `.trim();
 }
 
@@ -827,8 +973,9 @@ export function tryBindPendingChoiceContextToMessage(msg) {
     return true;
 }
 
-export async function bbVnGenerateOptionsFlow(excludedIntents =[]) {
+export async function bbVnGenerateOptionsFlow(request = []) {
     const btn = jQuery('#bb-vn-btn-generate');
+    const generationRequest = normalizeOptionsGenerationRequest(request);
     
     if (btn.hasClass('loading')) {
         setIsVnGenerationCancelled(true);
@@ -848,20 +995,38 @@ export async function bbVnGenerateOptionsFlow(excludedIntents =[]) {
         const chat = context.chat;
         if (!chat || chat.length === 0) throw new Error("Чат пуст");
         
-        const recentMessages = chat.slice(-10).map(m => `${m.name}: ${m.mes}`).join('\\n\\n');
-        const lastMessageText = chat[chat.length - 1] ? chat[chat.length - 1].mes : ""; 
+        const recentMessages = chat.slice(-10).map(message => `${message.name}: ${message.mes}`).join('\\n\\n');
+        const lastMessageText = chat[chat.length - 1]?.mes || '';
+        const replyLength = getActiveVnReplyLength();
+        const useEmotionalChoiceFraming = !!extension_settings[MODULE_NAME]?.emotionalChoiceFraming;
 
         let prompt = OPTIONS_PROMPT
             .replace('{{chat}}', recentMessages)
             .replace('{{lastMessage}}', lastMessageText);
 
         prompt = context.substituteParams(prompt);
+        prompt += `\n\n[ACTIVE LENGTH DIRECTIVE]\n${buildOptionLengthDirective(replyLength)}`;
 
-        const cleanedExcludedIntents = Array.isArray(excludedIntents)
-            ? excludedIntents.map(item => String(item || '').trim()).filter(Boolean)
-            :[];
-        if (cleanedExcludedIntents.length > 0) {
-            prompt += `\n\n[DO NOT REPEAT THESE PREVIOUS ACTION IDEAS]\n${cleanedExcludedIntents.map((item, idx) => `${idx + 1}. ${item}`).join('\n')}\nGenerate clearly different actions.`;
+        if (useEmotionalChoiceFraming) {
+            prompt += '\n\n[TONE DIVERSITY RULE]\nAll 3 options MUST use clearly different emotional colors. Do not reuse the same tone family twice, even with different wording.';
+        }
+
+        if (generationRequest.excludedIntents.length > 0) {
+            prompt += `\n\n[DO NOT REPEAT THESE PREVIOUS ACTION IDEAS]\n${generationRequest.excludedIntents.map((item, idx) => `${idx + 1}. ${item}`).join('\n')}\nGenerate clearly different actions instead of cosmetic rewrites.`;
+        }
+
+        if (generationRequest.excludedTones.length > 0) {
+            prompt += `\n\n[AVOID REUSING THESE PREVIOUS TONES]\n${generationRequest.excludedTones.map((item, idx) => `${idx + 1}. ${item}`).join('\n')}\nChoose other emotional colors this time.`;
+        }
+
+        if (generationRequest.guidance) {
+            prompt += `\n\n[USER GUIDANCE FOR THIS GENERATION]\n${generationRequest.guidance}\nTreat this as a strong preference across intent, tone, forecast, and message while still keeping all 3 options clearly distinct.`;
+        }
+
+        if (generationRequest.mode === 'smart-reroll') {
+            prompt += '\n\n[SMART REROLL MODE]\nThis is a guided reroll. Avoid shallow paraphrases of the previous set and produce noticeably fresher options.';
+        } else if (generationRequest.mode === 'reroll') {
+            prompt += '\n\n[REROLL MODE]\nReturn a fresh set, not cosmetic rewrites of the previous options.';
         }
 
         if (typeof window['bbGetSceneDirectorPrompt'] === 'function') {
@@ -872,19 +1037,31 @@ export async function bbVnGenerateOptionsFlow(excludedIntents =[]) {
             }
         }
 
+        const finalizeOptionsSet = async (rawOptions = []) => {
+            const rawCount = Array.isArray(rawOptions) ? rawOptions.length : 0;
+            let finalOptions = await fillMissingOptions(prompt, rawOptions);
+            if (useEmotionalChoiceFraming && hasWeakToneDiversity(finalOptions)) {
+                finalOptions = await diversifyOptionTones(prompt, finalOptions);
+            }
+            return {
+                rawCount,
+                finalOptions: dedupeOptions(finalOptions).slice(0, 3),
+            };
+        };
+
         const generationResult = await generateFastPrompt(prompt, { responseFormat: 'json', includeMeta: true });
         const result = typeof generationResult === 'string'
             ? generationResult
             : generationResult?.content || '';
         const finishReason = generationResult?.meta?.finishReason || '';
         const provider = generationResult?.meta?.provider || 'unknown';
-        console.debug(`[BB VN][debug] generated result length=${String(result || '').length} provider=${provider} finish_reason=${finishReason || 'none'}`);
+        console.debug(`[BB VN][debug] generated result length=${String(result || '').length} provider=${provider} finish_reason=${finishReason || 'none'} mode=${generationRequest.mode || 'default'} length=${replyLength}`);
 
         if (provider === 'custom-api' && finishReason === 'length') {
-            throw new Error('Кастомный API обрезал ответ по лимиту токенов (finish_reason=length). Уменьшите объём запроса или сделайте реролл.');
+            throw new Error('Кастомный API обрезал ответ по лимиту токенов (finish_reason=length). Уменьшите объём запроса, переключите длину на более короткую или сделайте реролл.');
         }
 
-        if (isVnGenerationCancelled) throw new Error("Отменено пользователем");
+        if (isVnGenerationCancelled) throw new Error('Отменено пользователем');
 
         let recoveredPayload = extractOptionsFromGeneration(result);
         let recoveredOptions = recoveredPayload.options;
@@ -899,30 +1076,23 @@ export async function bbVnGenerateOptionsFlow(excludedIntents =[]) {
         }
 
         if (recoveredPayload.ok && recoveredOptions && recoveredOptions.length > 0) {
-            const recoveredRawCount = recoveredOptions.length;
-            recoveredOptions = await fillMissingOptions(prompt, recoveredOptions);
-            const recoveredError = buildOptionsCountError(recoveredRawCount, recoveredOptions.length);
+            const { rawCount, finalOptions } = await finalizeOptionsSet(recoveredOptions);
+            const recoveredError = buildOptionsCountError(rawCount, finalOptions.length);
             if (recoveredError) throw new Error(recoveredError);
-            maybeNotifyPartialOptions(recoveredOptions.length);
+            maybeNotifyPartialOptions(finalOptions.length);
 
-            const lastMsg = chat[chat.length - 1];
-            const swipeId = lastMsg.swipe_id || 0;
-            if (!lastMsg.extra) lastMsg.extra = {};
-            if (!lastMsg.extra.bb_vn_options_swipes) lastMsg.extra.bb_vn_options_swipes = {};
-            lastMsg.extra.bb_vn_options_swipes[swipeId] = recoveredOptions;
-            saveChatDebounced();
-
+            persistOptionsForCurrentSwipe(chat, finalOptions);
             if (typeof window['renderVNOptionsFromData'] === 'function') {
-                window['renderVNOptionsFromData'](recoveredOptions, true);
+                window['renderVNOptionsFromData'](finalOptions, true);
             }
             return;
         }
 
         if (provider === 'custom-api' && finishReason === 'length') {
-            throw new Error('Кастомный API обрезал ответ по лимиту токенов (finish_reason=length). Уменьшите объём запроса или сделайте реролл.');
+            throw new Error('Кастомный API обрезал ответ по лимиту токенов (finish_reason=length). Уменьшите объём запроса, переключите длину на более короткую или сделайте реролл.');
         }
 
-        if (isVnGenerationCancelled) throw new Error("Отменено пользователем");
+        if (isVnGenerationCancelled) throw new Error('Отменено пользователем');
 
         const extractTopLevelJsonArray = (rawText = '') => {
             const source = String(rawText || '');
@@ -986,28 +1156,22 @@ export async function bbVnGenerateOptionsFlow(excludedIntents =[]) {
         }
 
         if (parsedOptions && parsedOptions.length > 0) {
-            const parsedRawCount = parsedOptions.length;
-            parsedOptions = await fillMissingOptions(prompt, parsedOptions);
-            const parsedError = buildOptionsCountError(parsedRawCount, parsedOptions.length);
+            const { rawCount, finalOptions } = await finalizeOptionsSet(parsedOptions);
+            const parsedError = buildOptionsCountError(rawCount, finalOptions.length);
             if (parsedError) throw new Error(parsedError);
-            maybeNotifyPartialOptions(parsedOptions.length);
+            maybeNotifyPartialOptions(finalOptions.length);
             
-            const lastMsg = chat[chat.length - 1];
-            const swipeId = lastMsg.swipe_id || 0;
-            if (!lastMsg.extra) lastMsg.extra = {};
-            if (!lastMsg.extra.bb_vn_options_swipes) lastMsg.extra.bb_vn_options_swipes = {};
-            lastMsg.extra.bb_vn_options_swipes[swipeId] = parsedOptions;
-            saveChatDebounced();
+            persistOptionsForCurrentSwipe(chat, finalOptions);
 
             if (typeof window['renderVNOptionsFromData'] === 'function') {
-                window['renderVNOptionsFromData'](parsedOptions, true);
+                window['renderVNOptionsFromData'](finalOptions, true);
             }
-        } else { throw new Error("Ответ пуст"); }
+        } else { throw new Error('Ответ пуст'); }
 
     } catch (e) {
-        if (e.message !== "Отменено пользователем") {
-            console.error("[BB VN] Ошибка генерации:", e);
-            notifyError(e.message || "Не удалось сгенерировать варианты");
+        if (e.message !== 'Отменено пользователем') {
+            console.error('[BB VN] Ошибка генерации:', e);
+            notifyError(e.message || 'Не удалось сгенерировать варианты');
             btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия VN').show();
         }
     }
