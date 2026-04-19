@@ -202,6 +202,7 @@ export function renderVnActionPanel(autoOpen = true) {
     bindVnUtilityActions({ hasOptions: false });
 
     if (autoOpen) {
+        setVnGenerateButtonIdle({ hasSaved: false });
         openVnPanel(optionsContainer);
         hideVnGenerateButton();
     } else {
@@ -255,6 +256,7 @@ export function renderVNOptionsFromData(parsedOptions, autoOpen = false) {
     optionsContainer.html(optionsHtml);
 
     if (autoOpen) {
+        setVnGenerateButtonIdle({ hasSaved: true });
         openVnPanel(optionsContainer);
         hideVnGenerateButton();
     } else {

@@ -886,6 +886,8 @@ body.bb-hud-popup-active #bb-social-toast-container {
 .bb-vn-empty-state {
     grid-column: 1 / -1;
     display: grid;
+    min-width: 0;
+    max-width: 100%;
     gap: 8px;
     padding: 12px 13px;
     border-radius: 14px;
@@ -896,9 +898,13 @@ body.bb-hud-popup-active #bb-social-toast-container {
 .bb-vn-empty-state-title {
     display: inline-flex;
     align-items: center;
+    flex-wrap: wrap;
+    min-width: 0;
+    max-width: 100%;
     gap: 8px;
     font-size: 10px;
     font-weight: 800;
+    line-height: 1.35;
     text-transform: uppercase;
     letter-spacing: 0.85px;
     color: #e2e8f0;
@@ -907,9 +913,15 @@ body.bb-hud-popup-active #bb-social-toast-container {
     color: #7dd3fc;
 }
 .bb-vn-empty-state-text {
+    min-width: 0;
+    max-width: 100%;
     font-size: 12px;
     line-height: 1.5;
     color: #94a3b8;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    text-wrap: pretty;
 }
 .bb-vn-option {
     flex: 1;
