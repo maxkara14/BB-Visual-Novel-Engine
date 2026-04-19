@@ -13,8 +13,58 @@ import {
 } from './generator.js';
 import { injectCombinedSocialPrompt } from './social.js';
 import { notifyInfo } from './toasts.js';
+import {
+    hasRenderedVnOptions,
+    hideVnGenerateButton,
+    resetVnOptionsContainer,
+    setVnGenerateButtonIdle,
+    showVnGenerateButton,
+} from './vn-ui.js';
 
 const VN_PANEL_CLOSE_MS = 220;
+
+function buildUtilityRow({ hasOptions = false, hasSavedOptions = false } = {}) {
+    const primaryButtonId = hasOptions ? 'bb-vn-btn-reroll' : 'bb-vn-btn-generate-now';
+    const primaryButtonTitle = hasOptions ? 'Обычный реролл' : 'Сгенерировать варианты';
+    const primaryButtonIcon = hasOptions ? 'fa-rotate-right' : 'fa-clapperboard';
+    const primaryButtonLabel = hasOptions ? 'Реролл' : 'Генерация';
+    const clearDisabledAttr = hasSavedOptions ? '' : ' disabled';
+
+    return `
+        <div class="bb-vn-utility-row">
+            <button type="button" class="bb-vn-utility-panel" id="${primaryButtonId}" title="${primaryButtonTitle}">
+                <i class="fa-solid ${primaryButtonIcon}"></i>
+                <span>${primaryButtonLabel}</span>
+            </button>
+            <button type="button" class="bb-vn-utility-panel" id="bb-vn-btn-reroll-smart" title="Короткое пожелание к следующим вариантам">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>Запрос</span>
+            </button>
+            <button type="button" class="bb-vn-utility-panel" id="bb-vn-btn-clear" title="Очистить сохранённые варианты"${clearDisabledAttr}>
+                <i class="fa-solid fa-trash-can"></i>
+                <span>Сброс</span>
+            </button>
+            <button type="button" class="bb-vn-utility-panel" id="bb-vn-btn-cancel" title="Свернуть">
+                <i class="fa-solid fa-chevron-up"></i>
+                <span>Скрыть</span>
+            </button>
+        </div>
+    `;
+}
+
+function buildEmptyPanelHtml() {
+    return `
+        <div class="bb-vn-empty-state">
+            <div class="bb-vn-empty-state-title">
+                <i class="fa-solid fa-film"></i>
+                <span>Панель готова</span>
+            </div>
+            <div class="bb-vn-empty-state-text">
+                Можно сразу запустить первую генерацию или сначала задать пожелание через «Запрос», чтобы получить более точные варианты.
+            </div>
+        </div>
+    `;
+}
 
 function stopVnPanelAnimation(container) {
     const scopedContainer = container instanceof jQuery ? container : jQuery(container);
@@ -80,6 +130,86 @@ function getCurrentRerollState() {
     };
 }
 
+async function requestGuidedGeneration({ hasOptions = false } = {}) {
+    const rerollState = hasOptions ? getCurrentRerollState() : { intents: [], tones: [] };
+    const popupTitle = hasOptions ? 'Запрос к новым вариантам' : 'Запрос к первой генерации';
+    const popupCopy = hasOptions
+        ? 'Напиши короткое пожелание к следующим вариантам.<br>Примеры: <code>больше нежности</code>, <code>резче двигай конфликт</code>, <code>меньше повторов по тону</code>, <code>больше инициативы</code>.'
+        : 'Напиши короткое пожелание к первой подборке вариантов.<br>Примеры: <code>больше нежности</code>, <code>резче двигай конфликт</code>, <code>меньше повторов по тону</code>, <code>больше инициативы</code>.';
+
+    const guidanceResult = await callPopup(
+        `<h3>${popupTitle}</h3><p>${popupCopy}</p>`,
+        'input',
+        '',
+        { okButton: 'Сгенерировать', rows: 3, wide: true },
+    );
+
+    if (guidanceResult === false || guidanceResult === null || guidanceResult === undefined) {
+        return;
+    }
+
+    const guidance = String(guidanceResult || '').trim();
+    if (!guidance) {
+        notifyInfo(hasOptions
+            ? 'Пожелание пустое, запрос к новым вариантам не запущен.'
+            : 'Пожелание пустое, запрос к первой генерации не запущен.');
+        return;
+    }
+
+    await bbVnGenerateOptionsFlow({
+        excludedIntents: hasOptions ? rerollState.intents : [],
+        excludedTones: hasOptions ? rerollState.tones : [],
+        guidance,
+        mode: hasOptions ? 'smart-reroll' : 'guided',
+    });
+}
+
+function bindVnUtilityActions({ hasOptions = false } = {}) {
+    const optionsContainer = jQuery('#bb-vn-options-container');
+
+    jQuery('#bb-vn-btn-cancel').off('click').on('click', () => {
+        closeVnPanel(optionsContainer, () => {
+            showVnGenerateButton();
+            setVnGenerateButtonIdle({ hasSaved: hasRenderedVnOptions() });
+        });
+    });
+
+    jQuery('#bb-vn-btn-generate-now').off('click').on('click', async () => {
+        await bbVnGenerateOptionsFlow();
+    });
+
+    jQuery('#bb-vn-btn-reroll').off('click').on('click', async () => {
+        const rerollState = getCurrentRerollState();
+        await bbVnGenerateOptionsFlow({
+            excludedIntents: rerollState.intents,
+            excludedTones: rerollState.tones,
+            mode: 'reroll',
+        });
+    });
+
+    jQuery('#bb-vn-btn-reroll-smart').off('click').on('click', async () => {
+        await requestGuidedGeneration({ hasOptions });
+    });
+
+    jQuery('#bb-vn-btn-clear').off('click').on('click', () => {
+        clearSavedVNOptions();
+    });
+}
+
+export function renderVnActionPanel(autoOpen = true) {
+    const optionsContainer = resetVnOptionsContainer();
+    optionsContainer.html(`${buildEmptyPanelHtml()}${buildUtilityRow({ hasOptions: false, hasSavedOptions: false })}`);
+    bindVnUtilityActions({ hasOptions: false });
+
+    if (autoOpen) {
+        openVnPanel(optionsContainer);
+        hideVnGenerateButton();
+    } else {
+        setVnGenerateButtonIdle({ hasSaved: false });
+        showVnGenerateButton();
+    }
+}
+
 export function renderVNOptionsFromData(parsedOptions, autoOpen = false) {
     let optionsHtml = '';
     const useEmotionalChoiceFraming = !!extension_settings[MODULE_NAME].emotionalChoiceFraming;
@@ -118,37 +248,18 @@ export function renderVNOptionsFromData(parsedOptions, autoOpen = false) {
         `;
     });
 
-    optionsHtml += `
-        <div class="bb-vn-utility-row">
-            <button type="button" class="bb-vn-utility-panel" id="bb-vn-btn-reroll" title="Обычный реролл">
-                <i class="fa-solid fa-rotate-right"></i>
-                <span>Реролл</span>
-            </button>
-            <button type="button" class="bb-vn-utility-panel" id="bb-vn-btn-reroll-smart" title="Умный реролл: короткое пожелание к новым вариантам">
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                <span>Запрос</span>
-            </button>
-            <button type="button" class="bb-vn-utility-panel" id="bb-vn-btn-clear" title="Очистить сохранённые варианты">
-                <i class="fa-solid fa-trash-can"></i>
-                <span>Сброс</span>
-            </button>
-            <button type="button" class="bb-vn-utility-panel" id="bb-vn-btn-cancel" title="Свернуть">
-                <i class="fa-solid fa-chevron-up"></i>
-                <span>Скрыть</span>
-            </button>
-        </div>
-    `;
+    optionsHtml += buildUtilityRow({ hasOptions: true, hasSavedOptions: true });
 
-    const optionsContainer = jQuery('#bb-vn-options-container');
+    const optionsContainer = resetVnOptionsContainer();
     stopVnPanelAnimation(optionsContainer);
     optionsContainer.html(optionsHtml);
 
     if (autoOpen) {
         openVnPanel(optionsContainer);
-        jQuery('#bb-vn-btn-generate').removeClass('loading').hide();
+        hideVnGenerateButton();
     } else {
-        optionsContainer.removeClass('active is-closing is-opening');
-        jQuery('#bb-vn-btn-generate').removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> VN · сохранено').show();
+        setVnGenerateButtonIdle({ hasSaved: true });
+        showVnGenerateButton();
     }
 
     jQuery('.bb-vn-option[data-intent]').off('click').on('click', function(e) {
@@ -180,7 +291,8 @@ export function renderVNOptionsFromData(parsedOptions, autoOpen = false) {
             textarea.dispatchEvent(new Event('input', { bubbles: true }));
             if (extension_settings[MODULE_NAME].autoSend) {
                 closeVnPanel(optionsContainer, () => {
-                    jQuery('#bb-vn-btn-generate').show().html('<i class="fa-solid fa-clapperboard"></i> Действия VN');
+                    showVnGenerateButton();
+                    setVnGenerateButtonIdle({ hasSaved: true });
                 });
                 document.getElementById('send_but')?.click();
             }
@@ -196,59 +308,16 @@ export function renderVNOptionsFromData(parsedOptions, autoOpen = false) {
         if (!wasExpanded) card.addClass('info-expanded');
     });
 
-    jQuery('#bb-vn-btn-cancel').off('click').on('click', () => {
-        closeVnPanel(optionsContainer, () => {
-            jQuery('#bb-vn-btn-generate').show().html('<i class="fa-solid fa-clapperboard"></i> Действия VN');
-        });
-    });
-
-    jQuery('#bb-vn-btn-reroll').off('click').on('click', async () => {
-        const rerollState = getCurrentRerollState();
-        await bbVnGenerateOptionsFlow({
-            excludedIntents: rerollState.intents,
-            excludedTones: rerollState.tones,
-            mode: 'reroll',
-        });
-    });
-
-    jQuery('#bb-vn-btn-reroll-smart').off('click').on('click', async () => {
-        const rerollState = getCurrentRerollState();
-        const guidanceResult = await callPopup(
-            '<h3>Умный реролл</h3><p>Напиши короткое пожелание к новым вариантам.<br>Примеры: <code>больше нежности</code>, <code>резче двигай конфликт</code>, <code>меньше повторов по тону</code>, <code>больше инициативы</code>.</p>',
-            'input',
-            '',
-            { okButton: 'Сгенерировать', rows: 3, wide: true },
-        );
-
-        if (guidanceResult === false || guidanceResult === null || guidanceResult === undefined) {
-            return;
-        }
-
-        const guidance = String(guidanceResult || '').trim();
-        if (!guidance) {
-            notifyInfo('Пожелание пустое, умный реролл не запущен.');
-            return;
-        }
-
-        await bbVnGenerateOptionsFlow({
-            excludedIntents: rerollState.intents,
-            excludedTones: rerollState.tones,
-            guidance,
-            mode: 'smart-reroll',
-        });
-    });
-
-    jQuery('#bb-vn-btn-clear').off('click').on('click', () => {
-        clearSavedVNOptions();
-    });
+    bindVnUtilityActions({ hasOptions: true });
 }
 
 window['renderVNOptionsFromData'] = renderVNOptionsFromData;
 
 export function injectVNActionsUI() {
     if (document.getElementById('bb-vn-action-bar')) return;
-    const barHtml = '<div id="bb-vn-action-bar" style="display: flex;"><div id="bb-vn-btn-generate" class="bb-vn-main-btn"><i class="fa-solid fa-clapperboard"></i> Действия VN</div><div id="bb-vn-options-container"></div></div>';
+    const barHtml = '<div id="bb-vn-action-bar" style="display: flex;"><div id="bb-vn-btn-generate" class="bb-vn-main-btn" title="Открыть панель действий VN"></div><div id="bb-vn-options-container"></div></div>';
     jQuery('#send_form').prepend(barHtml);
+    setVnGenerateButtonIdle();
 
     const ta = document.querySelector('#send_textarea');
     if (ta instanceof HTMLTextAreaElement) {
@@ -263,13 +332,13 @@ export function injectVNActionsUI() {
         });
     }
 
-    jQuery('#bb-vn-btn-generate').on('click', async function() {
+    jQuery('#bb-vn-btn-generate').on('click', function() {
         const container = jQuery('#bb-vn-options-container');
         if (container.children('.bb-vn-option[data-intent]').length > 0) {
             openVnPanel(container);
-            jQuery(this).hide();
+            hideVnGenerateButton();
         } else {
-            await bbVnGenerateOptionsFlow();
+            renderVnActionPanel(true);
         }
     });
 }

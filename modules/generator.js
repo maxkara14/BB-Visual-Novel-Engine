@@ -16,13 +16,21 @@ import {
     vnGenerationAbortController, 
     isVnGenerationCancelled, 
     setVnGenerationAbortController, 
-    setIsVnGenerationCancelled 
+    setIsVnGenerationCancelled,
+    createVnOptionsGenerationToken,
+    isActiveVnOptionsGenerationToken,
 } from './state.js';
 import { injectCombinedSocialPrompt } from './social.js';
+import {
+    resetVnOptionsContainer,
+    setVnGenerateButtonIdle,
+    setVnGenerateButtonLoading,
+} from './vn-ui.js';
 
 let lastCustomApiFallbackNoticeAt = 0;
 const MIN_RENDERABLE_OPTIONS = 2;
 const CUSTOM_API_HEALTH_EVENT = 'bb-vn-custom-api-health';
+const VN_GENERATION_CANCELLED_MESSAGE = 'Отменено пользователем';
 
 function emitCustomApiHealth(detail = {}) {
     try {
@@ -95,6 +103,16 @@ function normalizeOptionsGenerationRequest(request = []) {
         guidance: String(request || '').trim(),
         mode: 'default',
     };
+}
+
+function createVnGenerationCancelledError() {
+    return new Error(VN_GENERATION_CANCELLED_MESSAGE);
+}
+
+function ensureActiveVnOptionsGeneration(token) {
+    if (!isActiveVnOptionsGenerationToken(token) || isVnGenerationCancelled) {
+        throw createVnGenerationCancelledError();
+    }
 }
 
 function canonicalizeToneKey(tone = '') {
@@ -978,17 +996,19 @@ export async function bbVnGenerateOptionsFlow(request = []) {
     const generationRequest = normalizeOptionsGenerationRequest(request);
     
     if (btn.hasClass('loading')) {
-        setIsVnGenerationCancelled(true);
-        if (vnGenerationAbortController) vnGenerationAbortController.abort();
-        btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия VN').show();
+        createVnOptionsGenerationToken();
+        cancelVnGeneration();
+        restoreVNOptions(false);
         notifyInfo("Генерация вариантов отменена");
         return;
     }
 
+    const requestToken = createVnOptionsGenerationToken();
+    let completed = false;
     setIsVnGenerationCancelled(false);
 
-    btn.show().addClass('loading').html('<i class="fa-solid fa-spinner fa-spin"></i> Сценарий в обработке... <i class="fa-solid fa-xmark" style="margin-left: 6px; color: #ef4444;" title="Отменить"></i>');
-    jQuery('#bb-vn-options-container').removeClass('active').empty();
+    setVnGenerateButtonLoading();
+    resetVnOptionsContainer({ clear: true });
 
     try {
         const context = SillyTavern.getContext();
@@ -1025,6 +1045,8 @@ export async function bbVnGenerateOptionsFlow(request = []) {
 
         if (generationRequest.mode === 'smart-reroll') {
             prompt += '\n\n[SMART REROLL MODE]\nThis is a guided reroll. Avoid shallow paraphrases of the previous set and produce noticeably fresher options.';
+        } else if (generationRequest.mode === 'guided') {
+            prompt += '\n\n[GUIDED GENERATION MODE]\nThis is the first guided generation. Apply the user guidance proactively across all 3 options instead of treating it like a reroll.';
         } else if (generationRequest.mode === 'reroll') {
             prompt += '\n\n[REROLL MODE]\nReturn a fresh set, not cosmetic rewrites of the previous options.';
         }
@@ -1038,10 +1060,13 @@ export async function bbVnGenerateOptionsFlow(request = []) {
         }
 
         const finalizeOptionsSet = async (rawOptions = []) => {
+            ensureActiveVnOptionsGeneration(requestToken);
             const rawCount = Array.isArray(rawOptions) ? rawOptions.length : 0;
             let finalOptions = await fillMissingOptions(prompt, rawOptions);
+            ensureActiveVnOptionsGeneration(requestToken);
             if (useEmotionalChoiceFraming && hasWeakToneDiversity(finalOptions)) {
                 finalOptions = await diversifyOptionTones(prompt, finalOptions);
+                ensureActiveVnOptionsGeneration(requestToken);
             }
             return {
                 rawCount,
@@ -1050,6 +1075,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
         };
 
         const generationResult = await generateFastPrompt(prompt, { responseFormat: 'json', includeMeta: true });
+        ensureActiveVnOptionsGeneration(requestToken);
         const result = typeof generationResult === 'string'
             ? generationResult
             : generationResult?.content || '';
@@ -1061,7 +1087,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
             throw new Error('Кастомный API обрезал ответ по лимиту токенов (finish_reason=length). Уменьшите объём запроса, переключите длину на более короткую или сделайте реролл.');
         }
 
-        if (isVnGenerationCancelled) throw new Error('Отменено пользователем');
+        ensureActiveVnOptionsGeneration(requestToken);
 
         let recoveredPayload = extractOptionsFromGeneration(result);
         let recoveredOptions = recoveredPayload.options;
@@ -1071,12 +1097,14 @@ export async function bbVnGenerateOptionsFlow(request = []) {
             });
 
             const repairedResult = await repairOptionsJson(result);
+            ensureActiveVnOptionsGeneration(requestToken);
             recoveredPayload = extractOptionsFromGeneration(repairedResult);
             recoveredOptions = recoveredPayload.options;
         }
 
         if (recoveredPayload.ok && recoveredOptions && recoveredOptions.length > 0) {
             const { rawCount, finalOptions } = await finalizeOptionsSet(recoveredOptions);
+            ensureActiveVnOptionsGeneration(requestToken);
             const recoveredError = buildOptionsCountError(rawCount, finalOptions.length);
             if (recoveredError) throw new Error(recoveredError);
             maybeNotifyPartialOptions(finalOptions.length);
@@ -1085,6 +1113,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
             if (typeof window['renderVNOptionsFromData'] === 'function') {
                 window['renderVNOptionsFromData'](finalOptions, true);
             }
+            completed = true;
             return;
         }
 
@@ -1092,7 +1121,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
             throw new Error('Кастомный API обрезал ответ по лимиту токенов (finish_reason=length). Уменьшите объём запроса, переключите длину на более короткую или сделайте реролл.');
         }
 
-        if (isVnGenerationCancelled) throw new Error('Отменено пользователем');
+        ensureActiveVnOptionsGeneration(requestToken);
 
         const extractTopLevelJsonArray = (rawText = '') => {
             const source = String(rawText || '');
@@ -1157,6 +1186,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
 
         if (parsedOptions && parsedOptions.length > 0) {
             const { rawCount, finalOptions } = await finalizeOptionsSet(parsedOptions);
+            ensureActiveVnOptionsGeneration(requestToken);
             const parsedError = buildOptionsCountError(rawCount, finalOptions.length);
             if (parsedError) throw new Error(parsedError);
             maybeNotifyPartialOptions(finalOptions.length);
@@ -1166,14 +1196,22 @@ export async function bbVnGenerateOptionsFlow(request = []) {
             if (typeof window['renderVNOptionsFromData'] === 'function') {
                 window['renderVNOptionsFromData'](finalOptions, true);
             }
+            completed = true;
         } else { throw new Error('Ответ пуст'); }
 
     } catch (e) {
-        if (e.message !== 'Отменено пользователем') {
+        if (e.message !== VN_GENERATION_CANCELLED_MESSAGE) {
             console.error('[BB VN] Ошибка генерации:', e);
             notifyError(e.message || 'Не удалось сгенерировать варианты');
-            btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия VN').show();
         }
+    } finally {
+        if (!isActiveVnOptionsGenerationToken(requestToken)) return;
+
+        if (!completed && btn.hasClass('loading')) {
+            restoreVNOptions(false);
+        }
+
+        setIsVnGenerationCancelled(false);
     }
 }
 
@@ -1201,11 +1239,15 @@ export function restoreVNOptions(autoOpen = false) {
 }
 
 export function clearVNOptions() {
-    jQuery('#bb-vn-options-container').empty().removeClass('active');
+    resetVnOptionsContainer({ clear: true });
     const ta = document.querySelector('#send_textarea');
-    if (ta instanceof HTMLTextAreaElement && ta.value.trim().length === 0) {
-        jQuery('#bb-vn-btn-generate').show().removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия VN');
+    const btn = jQuery('#bb-vn-btn-generate');
+    setVnGenerateButtonIdle({ hasSaved: false });
+    if (ta instanceof HTMLTextAreaElement && ta.value.trim().length > 0) {
+        btn.hide();
+        return;
     }
+    btn.show();
 }
 
 export function clearSavedVNOptions() {
