@@ -1760,12 +1760,17 @@ export function scanAndCleanMessage(msg, messageId, trackDebug = false) {
     if (originalMes !== currentMes) {
         msg.mes = currentMes.trim(); 
         modified = true;
-        
-        if (msg.swipes && msg.swipes[swipeId] !== undefined) {
+
+        const hasSwipeArray = Array.isArray(msg.swipes);
+        const hasExactSwipeSlot = hasSwipeArray && msg.swipes[swipeId] !== undefined;
+        const canCreateInitialSwipe = swipeId === 0 && (!hasSwipeArray || msg.swipes.length === 0);
+
+        // During a fresh swipe SillyTavern can update msg.mes before it adds the new
+        // slot into msg.swipes. Falling back to swipes[0] here overwrites another
+        // variant and makes different swipes collapse into identical text.
+        if (hasExactSwipeSlot) {
             msg.swipes[swipeId] = msg.mes; 
-        } else if (msg.swipes && msg.swipes.length > 0) {
-            msg.swipes[0] = msg.mes; 
-        } else {
+        } else if (canCreateInitialSwipe) {
             msg.swipes = [msg.mes]; 
         }
     }
