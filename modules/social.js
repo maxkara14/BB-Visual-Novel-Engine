@@ -594,6 +594,93 @@ function normalizeImportedMemoryEntry(entry = {}) {
     };
 }
 
+function normalizeDedupText(value = '') {
+    return String(value || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function normalizeImpactDedupToken(value = '') {
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '_')
+        .replace(/-/g, '_');
+}
+
+function buildMemoryEntryDedupKey(entry = {}) {
+    const normalized = normalizeImportedMemoryEntry(entry);
+    const text = normalizeDedupText(normalized.text);
+    if (!text) return '';
+    return [
+        text,
+        normalized.delta,
+        normalized.tone,
+        normalized.moodlet,
+    ].join('|');
+}
+
+function dedupeMemoryEntries(entries = []) {
+    if (!Array.isArray(entries) || entries.length === 0) return [];
+
+    const seen = new Set();
+    const deduped = [];
+    for (let index = entries.length - 1; index >= 0; index--) {
+        const normalized = normalizeImportedMemoryEntry(entries[index]);
+        const key = buildMemoryEntryDedupKey(normalized);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        deduped.unshift(normalized);
+    }
+
+    return deduped;
+}
+
+function buildSocialUpdateDedupKey(update = {}) {
+    const name = normalizeCharacterLookupName(update?.name || '');
+    if (!name) return '';
+
+    return [
+        name,
+        normalizeImpactDedupToken(update?.friendship_impact || update?.impact_level || ''),
+        normalizeImpactDedupToken(update?.romance_impact || update?.romantic_impact || update?.love_impact || ''),
+        normalizeDedupText(update?.role_dynamic || update?.status || ''),
+        normalizeDedupText(update?.reason || ''),
+        sanitizeMoodlet(update?.emotion || update?.moodlet || ''),
+    ].join('|');
+}
+
+function dedupeSocialUpdateEntries(updates = []) {
+    if (!Array.isArray(updates) || updates.length === 0) {
+        return { updates: Array.isArray(updates) ? [] : [], changed: false };
+    }
+
+    const seen = new Set();
+    const deduped = [];
+    let changed = false;
+
+    updates.forEach(update => {
+        if (!update || typeof update !== 'object') {
+            changed = true;
+            return;
+        }
+
+        const key = buildSocialUpdateDedupKey(update);
+        if (key && seen.has(key)) {
+            changed = true;
+            return;
+        }
+
+        if (key) seen.add(key);
+        deduped.push(update);
+    });
+
+    return {
+        updates: deduped,
+        changed,
+    };
+}
+
 function normalizeImportedTraitEntry(entry = {}) {
     const normalizedTrait = normalizeTraitResponse(entry?.trait || '');
     if (!normalizedTrait) return null;
@@ -612,9 +699,9 @@ function normalizeImportedCharacterStats(stats = {}) {
         history: Array.isArray(stats?.history) ? stats.history.map(normalizeImportedHistoryEntry).slice(-24) : [],
         status: sanitizeRelationshipStatus(stats?.status || ''),
         memories: {
-            soft: Array.isArray(memories.soft) ? memories.soft.map(normalizeImportedMemoryEntry).filter(entry => entry.text).slice(-4) : [],
-            deep: Array.isArray(memories.deep) ? memories.deep.map(normalizeImportedMemoryEntry).filter(entry => entry.text) : [],
-            archive: Array.isArray(memories.archive) ? memories.archive.map(normalizeImportedMemoryEntry).filter(entry => entry.text) : [],
+            soft: Array.isArray(memories.soft) ? dedupeMemoryEntries(memories.soft).slice(-4) : [],
+            deep: Array.isArray(memories.deep) ? dedupeMemoryEntries(memories.deep) : [],
+            archive: Array.isArray(memories.archive) ? dedupeMemoryEntries(memories.archive) : [],
         },
         core_traits: Array.isArray(stats?.core_traits)
             ? stats.core_traits.map(normalizeImportedTraitEntry).filter(Boolean)
@@ -1580,12 +1667,16 @@ export function appendCharacterMemory(charStats, delta, reason, moodlet = '') {
     if (!charStats || !reason || delta === 0) return;
     const bucket = getMemoryBucket(delta);
     if (!bucket) return;
+    if (!charStats.memories || !Array.isArray(charStats.memories[bucket])) return;
     const memory = {
         text: reason,
         delta,
         tone: getMemoryTone(delta),
         moodlet: sanitizeMoodlet(moodlet),
     };
+    const memoryKey = buildMemoryEntryDedupKey(memory);
+    const hasDuplicate = charStats.memories[bucket].some(entry => buildMemoryEntryDedupKey(entry) === memoryKey);
+    if (memoryKey && hasDuplicate) return;
 
     charStats.memories[bucket].push(memory);
     
@@ -1731,15 +1822,17 @@ export function scanAndCleanMessage(msg, messageId, trackDebug = false) {
     if (parsedPayload) {
         try {
             const parsed = parsedPayload.parsed;
+            const dedupedParsedUpdates = dedupeSocialUpdateEntries(parsed.social_updates);
             if (!msg.extra) msg.extra = {};
             if (!msg.extra.bb_social_swipes) msg.extra.bb_social_swipes = {};
 
-            msg.extra.bb_social_swipes[swipeId] = parsed.social_updates.map(update => ({
+            msg.extra.bb_social_swipes[swipeId] = dedupedParsedUpdates.updates.map(update => ({
                 ...update,
                 scope: update.scope || scopeKey,
             }));
+            if (dedupedParsedUpdates.changed) modified = true;
             currentMes = currentMes.replace(parsedPayload.source, '');
-            if (trackDebug) setSocialParseDebug('parsed', `social_updates: ${parsed.social_updates.length}`);
+            if (trackDebug) setSocialParseDebug('parsed', `social_updates: ${dedupedParsedUpdates.updates.length}`);
         } catch(e) {}
     } else if (Array.isArray(existingUpdates) && existingUpdates.length > 0) {
         if (trackDebug) setSocialParseDebug('stored', `social_updates (saved): ${existingUpdates.length}`);
@@ -1953,6 +2046,12 @@ export function recalculateAllStats(isNewMessage = false) {
         let activeUpdates = getStoredSwipeEntries(msg.extra?.bb_social_swipes, swipeId, allowLegacyFallback);
 
         if (activeUpdates && Array.isArray(activeUpdates)) {
+            const dedupedActiveUpdates = dedupeSocialUpdateEntries(activeUpdates);
+            if (dedupedActiveUpdates.changed) {
+                activeUpdates.splice(0, activeUpdates.length, ...dedupedActiveUpdates.updates);
+                needsSave = true;
+            }
+
             const filteredSceneUpdates = filterStaleSceneUpdates(activeUpdates, msg, idx, chat, scopeState, aliasSet);
             if (filteredSceneUpdates.changed) {
                 activeUpdates.splice(0, activeUpdates.length, ...filteredSceneUpdates.updates);
