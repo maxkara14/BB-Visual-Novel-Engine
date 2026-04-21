@@ -49,6 +49,18 @@ const promptedMergeSuggestionKeys = new Set();
 const pendingMergeSuggestionQueue = [];
 let isProcessingMergeSuggestionQueue = false;
 const RECENT_RELATION_UPDATE_REPEAT_WINDOW = 12;
+const MIN_REASON_TOKEN_LENGTH = 3;
+const MIN_FUZZY_REASON_OVERLAP = 3;
+const MIN_REASON_PREFIX_MATCH = 4;
+const MIN_REASON_SHARED_SUBSTRING_LENGTH = 28;
+const FUZZY_REASON_JACCARD_THRESHOLD = 0.55;
+const FUZZY_REASON_SUBSET_THRESHOLD = 0.75;
+const REASON_TOKEN_STOPWORDS = new Set([
+    'это', 'этот', 'эта', 'эти', 'как', 'так', 'или', 'для', 'при', 'без', 'под', 'над', 'через',
+    'она', 'они', 'оно', 'его', 'ему', 'ему', 'её', 'ее', 'ней', 'него', 'них', 'них',
+    'когда', 'тогда', 'потому', 'который', 'которая', 'которые', 'только', 'просто', 'снова',
+    'после', 'среди', 'между', 'чтобы', 'если', 'даже', 'были', 'было', 'была', 'есть',
+]);
 
 function hasShownLiveToast(key = '') {
     return shownLiveToastKeys.includes(String(key || ''));
@@ -660,6 +672,91 @@ function buildRecentRelationshipRepeatKey(charName = '', friendshipDelta = 0, ro
         romanceDelta,
         normalizedReason,
     ].join('|');
+}
+
+function tokenizeReasonForSimilarity(reason = '') {
+    return normalizeCharacterLookupName(reason)
+        .split(' ')
+        .map(token => token.trim())
+        .filter(token => token && token.length >= MIN_REASON_TOKEN_LENGTH && !REASON_TOKEN_STOPWORDS.has(token));
+}
+
+function getReasonSharedPrefixLength(leftTokens = [], rightTokens = []) {
+    const limit = Math.min(leftTokens.length, rightTokens.length);
+    let prefixLength = 0;
+    while (prefixLength < limit && leftTokens[prefixLength] === rightTokens[prefixLength]) {
+        prefixLength++;
+    }
+    return prefixLength;
+}
+
+function getLongestCommonTokenSubstringLength(leftTokens = [], rightTokens = []) {
+    if (!leftTokens.length || !rightTokens.length) return 0;
+    const dp = Array.from({ length: leftTokens.length + 1 }, () => Array(rightTokens.length + 1).fill(0));
+    let best = 0;
+
+    for (let leftIndex = 1; leftIndex <= leftTokens.length; leftIndex++) {
+        for (let rightIndex = 1; rightIndex <= rightTokens.length; rightIndex++) {
+            if (leftTokens[leftIndex - 1] === rightTokens[rightIndex - 1]) {
+                dp[leftIndex][rightIndex] = dp[leftIndex - 1][rightIndex - 1] + 1;
+                if (dp[leftIndex][rightIndex] > best) best = dp[leftIndex][rightIndex];
+            }
+        }
+    }
+
+    return best;
+}
+
+function areReasonsSemanticallySimilar(leftReason = '', rightReason = '') {
+    const leftNormalized = normalizeDedupText(leftReason);
+    const rightNormalized = normalizeDedupText(rightReason);
+    if (!leftNormalized || !rightNormalized) return false;
+    if (leftNormalized === rightNormalized) return true;
+
+    const shorter = leftNormalized.length <= rightNormalized.length ? leftNormalized : rightNormalized;
+    const longer = shorter === leftNormalized ? rightNormalized : leftNormalized;
+    if (shorter.length >= MIN_REASON_SHARED_SUBSTRING_LENGTH && longer.includes(shorter)) return true;
+
+    const leftTokens = tokenizeReasonForSimilarity(leftNormalized);
+    const rightTokens = tokenizeReasonForSimilarity(rightNormalized);
+    if (!leftTokens.length || !rightTokens.length) return false;
+
+    const sharedPrefixLength = getReasonSharedPrefixLength(leftTokens, rightTokens);
+    if (sharedPrefixLength >= MIN_REASON_PREFIX_MATCH) return true;
+
+    const sharedSubstringTokens = getLongestCommonTokenSubstringLength(leftTokens, rightTokens);
+    if (sharedSubstringTokens >= MIN_REASON_PREFIX_MATCH) return true;
+
+    const leftSet = new Set(leftTokens);
+    const rightSet = new Set(rightTokens);
+    let overlap = 0;
+    leftSet.forEach(token => {
+        if (rightSet.has(token)) overlap++;
+    });
+    if (overlap < MIN_FUZZY_REASON_OVERLAP) return false;
+
+    const unionSize = new Set([...leftSet, ...rightSet]).size || 1;
+    const jaccard = overlap / unionSize;
+    const subsetCoverage = overlap / Math.min(leftSet.size, rightSet.size);
+    return jaccard >= FUZZY_REASON_JACCARD_THRESHOLD || subsetCoverage >= FUZZY_REASON_SUBSET_THRESHOLD;
+}
+
+function findRecentSemanticallyRepeatedUpdate(records = [], candidate = {}, currentIndex = -1) {
+    if (!Array.isArray(records) || !candidate?.charName || currentIndex < 0) return null;
+    const candidateReason = normalizeDedupText(candidate.reason || '');
+    if (!candidateReason) return null;
+
+    for (let recordIndex = records.length - 1; recordIndex >= 0; recordIndex--) {
+        const record = records[recordIndex];
+        if (!record?.charName) continue;
+        if (normalizeCharacterLookupName(record.charName) !== normalizeCharacterLookupName(candidate.charName)) continue;
+        if ((currentIndex - (record.idx ?? -999)) > RECENT_RELATION_UPDATE_REPEAT_WINDOW) break;
+        if ((record.friendshipDelta || 0) !== (candidate.friendshipDelta || 0)) continue;
+        if ((record.romanceDelta || 0) !== (candidate.romanceDelta || 0)) continue;
+        if (areReasonsSemanticallySimilar(record.reason || '', candidateReason)) return record;
+    }
+
+    return null;
 }
 
 function dedupeSocialUpdateEntries(updates = []) {
@@ -1919,6 +2016,7 @@ export function recalculateAllStats(isNewMessage = false) {
     const newStats = {};
     const liveToastCandidates = [];
     const recentRelationshipUpdateIndexes = new Map();
+    const recentRelationshipUpdates = [];
     setCurrentCalculatedStats(newStats);
     currentStoryMoments.length = 0;
     const snapshotBaseline = scopeState.snapshot_baseline && typeof scopeState.snapshot_baseline === 'object'
@@ -2169,6 +2267,15 @@ export function recalculateAllStats(isNewMessage = false) {
                 if (repeatedUpdateKey && previousRepeatIndex !== undefined && (idx - previousRepeatIndex) <= RECENT_RELATION_UPDATE_REPEAT_WINDOW) {
                     return;
                 }
+                const semanticallyRepeatedUpdate = findRecentSemanticallyRepeatedUpdate(recentRelationshipUpdates, {
+                    charName,
+                    friendshipDelta: f_delta,
+                    romanceDelta: r_delta,
+                    reason: update.reason || '',
+                }, idx);
+                if (semanticallyRepeatedUpdate) {
+                    return;
+                }
                 
                 if (!newStats[charName]) {
                     let base = 0, baseRomance = 0, isBrandNew = false;
@@ -2220,6 +2327,13 @@ export function recalculateAllStats(isNewMessage = false) {
                     });
                 }
                 if (repeatedUpdateKey) recentRelationshipUpdateIndexes.set(repeatedUpdateKey, idx);
+                recentRelationshipUpdates.push({
+                    idx,
+                    charName,
+                    friendshipDelta: f_delta,
+                    romanceDelta: r_delta,
+                    reason: update.reason || '',
+                });
                 recordedImpacts.forEach(impact => {
                     appendCharacterMemory(newStats[charName], impact.delta, update.reason || "", moodlet);
                 });
