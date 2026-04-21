@@ -48,6 +48,7 @@ const shownLiveToastKeys = [];
 const promptedMergeSuggestionKeys = new Set();
 const pendingMergeSuggestionQueue = [];
 let isProcessingMergeSuggestionQueue = false;
+const RECENT_RELATION_UPDATE_REPEAT_WINDOW = 12;
 
 function hasShownLiveToast(key = '') {
     return shownLiveToastKeys.includes(String(key || ''));
@@ -616,7 +617,6 @@ function buildMemoryEntryDedupKey(entry = {}) {
         text,
         normalized.delta,
         normalized.tone,
-        normalized.moodlet,
     ].join('|');
 }
 
@@ -646,7 +646,19 @@ function buildSocialUpdateDedupKey(update = {}) {
         normalizeImpactDedupToken(update?.romance_impact || update?.romantic_impact || update?.love_impact || ''),
         normalizeDedupText(update?.role_dynamic || update?.status || ''),
         normalizeDedupText(update?.reason || ''),
-        sanitizeMoodlet(update?.emotion || update?.moodlet || ''),
+    ].join('|');
+}
+
+function buildRecentRelationshipRepeatKey(charName = '', friendshipDelta = 0, romanceDelta = 0, reason = '') {
+    const normalizedName = normalizeCharacterLookupName(charName);
+    const normalizedReason = normalizeDedupText(reason);
+    if (!normalizedName || !normalizedReason) return '';
+    if (friendshipDelta === 0 && romanceDelta === 0) return '';
+    return [
+        normalizedName,
+        friendshipDelta,
+        romanceDelta,
+        normalizedReason,
     ].join('|');
 }
 
@@ -1906,6 +1918,7 @@ export function recalculateAllStats(isNewMessage = false) {
     const { scopeKey, scopeState, aliasSet } = bindActivePersonaState();
     const newStats = {};
     const liveToastCandidates = [];
+    const recentRelationshipUpdateIndexes = new Map();
     setCurrentCalculatedStats(newStats);
     currentStoryMoments.length = 0;
     const snapshotBaseline = scopeState.snapshot_baseline && typeof scopeState.snapshot_baseline === 'object'
@@ -2150,6 +2163,12 @@ export function recalculateAllStats(isNewMessage = false) {
                 );
                 f_delta = normalizedMixedDelta.friendshipDelta;
                 r_delta = normalizedMixedDelta.romanceDelta;
+
+                const repeatedUpdateKey = buildRecentRelationshipRepeatKey(charName, f_delta, r_delta, update.reason || '');
+                const previousRepeatIndex = repeatedUpdateKey ? recentRelationshipUpdateIndexes.get(repeatedUpdateKey) : undefined;
+                if (repeatedUpdateKey && previousRepeatIndex !== undefined && (idx - previousRepeatIndex) <= RECENT_RELATION_UPDATE_REPEAT_WINDOW) {
+                    return;
+                }
                 
                 if (!newStats[charName]) {
                     let base = 0, baseRomance = 0, isBrandNew = false;
@@ -2200,6 +2219,7 @@ export function recalculateAllStats(isNewMessage = false) {
                         moodlet,
                     });
                 }
+                if (repeatedUpdateKey) recentRelationshipUpdateIndexes.set(repeatedUpdateKey, idx);
                 recordedImpacts.forEach(impact => {
                     appendCharacterMemory(newStats[charName], impact.delta, update.reason || "", moodlet);
                 });

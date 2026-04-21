@@ -43,6 +43,9 @@ CRITICAL RULES:
 
 4. NEVER wrap any other part of the assistant reply in hidden HTML. Only the social block above can be hidden.
 5. Do not hide, alter, or rewrite user-provided regex, code, JSON, or text fragments.
+6. Record a relationship update ONLY when {{user}} created a genuinely NEW relational beat in this turn. Ongoing presence in the same room, continued comfort, repeated closeness, or the same unresolved mood is NOT a new shift by itself.
+7. If this turn only continues the same emotional beat as the previous turns, prefer "none" impacts instead of restating the same reason.
+8. Never repeat the same <reason> on consecutive turns for the same character with only a different <emotion>. If the cause has not meaningfully changed, do not describe it as a new update.
 
 HTML TAG FIELDS (STRICT):
 - <name> Concrete character name. (e.g., "Alex"). No collective nouns.
@@ -52,7 +55,7 @@ HTML TAG FIELDS (STRICT):
 - If the character genuinely likes, welcomes, enjoys, or is emotionally drawn to {{user}}'s action, do NOT lower friendship/trust at the same time as a positive romance shift.
 - Use friendship negative + romance positive ONLY for clearly conflicted or dark attraction: fear mixed with desire, dangerous fascination, toxic obsession, shame, manipulation, coercion, or "drawn in despite the harm".
 - <role_dynamic> 1-2 words describing {{user}}'s CURRENT role to them right now (e.g., "\u043e\u043f\u0430\u0441\u043d\u044b\u0439 \u0441\u043e\u044e\u0437\u043d\u0438\u043a", "\u0441\u043a\u0440\u044b\u0442\u0430\u044f \u0443\u0433\u0440\u043e\u0437\u0430", "\u043d\u0430\u0434\u0451\u0436\u043d\u044b\u0439 \u0434\u0440\u0443\u0433").
-- <reason> Short Russian explanation of WHY the impact happened.
+- <reason> Short Russian explanation of WHY the NEW impact happened in this turn. Describe the fresh trigger, not the general situation.
 - <emotion> 1-2 words describing the character's internal emotional state. If using two nouns, separate with a comma (e.g., "\u0448\u043e\u043a, \u043e\u0431\u0438\u0434\u0430", "\u0440\u0430\u0434\u043e\u0441\u0442\u044c").`;
 
 export const OPTIONS_PROMPT = `Analyze the recent chat. Generate exactly 3 highly distinct, engaging actions {{user}} can take right now to DRIVE THE STORY FORWARD.
