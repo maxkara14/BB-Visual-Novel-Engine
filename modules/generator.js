@@ -582,10 +582,7 @@ function collectCharacterDescriptionPromptContext() {
         const context = SillyTavern.getContext?.();
         const chat = Array.isArray(context?.chat) ? context.chat : [];
         const userName = String(context?.substituteParams?.('{{user}}') || 'пользователь').trim() || 'пользователь';
-        const personaText = String(context?.substituteParams?.('{{persona}}') || '')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .slice(0, 1400);
+        const personaText = clipPromptBlock(context?.substituteParams?.('{{persona}}') || '', 3200);
 
         let remainingChars = 5600;
         const recentLines = [];
@@ -731,9 +728,9 @@ async function collectCharacterDescriptionSourceContext({ charName = '', userNam
                 .reverse();
 
             const globalScanData = {
-                personaDescription: clipPromptBlock(personaText, 1400),
-                characterDescription: clipPromptBlock(cardFields?.description, 1400),
-                characterPersonality: clipPromptBlock(cardFields?.personality, 1000),
+                personaDescription: clipPromptBlock(personaText, 2600),
+                characterDescription: clipPromptBlock(cardFields?.description, 1800),
+                characterPersonality: clipPromptBlock(cardFields?.personality, 1200),
                 characterDepthPrompt: clipPromptBlock(cardFields?.charDepthPrompt, 900),
                 scenario: clipPromptBlock(cardFields?.scenario, 1000),
                 creatorNotes: clipPromptBlock(cardFields?.creatorNotes, 1200),
@@ -782,7 +779,7 @@ async function generateStructuredCharacterDescription({ charName = '', stats = {
             return `${delta > 0 ? '+' : ''}${delta}${reason ? ` :: ${reason}` : ''}`;
         }).filter(Boolean)
         : [];
-    const currentProfile = clipPromptBlock(currentDescription, 1800);
+    const currentProfile = clipPromptBlock(currentDescription, 3200);
     const { userName, personaText, recentChat } = collectCharacterDescriptionPromptContext();
     const sourceContext = await collectCharacterDescriptionSourceContext({
         charName: safeCharName,
@@ -792,29 +789,34 @@ async function generateStructuredCharacterDescription({ charName = '', stats = {
 
     const prompt = `Собери цельный профиль персонажа для prompt-инжекта в ролевом чате.
 
-Нужно вернуть не художественный абзац, а удобную памятку по персонажу, чтобы модель держала законченный образ без двусмысленностей.
+Нужно вернуть не художественный абзац, а компактное досье: достаточно подробное, чтобы модель уверенно держала внешность, прошлое, голос, роль и внутреннюю логику персонажа в будущих сценах.
 Опирайся на историю чата, персону пользователя, динамику отношений, карточку персонажа, creator notes, примеры речи и релевантный world info / lorebook.
 
 [ФОРМАТ ОТВЕТА]
 Верни только готовый профиль на русском языке, без markdown, без пояснений и без вступления.
-Сделай ровно 8 строк в формате:
+Сделай ровно 10 строк в формате:
 Имя: ...
 Возраст / этап жизни: ...
-Роль в истории: ...
-Внешний образ: ...
-Характер и манера: ...
-Биография и контекст: ...
+Роль и положение: ...
+Внешность: ...
+Одежда и узнаваемые детали: ...
+Характер и внутренняя опора: ...
+Манера речи и поведения: ...
+Прошлое и личный контекст: ...
 Отношение к ${userName}: ...
-Что важно учитывать в сценах: ...
+Сценический гайд: ...
 
 [ПРАВИЛА]
 1. Профиль должен быть законченным. Не пиши "не указано", "данных мало", "может быть", "возможно", "неясно" и другие заглушки.
 2. Если в источниках есть пробелы, аккуратно дострой образ до конца на основе уже известных фактов, тона сцены, world info, карточки и поведения персонажа.
 3. Домысливание разрешено только там, где оно не ломает явный канон. Явные факты из карточки, creator notes, world info и чата важнее домысливания.
 4. Если можно трактовать образ по-разному, выбери одну наиболее правдоподобную и согласованную версию, а не оставляй несколько вариантов.
-5. Профиль должен быть полезен для будущих сцен: давать внешность, манеру, прошлое, роль и текущее отношение к пользователю.
-6. Если текущее описание уже содержит полезные факты, сохрани их и расширь, а не игнорируй.
-7. Держи ответ компактным и насыщенным, обычно в пределах 900-1800 символов.
+5. Внешность должна быть конкретной: телосложение, лицо, волосы, глаза, голос, заметные привычки, шрамы, запах или манера двигаться, если это уместно.
+6. Прошлое должно давать игровые крючки: происхождение, социальное положение, связи, тайны, травмы, цели, страхи или долг.
+7. Сценический гайд должен объяснять, как писать персонажа: что подчёркивать в реакциях, чего избегать, какие темы цепляют сильнее всего.
+8. Если текущее описание уже содержит полезные факты, сохрани их и расширь, а не игнорируй.
+9. Не превращай профиль в анкету с пустыми пунктами. Каждая строка должна быть плотной и пригодной для prompt-инжекта.
+10. Держи ответ компактным и насыщенным, обычно в пределах 1400-2800 символов.
 
 [ДАННЫЕ О ПЕРСОНАЖЕ]
 Имя: ${safeCharName}

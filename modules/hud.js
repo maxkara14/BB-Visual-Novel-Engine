@@ -22,7 +22,9 @@ import {
     bindActivePersonaState,
     getCurrentPersonaScopeKey,
     getCharacterProfile,
-    updateCharacterProfile
+    updateCharacterProfile,
+    renameCharacterRecord,
+    mergeCharacterRecords
 } from './social.js';
 import { cancelVnGeneration, crystallizeTraitFromMemories, generateCharacterDescription, isVnGenerationAbortError } from './generator.js';
 
@@ -185,36 +187,32 @@ function buildCharacterDescriptionTemplateStructured({ charName = '', stats = {}
     const romance = parseInt(stats?.romance, 10) || 0;
     const traits = Array.isArray(stats?.core_traits)
         ? stats.core_traits
-            .map(item => String(item?.trait || '').split(':')[0].trim())
+            .map(item => String(item?.trait || '').trim())
             .filter(Boolean)
-            .slice(0, 3)
+            .slice(0, 4)
         : [];
     const memories = stats?.memories && typeof stats.memories === 'object' ? stats.memories : {};
     const notableMemories = [
         ...(Array.isArray(memories.deep) ? memories.deep : []),
-        ...(Array.isArray(memories.soft) ? memories.soft.slice(-2) : []),
+        ...(Array.isArray(memories.soft) ? memories.soft.slice(-3) : []),
     ]
         .map(memory => String(memory?.text || '').trim())
         .filter(Boolean)
-        .slice(0, 2);
+        .slice(0, 4);
     const trend = getTrendNarrative(stats?.history || []);
 
-    const fragments = [
-        `${charName} сейчас воспринимает пользователя как "${displayStatus || 'неопределённый фактор'}".`,
-        `Текущая динамика отношений: ${trend.toLowerCase()}, доверие ${affinity > 0 ? '+' : ''}${affinity}.`,
-    ];
-
-    if (romance !== 0) {
-        fragments.push(`Романтическое напряжение держится на уровне ${romance > 0 ? '+' : ''}${romance}.`);
-    }
-    if (traits.length > 0) {
-        fragments.push(`В поведении особенно заметны черты: ${traits.join(', ')}.`);
-    }
-    if (notableMemories.length > 0) {
-        fragments.push(`Его особенно формируют события: ${notableMemories.join('; ')}.`);
-    }
-
-    return fragments.join(' ').replace(/\s+/g, ' ').trim();
+    return [
+        `Имя: ${charName}.`,
+        'Возраст / этап жизни: взрослость или актуальный жизненный этап уточняется по сценам без жёсткой привязки.',
+        `Роль и положение: ${displayStatus || 'значимый участник текущей истории'}, связанный с маршрутом пользователя.`,
+        'Внешность: конкретные черты пока лучше брать из карточки и сцены; при генерации нужно закрепить лицо, телосложение, волосы, глаза, голос и заметные привычки.',
+        'Одежда и узнаваемые детали: держать визуальные якоря из карточки, текущей сцены и загруженного аватара, не менять стиль без причины.',
+        `Характер и внутренняя опора: ${traits.length > 0 ? traits.join('; ') : 'устойчивые черты ещё формируются через память и реакции'}.`,
+        `Манера речи и поведения: ориентироваться на тон последних сцен; динамика отношений сейчас — ${trend.toLowerCase()}.`,
+        `Прошлое и личный контекст: ${notableMemories.length > 0 ? notableMemories.join('; ') : 'крупные биографические факты ещё не закреплены, их нужно достраивать осторожно'}.`,
+        `Отношение к пользователю: доверие ${affinity > 0 ? '+' : ''}${affinity}${romance !== 0 ? `, романтическая линия ${romance > 0 ? '+' : ''}${romance}` : ''}; воспринимает пользователя как "${displayStatus || 'неопределённый фактор'}".`,
+        'Сценический гайд: сохранять уже закреплённые факты, усиливать личные реакции через память, не сбрасывать тон отношений между сценами.',
+    ].join('\n');
 }
 
 async function loadImageFromUrl(dataUrl = '') {
@@ -627,6 +625,10 @@ function buildCharacterCardHtml(charName = '') {
             <div class="bb-char-editor" style="cursor: default; border-top: 1px solid rgba(255,255,255,0.06); border-radius: 0 0 22px 22px; margin: 0; background: rgba(0,0,0,0.2);">
                 <div class="bb-editor-title">Настройки персонажа</div>
                 <div class="bb-editor-hint">Здесь можно задать стартовые значения, аватар и профиль персонажа.</div>
+                <label class="bb-editor-name-field">
+                    <span>Имя в VNE</span>
+                    <input type="text" class="text_pole bb-edit-display-name-input" value="${escapeHtml(charName)}" title="При сохранении прежнее имя останется алиасом для старых записей.">
+                </label>
                 <div class="bb-avatar-editor-grid">
                     <div class="bb-avatar-editor-panel">
                         <div class="bb-avatar-preview ${profile.avatar ? 'has-image' : 'is-empty'}" style="${buildAvatarStyle(profile)}">
@@ -651,7 +653,7 @@ function buildCharacterCardHtml(charName = '') {
                 <label class="checkbox_label" style="margin-bottom: 10px;"><input type="checkbox" class="bb-edit-platonic-cb" ${isPlatonic ? 'checked' : ''}><span style="font-size: 11px; color:#fca5a5;">Строго платонически (блокирует флирт)</span></label>
                 <div class="bb-editor-section">
                     <div class="bb-editor-title">Описание персонажа</div>
-                    <textarea class="text_pole bb-edit-description-input" rows="4" style="width:100%; min-height: 92px; resize: vertical;">${escapeHtml(profile.description)}</textarea>
+                    <textarea class="text_pole bb-edit-description-input" rows="8" style="width:100%; min-height: 180px; resize: vertical;">${escapeHtml(profile.description)}</textarea>
                     <input type="hidden" class="bb-edit-generated-description" value="${escapeHtml(generatedDescription)}">
                     <div class="bb-editor-actions bb-editor-actions-tight" style="margin-top: 8px;">
                         <button type="button" class="menu_button bb-btn-generate-description" data-char="${escapeHtml(charName)}"><i class="fa-solid fa-wand-magic-sparkles"></i>&ensp;По шаблону</button>
@@ -933,13 +935,21 @@ export function renderSocialHud() {
                     queueCharacterEditorAvatarPreview(jQuery(this).closest('.bb-char-editor'));
                 });
 
+            jQuery('.bb-edit-display-name-input').off('input change').on('input change', function(e) {
+                e.stopPropagation();
+                const editor = jQuery(this).closest('.bb-char-editor');
+                const displayName = String(jQuery(this).val() || editor.closest('.bb-char-card').attr('data-char') || '').trim();
+                editor.find('.bb-avatar-preview-initials').text(getCharacterInitials(displayName));
+            });
+
             jQuery('.bb-btn-generate-description').off('click').on('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
                 const editor = jQuery(this).closest('.bb-char-editor');
                 const button = jQuery(this);
                 const cancelButton = editor.find('.bb-btn-cancel-description-generation');
-                const charName = String(button.attr('data-char') || '').trim();
+                const originalCharName = String(button.attr('data-char') || '').trim();
+                const charName = String(editor.find('.bb-edit-display-name-input').val() || originalCharName).trim();
                 const generatedFallback = String(editor.find('.bb-edit-generated-description').val() || '').trim();
                 const originalHtml = button.html();
                 const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -952,7 +962,7 @@ export function renderSocialHud() {
                 cancelButton.prop('disabled', false).show().html('<i class="fa-solid fa-xmark"></i>&ensp;Отмена');
                 generateCharacterDescription({
                     charName,
-                    stats: currentCalculatedStats[charName] || {},
+                    stats: currentCalculatedStats[originalCharName] || currentCalculatedStats[charName] || {},
                     currentDescription: String(editor.find('.bb-edit-description-input').val() || '').trim(),
                 }).then((generated) => {
                     if (String(editor.data('bbDescriptionGenerationRequestId') || '') !== requestId) return;
@@ -1007,33 +1017,11 @@ export function renderSocialHud() {
                 jQuery(this).closest('.bb-char-editor').find('.bb-edit-description-input').val('');
             });
 
-            jQuery('.bb-btn-save-char').off('click').on('click', function() {
-                bindActivePersonaState();
-                const charName = jQuery(this).attr('data-char');
-                const editor = jQuery(this).closest('.bb-char-editor');
-                const newBase = parseInt(String(editor.find('.bb-edit-base-input').val()), 10);
-                const newRomance = parseInt(String(editor.find('.bb-edit-romance-input').val()), 10);
-                const isPlatonic = editor.find('.bb-edit-platonic-cb').is(':checked');
-                const description = String(editor.find('.bb-edit-description-input').val() || '').trim();
-                const avatar = String(editor.find('.bb-edit-avatar-data').val() || '').trim();
-                const avatarCrop = {
-                    x: parseFloat(String(editor.find('.bb-avatar-focus-x').val() || '50')),
-                    y: parseFloat(String(editor.find('.bb-avatar-focus-y').val() || '50')),
-                    zoom: parseFloat(String(editor.find('.bb-avatar-focus-zoom').val() || '100')),
-                };
-                
-                if (!isNaN(newBase)) { if (!chat_metadata['bb_vn_char_bases']) chat_metadata['bb_vn_char_bases'] = {}; chat_metadata['bb_vn_char_bases'][charName] = newBase; }
-                if (!isNaN(newRomance)) { if (!chat_metadata['bb_vn_char_bases_romance']) chat_metadata['bb_vn_char_bases_romance'] = {}; chat_metadata['bb_vn_char_bases_romance'][charName] = newRomance; }
-                if (!chat_metadata['bb_vn_platonic_chars']) chat_metadata['bb_vn_platonic_chars'] = [];
-                if (isPlatonic) { if (!chat_metadata['bb_vn_platonic_chars'].includes(charName)) chat_metadata['bb_vn_platonic_chars'].push(charName); }
-                else { chat_metadata['bb_vn_platonic_chars'] = chat_metadata['bb_vn_platonic_chars'].filter(c => c !== charName); }
-                saveChatDebounced(); recalculateAllStats(); notifySuccess("Настройки сохранены!");
-            });
-
             jQuery('.bb-btn-save-char').off('click').on('click', async function() {
                 bindActivePersonaState();
-                const charName = jQuery(this).attr('data-char');
+                const originalCharName = String(jQuery(this).attr('data-char') || '').trim();
                 const editor = jQuery(this).closest('.bb-char-editor');
+                const requestedCharName = String(editor.find('.bb-edit-display-name-input').val() || originalCharName).trim();
                 const newBase = parseInt(String(editor.find('.bb-edit-base-input').val()), 10);
                 const newRomance = parseInt(String(editor.find('.bb-edit-romance-input').val()), 10);
                 const isPlatonic = editor.find('.bb-edit-platonic-cb').is(':checked');
@@ -1044,6 +1032,46 @@ export function renderSocialHud() {
                     y: parseFloat(String(editor.find('.bb-avatar-focus-y').val() || '50')),
                     zoom: parseFloat(String(editor.find('.bb-avatar-focus-zoom').val() || '100')),
                 };
+
+                if (!requestedCharName) {
+                    notifyError('Имя персонажа не может быть пустым.');
+                    return;
+                }
+
+                let charName = originalCharName;
+                let renamed = false;
+                if (requestedCharName && requestedCharName !== originalCharName) {
+                    const renameResult = renameCharacterRecord(originalCharName, requestedCharName);
+                    if (renameResult?.ok) {
+                        charName = renameResult.primaryName || requestedCharName;
+                        renamed = !renameResult.same;
+                    } else if (renameResult?.conflict) {
+                        let confirmed = false;
+                        setHudPopupPriority(true);
+                        try {
+                            confirmed = await SillyTavern.getContext().callPopup(
+                                `<h3>Имя уже занято</h3><p><strong>${escapeHtml(requestedCharName)}</strong> уже есть в трекере.</p><p>Слить <strong>${escapeHtml(originalCharName)}</strong> в эту запись?</p>`,
+                                'confirm'
+                            );
+                        } finally {
+                            setHudPopupPriority(false);
+                        }
+                        if (!confirmed) {
+                            notifyInfo('Переименование отменено.');
+                            return;
+                        }
+                        const mergeResult = mergeCharacterRecords(originalCharName, requestedCharName);
+                        if (!mergeResult?.ok) {
+                            notifyError('Не удалось слить записи персонажа.');
+                            return;
+                        }
+                        charName = mergeResult.targetName || requestedCharName;
+                        renamed = !mergeResult.same;
+                    } else {
+                        notifyError('Не удалось переименовать персонажа.');
+                        return;
+                    }
+                }
 
                 if (!isNaN(newBase)) { if (!chat_metadata['bb_vn_char_bases']) chat_metadata['bb_vn_char_bases'] = {}; chat_metadata['bb_vn_char_bases'][charName] = newBase; }
                 if (!isNaN(newRomance)) { if (!chat_metadata['bb_vn_char_bases_romance']) chat_metadata['bb_vn_char_bases_romance'] = {}; chat_metadata['bb_vn_char_bases_romance'][charName] = newRomance; }
@@ -1064,7 +1092,9 @@ export function renderSocialHud() {
                 });
                 saveChatDebounced();
                 recalculateAllStats();
-                notifySuccess(finalAvatar ? 'Карточка и аватар персонажа сохранены!' : 'Настройки персонажа сохранены!');
+                notifySuccess(renamed
+                    ? `Персонаж переименован в «${charName}».`
+                    : (finalAvatar ? 'Карточка и аватар персонажа сохранены!' : 'Настройки персонажа сохранены!'));
             });
 
             jQuery('.bb-btn-crystallize-pos, .bb-btn-crystallize-neg').off('click').on('click', async function(e) {

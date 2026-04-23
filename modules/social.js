@@ -1095,6 +1095,77 @@ function addAliasToEntry(entry, alias, scopeState) {
     scopeState.char_registry[entry.id] = entry;
 }
 
+function findRegistryEntryByOwnedName(scopeState = {}, rawName = '') {
+    const normalized = normalizeCharacterLookupName(rawName);
+    if (!normalized) return null;
+    return getRegistryEntries(scopeState).find(entry => entryOwnsName(entry, rawName)) || null;
+}
+
+function moveNamedMapValue(map = null, fromName = '', toName = '') {
+    if (!map || typeof map !== 'object') return false;
+    const fromKey = String(fromName || '').trim();
+    const toKey = String(toName || '').trim();
+    if (!fromKey || !toKey || fromKey === toKey) return false;
+    if (!Object.prototype.hasOwnProperty.call(map, fromKey)) return false;
+
+    if (!Object.prototype.hasOwnProperty.call(map, toKey) || map[toKey] === 0 || map[toKey] === undefined) {
+        map[toKey] = map[fromKey];
+    }
+    delete map[fromKey];
+    return true;
+}
+
+function replaceNameInList(list = [], fromName = '', toName = '') {
+    if (!Array.isArray(list)) return [];
+    const normalizedFrom = normalizeCharacterLookupName(fromName);
+    const normalizedTo = normalizeCharacterLookupName(toName);
+    if (!normalizedFrom || !normalizedTo) return list;
+
+    const result = [];
+    const seen = new Set();
+    list.forEach(item => {
+        const nextName = normalizeCharacterLookupName(item) === normalizedFrom ? toName : item;
+        const key = normalizeCharacterLookupName(nextName);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        result.push(nextName);
+    });
+    return result;
+}
+
+function renameSnapshotCharacterData(snapshotBaseline = null, fromName = '', toName = '') {
+    if (!snapshotBaseline || typeof snapshotBaseline !== 'object') return false;
+    let changed = false;
+
+    if (snapshotBaseline.characters && typeof snapshotBaseline.characters === 'object') {
+        changed = moveNamedMapValue(snapshotBaseline.characters, fromName, toName) || changed;
+    }
+    if (snapshotBaseline.char_bases && typeof snapshotBaseline.char_bases === 'object') {
+        changed = moveNamedMapValue(snapshotBaseline.char_bases, fromName, toName) || changed;
+    }
+    if (snapshotBaseline.char_bases_romance && typeof snapshotBaseline.char_bases_romance === 'object') {
+        changed = moveNamedMapValue(snapshotBaseline.char_bases_romance, fromName, toName) || changed;
+    }
+    if (Array.isArray(snapshotBaseline.story_moments)) {
+        snapshotBaseline.story_moments.forEach(moment => {
+            if (!moment || typeof moment !== 'object') return;
+            if (normalizeCharacterLookupName(moment.char || '') === normalizeCharacterLookupName(fromName)) {
+                moment.char = toName;
+                if (typeof moment.text === 'string') {
+                    moment.text = moment.text.replace(new RegExp(`^${escapeRegExp(fromName)}:`, 'u'), `${toName}:`);
+                }
+                changed = true;
+            }
+        });
+    }
+
+    return changed;
+}
+
+function escapeRegExp(value = '') {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function scoreCharacterMatch(sourceName = '', candidateName = '') {
     const source = normalizeCharacterLookupName(sourceName);
     const candidate = normalizeCharacterLookupName(candidateName);
@@ -1182,6 +1253,132 @@ export function updateCharacterProfile(charName = '', updates = {}) {
     const profile = applyCharacterProfileToEntry(identity.entry, updates);
     scopeState.char_registry[identity.entry.id] = identity.entry;
     return profile;
+}
+
+export function renameCharacterRecord(fromName = '', toName = '') {
+    const requestedName = String(toName || '').trim();
+    if (!requestedName || isCollectiveEntityName(requestedName)) {
+        return { ok: false, reason: 'invalid_name' };
+    }
+
+    const { scopeKey, scopeState, aliasSet } = bindActivePersonaState();
+    const source = resolveCharacterIdentity(fromName, { allowCreate: false, allowSuggestions: false });
+    if (!source?.entry) {
+        return { ok: false, reason: 'source_not_found' };
+    }
+
+    const sourceEntry = scopeState.char_registry[source.id];
+    if (!sourceEntry) {
+        return { ok: false, reason: 'source_not_found' };
+    }
+
+    const existingTargetEntry = findRegistryEntryByOwnedName(scopeState, requestedName);
+    if (existingTargetEntry && existingTargetEntry.id !== source.id) {
+        return {
+            ok: false,
+            reason: 'target_exists',
+            conflict: true,
+            targetName: existingTargetEntry.primary_name,
+        };
+    }
+
+    const previousPrimary = String(sourceEntry.primary_name || fromName || '').trim();
+    const previousNames = [previousPrimary, ...(Array.isArray(sourceEntry.aliases) ? sourceEntry.aliases : [])]
+        .map(name => String(name || '').trim())
+        .filter(Boolean);
+    const previousNormalized = normalizeCharacterLookupName(previousPrimary);
+    const requestedNormalized = normalizeCharacterLookupName(requestedName);
+    if (!requestedNormalized) {
+        return { ok: false, reason: 'invalid_name' };
+    }
+
+    addAliasToEntry(sourceEntry, previousPrimary, scopeState);
+    addAliasToEntry(sourceEntry, requestedName, scopeState);
+    sourceEntry.primary_name = requestedName;
+    scopeState.char_registry[sourceEntry.id] = sourceEntry;
+
+    let count = previousNormalized !== requestedNormalized ? 1 : 0;
+    const shouldRenameStoredName = (value = '') => {
+        const normalized = normalizeCharacterLookupName(value);
+        return normalized && previousNames.some(name => normalizeCharacterLookupName(name) === normalized);
+    };
+
+    const chat = SillyTavern.getContext().chat;
+    if (Array.isArray(chat)) {
+        chat.forEach(msg => {
+            if (msg.extra?.bb_social_swipes) {
+                for (const sId in msg.extra.bb_social_swipes) {
+                    if (!Array.isArray(msg.extra.bb_social_swipes[sId])) continue;
+                    msg.extra.bb_social_swipes[sId].forEach(update => {
+                        if (update?.scope && !aliasSet.has(update.scope)) return;
+                        if (update?.char_id === source.id || shouldRenameStoredName(update?.name || '')) {
+                            if (update.name !== requestedName) {
+                                update.name = requestedName;
+                                count++;
+                            }
+                            update.char_id = source.id;
+                            update.scope = scopeKey;
+                        }
+                    });
+                }
+            }
+            if (msg.extra?.bb_vn_char_traits_swipes) {
+                for (const sId in msg.extra.bb_vn_char_traits_swipes) {
+                    if (!Array.isArray(msg.extra.bb_vn_char_traits_swipes[sId])) continue;
+                    msg.extra.bb_vn_char_traits_swipes[sId].forEach(trait => {
+                        if (trait?.scope && !aliasSet.has(trait.scope)) return;
+                        if (trait?.char_id === source.id || shouldRenameStoredName(trait?.charName || '')) {
+                            if (trait.charName !== requestedName) {
+                                trait.charName = requestedName;
+                                count++;
+                            }
+                            trait.char_id = source.id;
+                            trait.scope = scopeKey;
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    previousNames.forEach(oldName => {
+        moveNamedMapValue(chat_metadata['bb_vn_char_bases'], oldName, requestedName);
+        moveNamedMapValue(chat_metadata['bb_vn_char_bases_romance'], oldName, requestedName);
+    });
+
+    if (Array.isArray(chat_metadata['bb_vn_ignored_chars'])) {
+        scopeState.ignored_chars = previousNames.reduce(
+            (list, oldName) => replaceNameInList(list, oldName, requestedName),
+            chat_metadata['bb_vn_ignored_chars'],
+        );
+        chat_metadata['bb_vn_ignored_chars'] = scopeState.ignored_chars;
+    }
+    if (Array.isArray(chat_metadata['bb_vn_platonic_chars'])) {
+        scopeState.platonic_chars = previousNames.reduce(
+            (list, oldName) => replaceNameInList(list, oldName, requestedName),
+            chat_metadata['bb_vn_platonic_chars'],
+        );
+        chat_metadata['bb_vn_platonic_chars'] = scopeState.platonic_chars;
+    }
+
+    previousNames.forEach(oldName => {
+        renameSnapshotCharacterData(scopeState.snapshot_baseline, oldName, requestedName);
+    });
+    scopeState.merge_suggestions = (scopeState.merge_suggestions || []).filter(item =>
+        item.target_id !== source.id
+        && normalizeCharacterLookupName(item.source || '') !== previousNormalized
+        && normalizeCharacterLookupName(item.target || '') !== previousNormalized
+    );
+    chat_metadata['bb_vn_merge_suggestions'] = scopeState.merge_suggestions;
+
+    return {
+        ok: true,
+        count,
+        previousName: previousPrimary,
+        primaryName: requestedName,
+        id: source.id,
+        same: previousNormalized === requestedNormalized,
+    };
 }
 
 export function resolveCharacterIdentity(rawName = '', options = {}) {

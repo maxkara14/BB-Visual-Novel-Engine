@@ -2153,6 +2153,21 @@ body.bb-hud-popup-active #bb-social-toast-container {
     margin-bottom: 12px;
 }
 
+.bb-editor-name-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 10px 0 12px;
+    font-size: 11px;
+    color: #cbd5e1;
+    font-weight: 700;
+}
+
+.bb-editor-name-field input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
 .bb-slider-field {
     display: flex;
     flex-direction: column;
