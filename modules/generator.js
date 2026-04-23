@@ -31,6 +31,12 @@ let lastCustomApiFallbackNoticeAt = 0;
 const MIN_RENDERABLE_OPTIONS = 2;
 const CUSTOM_API_HEALTH_EVENT = 'bb-vn-custom-api-health';
 const VN_GENERATION_CANCELLED_MESSAGE = 'Отменено пользователем';
+const OPTIONS_RESPONSE_LENGTH_TOKENS = {
+    short: 2800,
+    medium: 5200,
+    long: 8000,
+};
+const JSON_REPAIR_RESPONSE_LENGTH_TOKENS = 5200;
 
 function emitCustomApiHealth(detail = {}) {
     try {
@@ -60,6 +66,47 @@ function buildOptionLengthDirective(lengthPreset = '') {
         default:
             return 'Length preset: MEDIUM. Each "message" should feel like one developed scene beat: usually 2-4 paragraphs, about 900-1600 Russian characters total. Balance action, dialogue, internal thought, and a noticeable consequence while keeping the pace active.';
     }
+}
+
+function getOptionsResponseLength(lengthPreset = '') {
+    return OPTIONS_RESPONSE_LENGTH_TOKENS[normalizeVnReplyLength(lengthPreset)] || OPTIONS_RESPONSE_LENGTH_TOKENS.medium;
+}
+
+function getVnOptionsJsonSchema() {
+    return {
+        name: 'bb_vn_options',
+        description: 'Three distinct visual novel action options.',
+        strict: true,
+        value: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['options'],
+            properties: {
+                options: {
+                    type: 'array',
+                    minItems: 3,
+                    maxItems: 3,
+                    items: {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['intent', 'tone', 'forecast', 'targets', 'risk', 'message'],
+                        properties: {
+                            intent: { type: 'string' },
+                            tone: { type: 'string' },
+                            forecast: { type: 'string' },
+                            targets: {
+                                type: 'array',
+                                maxItems: 3,
+                                items: { type: 'string' },
+                            },
+                            risk: { type: 'string' },
+                            message: { type: 'string' },
+                        },
+                    },
+                },
+            },
+        },
+    };
 }
 
 function buildAssistantLengthDirective(lengthPreset = '') {
@@ -160,11 +207,19 @@ function persistOptionsForCurrentSwipe(chat, options = []) {
     saveChatDebounced();
 }
 
-export async function runMainGen(promptText) {
+export async function runMainGen(promptText, options = {}) {
+    const request = { quietPrompt: promptText };
+    if (Number.isFinite(options.responseLength) && options.responseLength > 0) {
+        request.responseLength = Math.round(options.responseLength);
+    }
+    if (options.jsonSchema) {
+        request.jsonSchema = options.jsonSchema;
+    }
+
     if (typeof generateQuietPrompt === 'function') {
-        return await generateQuietPrompt({ quietPrompt: promptText });
+        return await generateQuietPrompt(request);
     } else if (typeof window['generateQuietPrompt'] === 'function') {
-        return await window['generateQuietPrompt']({ quietPrompt: promptText });
+        return await window['generateQuietPrompt'](request);
     } else {
         throw new Error("Функция генерации Таверны не найдена. Обновите SillyTavern.");
     }
@@ -194,6 +249,10 @@ export function cancelVnGeneration() {
 export async function generateFastPrompt(promptText, options = {}) {
     const responseFormat = options.responseFormat === 'text' ? 'text' : 'json';
     const includeMeta = options.includeMeta === true;
+    const responseLength = Number.isFinite(options.responseLength) && options.responseLength > 0
+        ? Math.round(options.responseLength)
+        : null;
+    const jsonSchema = options.jsonSchema || null;
     const s = extension_settings[MODULE_NAME];
     if (s.useCustomApi && s.customApiUrl && s.customApiModel) {
         try {
@@ -221,7 +280,7 @@ export async function generateFastPrompt(promptText, options = {}) {
                         { role: 'user', content: promptText }
                     ],
                     temperature: 0.7,
-                    max_tokens: 4000,
+                    max_tokens: Math.max(4000, responseLength || 0),
                     stream: false
                 })
             });
@@ -265,7 +324,7 @@ export async function generateFastPrompt(promptText, options = {}) {
                     : 'Запрос к кастомной модели сорвался. Генерация временно ушла на основную модель.',
             });
             maybeNotifyCustomApiFallback();
-            const fallbackContent = await runMainGen(promptText);
+            const fallbackContent = await runMainGen(promptText, { responseLength, jsonSchema });
             if (includeMeta) {
                 return {
                     content: fallbackContent,
@@ -281,7 +340,7 @@ export async function generateFastPrompt(promptText, options = {}) {
             setVnGenerationAbortController(null);
         }
     } else {
-        const content = await runMainGen(promptText);
+        const content = await runMainGen(promptText, { responseLength, jsonSchema });
         if (includeMeta) {
             return {
                 content,
@@ -316,6 +375,23 @@ function extractOptionsFromGeneration(rawText = '') {
     };
 }
 
+function logOptionsJsonFailure(rawText = '', errors = [], stage = 'initial') {
+    const text = String(rawText || '');
+    const position = errors
+        .map(error => String(error || '').match(/position\s+(\d+)/i)?.[1])
+        .map(value => Number.parseInt(value, 10))
+        .find(Number.isFinite);
+    const snippetStart = Number.isFinite(position) ? Math.max(0, position - 260) : 0;
+    const snippetEnd = Number.isFinite(position) ? Math.min(text.length, position + 260) : Math.min(text.length, 520);
+
+    console.warn(`[BB VN] Options JSON ${stage} parse diagnostic`, {
+        length: text.length,
+        position: Number.isFinite(position) ? position : null,
+        tail: text.slice(Math.max(0, text.length - 520)),
+        aroundError: text.slice(snippetStart, snippetEnd),
+    });
+}
+
 async function repairOptionsJson(rawText = '') {
     const repairPrompt = `You repair malformed JSON arrays for an internal roleplay tool.
 
@@ -328,7 +404,12 @@ If a field is missing, use an empty string or[] instead of removing the object.
 BROKEN INPUT:
 ${String(rawText || '').trim()}`;
 
-    const generationResult = await generateFastPrompt(repairPrompt, { responseFormat: 'json', includeMeta: true });
+    const generationResult = await generateFastPrompt(repairPrompt, {
+        responseFormat: 'json',
+        includeMeta: true,
+        responseLength: JSON_REPAIR_RESPONSE_LENGTH_TOKENS,
+        jsonSchema: getVnOptionsJsonSchema(),
+    });
     return typeof generationResult === 'string'
         ? generationResult
         : generationResult?.content || '';
@@ -380,7 +461,12 @@ Return ONLY a valid JSON array with the same schema.
 [EXISTING OPTIONS]
 ${existingSummary}`;
 
-        const recoveryResult = await generateFastPrompt(recoveryPrompt, { responseFormat: 'json', includeMeta: true });
+        const recoveryResult = await generateFastPrompt(recoveryPrompt, {
+            responseFormat: 'json',
+            includeMeta: true,
+            responseLength: JSON_REPAIR_RESPONSE_LENGTH_TOKENS,
+            jsonSchema: getVnOptionsJsonSchema(),
+        });
         const recoveryText = typeof recoveryResult === 'string'
             ? recoveryResult
             : recoveryResult?.content || '';
@@ -417,7 +503,12 @@ Hard rules:
 [REJECTED SET]
 ${summarizeOptionsForPrompt(normalizedOptions)}`;
 
-    const diversifiedResult = await generateFastPrompt(diversifyPrompt, { responseFormat: 'json', includeMeta: true });
+    const diversifiedResult = await generateFastPrompt(diversifyPrompt, {
+        responseFormat: 'json',
+        includeMeta: true,
+        responseLength: JSON_REPAIR_RESPONSE_LENGTH_TOKENS,
+        jsonSchema: getVnOptionsJsonSchema(),
+    });
     const diversifiedText = typeof diversifiedResult === 'string'
         ? diversifiedResult
         : diversifiedResult?.content || '';
@@ -1026,6 +1117,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
 
         prompt = context.substituteParams(prompt);
         prompt += `\n\n[ACTIVE LENGTH DIRECTIVE]\n${buildOptionLengthDirective(replyLength)}`;
+        prompt += '\n\n[STRUCTURED OUTPUT COMPATIBILITY]\nPreferred output is the JSON array from the template. If the runtime provides a JSON schema wrapper, return {"options":[...]} with exactly 3 option objects and no extra fields.';
 
         if (useEmotionalChoiceFraming) {
             prompt += '\n\n[TONE DIVERSITY RULE]\nAll 3 options MUST use clearly different emotional colors. Do not reuse the same tone family twice, even with different wording.';
@@ -1074,7 +1166,12 @@ export async function bbVnGenerateOptionsFlow(request = []) {
             };
         };
 
-        const generationResult = await generateFastPrompt(prompt, { responseFormat: 'json', includeMeta: true });
+        const generationResult = await generateFastPrompt(prompt, {
+            responseFormat: 'json',
+            includeMeta: true,
+            responseLength: getOptionsResponseLength(replyLength),
+            jsonSchema: getVnOptionsJsonSchema(),
+        });
         ensureActiveVnOptionsGeneration(requestToken);
         const result = typeof generationResult === 'string'
             ? generationResult
@@ -1095,11 +1192,15 @@ export async function bbVnGenerateOptionsFlow(request = []) {
             console.warn('[BB VN] Initial options JSON parse failed. Attempting repair...', {
                 errors: recoveredPayload.errors,
             });
+            logOptionsJsonFailure(result, recoveredPayload.errors, 'initial');
 
             const repairedResult = await repairOptionsJson(result);
             ensureActiveVnOptionsGeneration(requestToken);
             recoveredPayload = extractOptionsFromGeneration(repairedResult);
             recoveredOptions = recoveredPayload.options;
+            if (!recoveredPayload.ok) {
+                logOptionsJsonFailure(repairedResult, recoveredPayload.errors, 'repair');
+            }
         }
 
         if (recoveredPayload.ok && recoveredOptions && recoveredOptions.length > 0) {
