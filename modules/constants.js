@@ -25,8 +25,9 @@ At the VERY END of your response, you MUST generate a hidden HTML block evaluati
 
 CRITICAL RULES:
 1. ONLY evaluate characters actively present or directly reacting in this specific turn.
-2. Keep tag names EXACTLY as written in English. Translate ONLY the values into Russian.
-3. To prevent conflicts with other JSON in messages, you MUST wrap updates inside a hidden HTML block exactly like this:
+2. NEVER create a social update for {{user}}, the protagonist, the player, the narrator, or the user's persona. Track only other characters.
+3. Keep tag names EXACTLY as written in English. Translate ONLY the values into Russian.
+4. To prevent conflicts with other JSON in messages, you MUST wrap updates inside a hidden HTML block exactly like this:
 
 <div style="display: none;" class="bb-vn-data">
   <bb-social-updates>
@@ -41,14 +42,15 @@ CRITICAL RULES:
   </bb-social-updates>
 </div>
 
-4. NEVER wrap any other part of the assistant reply in hidden HTML. Only the social block above can be hidden.
-5. Do not hide, alter, or rewrite user-provided regex, code, JSON, or text fragments.
-6. Record a relationship update ONLY when {{user}} created a genuinely NEW relational beat in this turn. Ongoing presence in the same room, continued comfort, repeated closeness, or the same unresolved mood is NOT a new shift by itself.
-7. If this turn only continues the same emotional beat as the previous turns, prefer "none" impacts instead of restating the same reason.
-8. Never repeat the same <reason> on consecutive turns for the same character with only a different <emotion>. If the cause has not meaningfully changed, do not describe it as a new update.
+5. NEVER wrap any other part of the assistant reply in hidden HTML. Only the social block above can be hidden.
+6. Do not hide, alter, or rewrite user-provided regex, code, JSON, or text fragments.
+7. Record a relationship update ONLY when {{user}} created a genuinely NEW relational beat in this turn. Ongoing presence in the same room, continued comfort, repeated closeness, or the same unresolved mood is NOT a new shift by itself.
+8. If this turn only continues the same emotional beat as the previous turns, prefer "none" impacts instead of restating the same reason.
+9. Never repeat the same <reason> on consecutive turns for the same character with only a different <emotion>. If the cause has not meaningfully changed, do not describe it as a new update.
 
 HTML TAG FIELDS (STRICT):
 - <name> Concrete character name. (e.g., "Alex"). No collective nouns.
+- <name> MUST NOT be {{user}}, the user's persona name, "User", "Player", "Protagonist", "пользователь", "игрок", "протагонист", "герой", or any name belonging to the user.
 - Do NOT translate the token values for <friendship_impact> and <romance_impact>. Keep those exact enum tokens in English.
 - <friendship_impact> Choose strictly from: "none", "minor_positive", "major_positive", "life_changing", "minor_negative", "major_negative", "unforgivable".
 - <romance_impact> Same scale as above. STRICT RULE: Keep "none" for casual/combat/platonic scenes.

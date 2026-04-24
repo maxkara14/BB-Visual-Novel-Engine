@@ -295,6 +295,161 @@ function getCurrentPersonaLabel() {
     return personaText.split(/\r?\n/).map(line => line.trim()).find(Boolean)?.slice(0, 80) || 'Persona';
 }
 
+function cleanPersonaNameCandidate(value = '') {
+    return String(value || '')
+        .replace(/[*_`~]+/g, '')
+        .replace(/\[[^\]]*]/g, ' ')
+        .replace(/\([^)]*\)/g, ' ')
+        .replace(/[«»"']/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function collectPersonaDeclaredNames(personaText = '') {
+    const text = String(personaText || '').replace(/\r/g, '');
+    if (!text.trim()) return [];
+
+    const candidates = [];
+    const nameLineRegex = /(?:^|\n)\s*(?:[#>*\-\s]*)?(?:\*\*)?\s*(?:имя|name|ник|nickname)\s*(?:\*\*)?\s*[:：-]\s*([^\n]+)/giu;
+    for (const match of text.matchAll(nameLineRegex)) {
+        const rawValue = cleanPersonaNameCandidate(match[1] || '');
+        if (!rawValue) continue;
+        candidates.push(rawValue);
+        rawValue
+            .split(/[\/|,;]+/g)
+            .map(cleanPersonaNameCandidate)
+            .filter(Boolean)
+            .forEach(name => candidates.push(name));
+    }
+
+    return candidates.filter(name => name.length >= 2 && name.length <= 100);
+}
+
+function getUserCharacterNameCandidates() {
+    const candidates = [
+        'user',
+        'player',
+        'protagonist',
+        'narrator',
+        'пользователь',
+        'юзер',
+        'игрок',
+        'протагонист',
+        'рассказчик',
+        'герой',
+        'героиня',
+    ];
+
+    try {
+        const context = SillyTavern.getContext?.();
+        const chat = Array.isArray(context?.chat) ? context.chat : [];
+        const identity = getCurrentPersonaIdentity();
+        candidates.push(
+            context?.substituteParams?.('{{user}}'),
+            context?.name1,
+            context?.user_name,
+            chat_metadata['persona_name'],
+            chat_metadata['user_name'],
+            identity?.name,
+        );
+
+        const latestUserIdentity = getLatestUserPersonaIdentityFromChat(chat);
+        candidates.push(latestUserIdentity?.name);
+    } catch (error) {
+        void error;
+    }
+
+    collectPersonaDeclaredNames(getCurrentPersonaText()).forEach(name => candidates.push(name));
+
+    const seen = new Set();
+    return candidates
+        .map(cleanPersonaNameCandidate)
+        .filter(Boolean)
+        .filter(name => {
+            const normalized = normalizeCharacterLookupName(name);
+            if (!normalized || seen.has(normalized)) return false;
+            seen.add(normalized);
+            return true;
+        });
+}
+
+function isUserPersonaCharacterName(rawName = '') {
+    const normalized = normalizeCharacterLookupName(rawName);
+    if (!normalized) return false;
+    return getUserCharacterNameCandidates().some(candidate => normalizeCharacterLookupName(candidate) === normalized);
+}
+
+function filterUserPersonaSocialUpdates(updates = []) {
+    if (!Array.isArray(updates) || updates.length === 0) {
+        return { updates: Array.isArray(updates) ? updates : [], changed: false, dropped: [] };
+    }
+
+    const dropped = [];
+    const filtered = updates.filter(update => {
+        if (!isUserPersonaCharacterName(update?.name || '')) return true;
+        dropped.push(update);
+        return false;
+    });
+
+    return {
+        updates: filtered,
+        changed: filtered.length !== updates.length,
+        dropped,
+    };
+}
+
+function purgeUserPersonaTracking(scopeState = {}) {
+    let changed = false;
+    const removeNamedMapEntries = (map = null) => {
+        if (!map || typeof map !== 'object') return;
+        Object.keys(map).forEach(name => {
+            if (!isUserPersonaCharacterName(name)) return;
+            delete map[name];
+            changed = true;
+        });
+    };
+    const filterNameList = (list = []) => {
+        if (!Array.isArray(list)) return [];
+        const filtered = list.filter(name => !isUserPersonaCharacterName(name));
+        if (filtered.length !== list.length) changed = true;
+        return filtered;
+    };
+
+    removeNamedMapEntries(scopeState.char_bases);
+    removeNamedMapEntries(scopeState.char_bases_romance);
+    removeNamedMapEntries(scopeState.snapshot_baseline?.characters);
+    removeNamedMapEntries(scopeState.snapshot_baseline?.char_bases);
+    removeNamedMapEntries(scopeState.snapshot_baseline?.char_bases_romance);
+
+    if (scopeState.char_registry && typeof scopeState.char_registry === 'object') {
+        Object.entries(scopeState.char_registry).forEach(([id, entry]) => {
+            const names = [entry?.primary_name, ...(Array.isArray(entry?.aliases) ? entry.aliases : [])];
+            if (!names.some(name => isUserPersonaCharacterName(name))) return;
+            delete scopeState.char_registry[id];
+            changed = true;
+        });
+    }
+
+    scopeState.ignored_chars = filterNameList(scopeState.ignored_chars);
+    scopeState.platonic_chars = filterNameList(scopeState.platonic_chars);
+    if (Array.isArray(scopeState.merge_suggestions)) {
+        const filteredSuggestions = scopeState.merge_suggestions.filter(item =>
+            !isUserPersonaCharacterName(item?.source || '') && !isUserPersonaCharacterName(item?.target || '')
+        );
+        if (filteredSuggestions.length !== scopeState.merge_suggestions.length) changed = true;
+        scopeState.merge_suggestions = filteredSuggestions;
+    }
+
+    chat_metadata['bb_vn_char_bases'] = scopeState.char_bases;
+    chat_metadata['bb_vn_char_bases_romance'] = scopeState.char_bases_romance;
+    chat_metadata['bb_vn_ignored_chars'] = scopeState.ignored_chars;
+    chat_metadata['bb_vn_platonic_chars'] = scopeState.platonic_chars;
+    chat_metadata['bb_vn_char_registry'] = scopeState.char_registry;
+    chat_metadata['bb_vn_merge_suggestions'] = scopeState.merge_suggestions;
+
+    return changed;
+}
+
 function ensurePersonaBindingsStore() {
     if (!chat_metadata['bb_vn_persona_bindings'] || typeof chat_metadata['bb_vn_persona_bindings'] !== 'object') {
         chat_metadata['bb_vn_persona_bindings'] = {};
@@ -856,7 +1011,7 @@ function getKnownCharacterNames(scopeState = {}) {
     const names = new Set();
     const pushName = (value) => {
         const safeName = String(value || '').trim();
-        if (!safeName || isCollectiveEntityName(safeName)) return;
+        if (!safeName || isCollectiveEntityName(safeName) || isUserPersonaCharacterName(safeName)) return;
         names.add(safeName);
     };
 
@@ -1002,7 +1157,7 @@ export function importActivePersonaSnapshot(rawSnapshot = '') {
     const normalizedCharacters = {};
     Object.entries(snapshotData.characters).forEach(([charName, stats]) => {
         const safeName = String(charName || '').trim();
-        if (!safeName || isCollectiveEntityName(safeName)) return;
+        if (!safeName || isCollectiveEntityName(safeName) || isUserPersonaCharacterName(safeName)) return;
         normalizedCharacters[safeName] = normalizeImportedCharacterStats(stats);
     });
 
@@ -1257,7 +1412,7 @@ export function updateCharacterProfile(charName = '', updates = {}) {
 
 export function renameCharacterRecord(fromName = '', toName = '') {
     const requestedName = String(toName || '').trim();
-    if (!requestedName || isCollectiveEntityName(requestedName)) {
+    if (!requestedName || isCollectiveEntityName(requestedName) || isUserPersonaCharacterName(requestedName)) {
         return { ok: false, reason: 'invalid_name' };
     }
 
@@ -1391,6 +1546,7 @@ export function resolveCharacterIdentity(rawName = '', options = {}) {
     const displayName = String(rawName || '').trim();
     const normalized = normalizeCharacterLookupName(displayName);
     if (!displayName || !normalized) return null;
+    if (isUserPersonaCharacterName(displayName)) return null;
 
     const entries = getRegistryEntries(scopeState);
     for (const entry of entries) {
@@ -1616,7 +1772,7 @@ function getTrackedCharacterRoster(scopeState = {}) {
     const roster = new Set();
     const pushName = (value) => {
         const safeName = String(value || '').trim();
-        if (!safeName || isCollectiveEntityName(safeName)) return;
+        if (!safeName || isCollectiveEntityName(safeName) || isUserPersonaCharacterName(safeName)) return;
         roster.add(safeName);
     };
 
@@ -1633,7 +1789,7 @@ function collectRecentSceneCharacterScores(chat = [], uptoIndex = -1, scopeState
     const roster = getTrackedCharacterRoster(scopeState);
     const bumpScore = (rawName = '', amount = 1) => {
         const canonical = getCanonicalCharacterNameWithoutMutation(rawName, scopeState) || String(rawName || '').trim();
-        if (!canonical || isCollectiveEntityName(canonical)) return;
+        if (!canonical || isCollectiveEntityName(canonical) || isUserPersonaCharacterName(canonical)) return;
         scores.set(canonical, (scores.get(canonical) || 0) + amount);
     };
 
@@ -1678,7 +1834,7 @@ function collectRecentSceneCharacterScores(chat = [], uptoIndex = -1, scopeState
 }
 
 function getPromptRelevantCharacters(scopeState = {}, aliasSet = new Set()) {
-    const trackedCharacters = Object.keys(currentCalculatedStats || {}).filter(name => name && !isCollectiveEntityName(name));
+    const trackedCharacters = Object.keys(currentCalculatedStats || {}).filter(name => name && !isCollectiveEntityName(name) && !isUserPersonaCharacterName(name));
     if (trackedCharacters.length <= 6) return trackedCharacters;
 
     const chat = SillyTavern.getContext().chat || [];
@@ -2128,7 +2284,8 @@ export function scanAndCleanMessage(msg, messageId, trackDebug = false) {
     if (parsedPayload) {
         try {
             const parsed = parsedPayload.parsed;
-            const dedupedParsedUpdates = dedupeSocialUpdateEntries(parsed.social_updates);
+            const userFilteredUpdates = filterUserPersonaSocialUpdates(parsed.social_updates);
+            const dedupedParsedUpdates = dedupeSocialUpdateEntries(userFilteredUpdates.updates);
             if (!msg.extra) msg.extra = {};
             if (!msg.extra.bb_social_swipes) msg.extra.bb_social_swipes = {};
 
@@ -2136,9 +2293,14 @@ export function scanAndCleanMessage(msg, messageId, trackDebug = false) {
                 ...update,
                 scope: update.scope || scopeKey,
             }));
-            if (dedupedParsedUpdates.changed) modified = true;
+            if (dedupedParsedUpdates.changed || userFilteredUpdates.changed) modified = true;
             currentMes = currentMes.replace(parsedPayload.source, '');
-            if (trackDebug) setSocialParseDebug('parsed', `social_updates: ${dedupedParsedUpdates.updates.length}`);
+            if (trackDebug) {
+                const droppedSuffix = userFilteredUpdates.dropped.length > 0
+                    ? `, self dropped: ${userFilteredUpdates.dropped.length}`
+                    : '';
+                setSocialParseDebug('parsed', `social_updates: ${dedupedParsedUpdates.updates.length}${droppedSuffix}`);
+            }
         } catch(e) {}
     } else if (Array.isArray(existingUpdates) && existingUpdates.length > 0) {
         if (trackDebug) setSocialParseDebug('stored', `social_updates (saved): ${existingUpdates.length}`);
@@ -2190,7 +2352,7 @@ export async function handleNewCharacterInterviews(chars) {
     let madeChanges = false;
     const userName = SillyTavern.getContext().substituteParams('{{user}}');
 
-    for (const charName of chars) {
+    for (const charName of chars.filter(name => !isUserPersonaCharacterName(name))) {
         const result = await callPopup(`<h3>Новая связь: ${escapeHtml(charName)}</h3><p>Этот персонаж впервые появился в трекере.<br>Задайте базовое отношение к <strong>${escapeHtml(userName)}</strong> (от -100 до 100).<br><br><span style="font-size:12px; color:#94a3b8;">0 — незнакомец, 50 — друг, -50 — враг.</span></p>`, 'input', '0');
         
         if (result !== undefined && result !== null && result !== false) {
@@ -2214,6 +2376,7 @@ export function recalculateAllStats(isNewMessage = false) {
     const liveToastCandidates = [];
     const recentRelationshipUpdateIndexes = new Map();
     const recentRelationshipUpdates = [];
+    let needsSave = purgeUserPersonaTracking(scopeState);
     setCurrentCalculatedStats(newStats);
     currentStoryMoments.length = 0;
     const snapshotBaseline = scopeState.snapshot_baseline && typeof scopeState.snapshot_baseline === 'object'
@@ -2224,7 +2387,9 @@ export function recalculateAllStats(isNewMessage = false) {
     const baselineStoryMoments = Array.isArray(snapshotBaseline?.story_moments)
         ? cloneJsonData(snapshotBaseline.story_moments, []).slice(-30)
         : [];
-    baselineStoryMoments.forEach(moment => currentStoryMoments.push(moment));
+    baselineStoryMoments
+        .filter(moment => !isUserPersonaCharacterName(moment?.char || ''))
+        .forEach(moment => currentStoryMoments.push(moment));
     const baselineCharacters = snapshotBaseline?.characters && typeof snapshotBaseline.characters === 'object'
         ? snapshotBaseline.characters
         : {};
@@ -2236,7 +2401,7 @@ export function recalculateAllStats(isNewMessage = false) {
         : {};
     Object.entries(baselineCharacters).forEach(([charName, stats]) => {
         const safeName = String(charName || '').trim();
-        if (!safeName || isCollectiveEntityName(safeName)) return;
+        if (!safeName || isCollectiveEntityName(safeName) || isUserPersonaCharacterName(safeName)) return;
         if (Array.isArray(chat_metadata['bb_vn_ignored_chars']) && chat_metadata['bb_vn_ignored_chars'].includes(safeName)) return;
 
         const normalizedStats = normalizeImportedCharacterStats(stats);
@@ -2261,8 +2426,6 @@ export function recalculateAllStats(isNewMessage = false) {
     const lastAssistantIndex = Array.isArray(chat)
         ? [...chat].map((msg, idx) => ({ msg, idx })).reverse().find(item => item.msg && !item.msg.is_user)?.idx ?? -1
         : -1;
-
-    let needsSave = false;
 
     if (chat && chat.length > 0 && chat_metadata['bb_vn_char_traits'] && Object.keys(chat_metadata['bb_vn_char_traits']).length > 0) {
         const lastMsg = chat[chat.length - 1];
@@ -2306,6 +2469,12 @@ export function recalculateAllStats(isNewMessage = false) {
 
         const msgTraits = msg.extra?.bb_vn_char_traits_swipes?.[swipeId];
         if (msgTraits && Array.isArray(msgTraits)) {
+            const filteredTraits = msgTraits.filter(trait => !isUserPersonaCharacterName(trait?.charName || ''));
+            if (filteredTraits.length !== msgTraits.length) {
+                msgTraits.splice(0, msgTraits.length, ...filteredTraits);
+                needsSave = true;
+            }
+
             msgTraits.forEach(t => {
                 if (t.scope && !aliasSet.has(t.scope)) return;
                 if (!t.scope || t.scope !== scopeKey) {
@@ -2354,6 +2523,15 @@ export function recalculateAllStats(isNewMessage = false) {
         let activeUpdates = getStoredSwipeEntries(msg.extra?.bb_social_swipes, swipeId, allowLegacyFallback);
 
         if (activeUpdates && Array.isArray(activeUpdates)) {
+            const userFilteredActiveUpdates = filterUserPersonaSocialUpdates(activeUpdates);
+            if (userFilteredActiveUpdates.changed) {
+                activeUpdates.splice(0, activeUpdates.length, ...userFilteredActiveUpdates.updates);
+                needsSave = true;
+                if (idx === lastAssistantIndex && userFilteredActiveUpdates.dropped.length > 0) {
+                    setSocialParseDebug('filtered', 'Отброшено обновление на пользователя: VNE не создаёт карточку юзера');
+                }
+            }
+
             const dedupedActiveUpdates = dedupeSocialUpdateEntries(activeUpdates);
             if (dedupedActiveUpdates.changed) {
                 activeUpdates.splice(0, activeUpdates.length, ...dedupedActiveUpdates.updates);
@@ -2439,7 +2617,7 @@ export function recalculateAllStats(isNewMessage = false) {
                     update.name = charName;
                     needsSave = true;
                 }
-                if (!charName || isCollectiveEntityName(charName)) return;
+                if (!charName || isCollectiveEntityName(charName) || isUserPersonaCharacterName(charName)) return;
                 if (chat_metadata['bb_vn_ignored_chars'].includes(charName)) return;
 
                 let f_delta = parseImpactDelta(update.friendship_impact || update.impact_level);
