@@ -2198,8 +2198,10 @@ export function tryParseSocialUpdates(rawText) {
         const normalized = String(value || '').trim();
         return normalized || 'none';
     };
-    const readUpdatesFromBlock = (block) => {
-        const updateMatches = [...block.matchAll(/<bb-social-update\b[^>]*>([\s\S]*?)<\/bb-social-update>/gi)];
+    const readUpdatesFromBlock = (block, tagName = 'bb-social-update') => {
+        const escapedTagName = String(tagName || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (!escapedTagName) return [];
+        const updateMatches = [...block.matchAll(new RegExp(`<${escapedTagName}\\b[^>]*>([\\s\\S]*?)<\\/${escapedTagName}>`, 'gi'))];
         const updates = updateMatches.map(match => {
             const item = match[1] || '';
             const readTag = (tag) => {
@@ -2218,6 +2220,7 @@ export function tryParseSocialUpdates(rawText) {
 
         return updates;
     };
+    const readCharacterUpdatesFromBlock = (block) => readUpdatesFromBlock(block, 'character');
 
     const parseFromSource = (sourceText, preferOriginalSource = '') => {
         const directBlockMatches = [...sourceText.matchAll(/<bb-social-updates\b[^>]*>[\s\S]*?<\/bb-social-updates>/gi)];
@@ -2246,6 +2249,14 @@ export function tryParseSocialUpdates(rawText) {
                         source: preferOriginalSource || updatesBlockMatch[0],
                     };
                 }
+            }
+
+            const characterUpdates = readCharacterUpdatesFromBlock(hiddenHtml);
+            if (characterUpdates.length > 0) {
+                return {
+                    parsed: { social_updates: characterUpdates },
+                    source: preferOriginalSource || hiddenHtml,
+                };
             }
         }
 

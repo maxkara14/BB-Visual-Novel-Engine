@@ -44,6 +44,7 @@ CRITICAL RULES:
 
 5. NEVER wrap any other part of the assistant reply in hidden HTML. Only the social block above can be hidden.
 6. Do not hide, alter, or rewrite user-provided regex, code, JSON, or text fragments.
+6a. NEVER replace <bb-social-updates> or <bb-social-update> with alternative tags such as <character>, <relationship>, or <update>.
 7. Record a relationship update ONLY when {{user}} created a genuinely NEW relational beat in this turn. Ongoing presence in the same room, continued comfort, repeated closeness, or the same unresolved mood is NOT a new shift by itself.
 8. If this turn only continues the same emotional beat as the previous turns, prefer "none" impacts instead of restating the same reason.
 9. Never repeat the same <reason> on consecutive turns for the same character with only a different <emotion>. If the cause has not meaningfully changed, do not describe it as a new update.
