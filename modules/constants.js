@@ -48,6 +48,7 @@ CRITICAL RULES:
 7. Record a relationship update ONLY when {{user}} created a genuinely NEW relational beat in this turn. Ongoing presence in the same room, continued comfort, repeated closeness, or the same unresolved mood is NOT a new shift by itself.
 8. If this turn only continues the same emotional beat as the previous turns, prefer "none" impacts instead of restating the same reason.
 9. Never repeat the same <reason> on consecutive turns for the same character with only a different <emotion>. If the cause has not meaningfully changed, do not describe it as a new update.
+10. The legacy tag <role_dynamic> is NOT the character's job, title, class, or self-image. It is ONLY how this character labels {{user}} in their mind.
 
 HTML TAG FIELDS (STRICT):
 - <name> Concrete character name. (e.g., "Alex"). No collective nouns.
@@ -57,7 +58,9 @@ HTML TAG FIELDS (STRICT):
 - <romance_impact> Same scale as above. STRICT RULE: Keep "none" for casual/combat/platonic scenes.
 - If the character genuinely likes, welcomes, enjoys, or is emotionally drawn to {{user}}'s action, do NOT lower friendship/trust at the same time as a positive romance shift.
 - Use friendship negative + romance positive ONLY for clearly conflicted or dark attraction: fear mixed with desire, dangerous fascination, toxic obsession, shame, manipulation, coercion, or "drawn in despite the harm".
-- <role_dynamic> 1-2 words describing {{user}}'s CURRENT role to them right now (e.g., "\u043e\u043f\u0430\u0441\u043d\u044b\u0439 \u0441\u043e\u044e\u0437\u043d\u0438\u043a", "\u0441\u043a\u0440\u044b\u0442\u0430\u044f \u0443\u0433\u0440\u043e\u0437\u0430", "\u043d\u0430\u0434\u0451\u0436\u043d\u044b\u0439 \u0434\u0440\u0443\u0433").
+- <role_dynamic> 1-2 words describing {{user}}'s CURRENT relationship label FROM THIS CHARACTER'S POINT OF VIEW (e.g., "\u043e\u043f\u0430\u0441\u043d\u044b\u0439 \u0441\u043e\u044e\u0437\u043d\u0438\u043a", "\u0441\u043a\u0440\u044b\u0442\u0430\u044f \u0443\u0433\u0440\u043e\u0437\u0430", "\u043d\u0430\u0434\u0451\u0436\u043d\u044b\u0439 \u0434\u0440\u0443\u0433", "\u043e\u0431\u043c\u0430\u043d\u0443\u0432\u0448\u0438\u0439 \u0447\u0443\u0436\u0430\u043a").
+- <role_dynamic> MUST answer: "\u043a\u0435\u043c {{user}} \u0441\u0442\u0430\u043b \u0434\u043b\u044f <name>?" It must NOT answer: "\u043a\u0442\u043e <name> \u0442\u0430\u043a\u043e\u0439?" or "\u0447\u0442\u043e <name> \u0447\u0443\u0432\u0441\u0442\u0432\u0443\u0435\u0442?"
+- <role_dynamic> may include {{user}}'s actual persona role/profession ONLY if it describes how <name> sees {{user}}. For example, if {{user}} is truly a guard, "\u043d\u0435\u043d\u0430\u0434\u0451\u0436\u043d\u044b\u0439 \u0441\u0442\u0440\u0430\u0436" can be valid. If <name> is the guard, do NOT write "\u043e\u0431\u043c\u0430\u043d\u0443\u0442\u044b\u0439 \u0441\u0442\u0440\u0430\u0436"; write what {{user}} became to that guard instead, such as "\u043e\u0431\u043c\u0430\u043d\u0449\u0438\u043a", "\u0441\u043a\u0440\u044b\u0442\u0430\u044f \u0443\u0433\u0440\u043e\u0437\u0430", or "\u043f\u043e\u0434\u043e\u0437\u0440\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0439 \u0447\u0443\u0436\u0430\u043a".
 - <reason> Short Russian explanation of WHY the NEW impact happened in this turn. Describe the fresh trigger, not the general situation.
 - <emotion> 1-2 words describing the character's internal emotional state. If using two nouns, separate with a comma (e.g., "\u0448\u043e\u043a, \u043e\u0431\u0438\u0434\u0430", "\u0440\u0430\u0434\u043e\u0441\u0442\u044c").`;
 
