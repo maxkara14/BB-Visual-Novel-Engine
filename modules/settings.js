@@ -38,6 +38,16 @@ function renderMergeSuggestionsList() {
 
 window['bbRenderMergeSuggestionsList'] = renderMergeSuggestionsList;
 
+function normalizeDebugTraitText(raw = '', fallbackLabel = 'Черта') {
+    const text = String(raw || '').trim();
+    if (!text) return '';
+    return text.includes(':') ? text : `${fallbackLabel}: ${text}`;
+}
+
+function makeDebugEventId(prefix = 'debug') {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function makeSnapshotFilename() {
     const scopeKey = getCurrentPersonaScopeKey().replace(/[^\w-]+/g, '_');
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -68,7 +78,8 @@ export function injectDebugData(impact, isRomance = false) {
     if (!lastMsg.extra.bb_social_swipes) lastMsg.extra.bb_social_swipes = {};
     const sId = lastMsg.swipe_id || 0;
     if (!lastMsg.extra.bb_social_swipes[sId]) lastMsg.extra.bb_social_swipes[sId] = [];
-    lastMsg.extra.bb_social_swipes[sId].push({ name: charName, friendship_impact: isRomance ? "none" : impact, romance_impact: isRomance ? impact : "none", role_dynamic: "Дебаг", reason: jQuery('#bb-debug-reason').val(), emotion: "тест", scope: getCurrentPersonaScopeKey() });
+    const reason = String(jQuery('#bb-debug-reason').val() || '').trim() || (isRomance ? 'Дебаг-романтика' : 'Дебаг-доверие');
+    lastMsg.extra.bb_social_swipes[sId].push({ name: charName, friendship_impact: isRomance ? "none" : impact, romance_impact: isRomance ? impact : "none", role_dynamic: "", reason, emotion: "тест", debug_event: true, debug_id: makeDebugEventId('impact'), scope: getCurrentPersonaScopeKey() });
     saveChatDebounced(); recalculateAllStats(false); notifySuccess("Данные внедрены.");
 }
 
@@ -91,6 +102,8 @@ export function injectMixedDeepDebugData() {
         role_dynamic: "",
         reason: customReason || "Тянет вопреки опасности",
         emotion: "опасное влечение",
+        debug_event: true,
+        debug_id: makeDebugEventId('mixed'),
         scope: getCurrentPersonaScopeKey(),
     });
     saveChatDebounced();
@@ -459,7 +472,7 @@ export function setupExtensionSettings() {
 
     jQuery('#bb-dbg-add-trait-pos').on('click', function() {
         const charName = String(jQuery('#bb-debug-char-name').val()).trim();
-        const trait = String(jQuery('#bb-debug-reason').val()).trim();
+        const trait = normalizeDebugTraitText(jQuery('#bb-debug-reason').val(), 'Светлая черта');
         if(!charName || !trait) return notifyError("Укажите имя и текст черты!");
         const chat = SillyTavern.getContext().chat; if (!chat?.length) return;
         const lastMsg = chat[chat.length - 1]; const sId = lastMsg.swipe_id || 0;
@@ -471,7 +484,7 @@ export function setupExtensionSettings() {
 
     jQuery('#bb-dbg-add-trait-neg').on('click', function() {
         const charName = String(jQuery('#bb-debug-char-name').val()).trim();
-        const trait = String(jQuery('#bb-debug-reason').val()).trim();
+        const trait = normalizeDebugTraitText(jQuery('#bb-debug-reason').val(), 'Мрачная черта');
         if(!charName || !trait) return notifyError("Укажите имя и текст черты!");
         const chat = SillyTavern.getContext().chat; if (!chat?.length) return;
         const lastMsg = chat[chat.length - 1]; const sId = lastMsg.swipe_id || 0;
@@ -489,7 +502,7 @@ export function setupExtensionSettings() {
         const lastMsg = chat[chat.length - 1]; const sId = lastMsg.swipe_id || 0;
         if (!lastMsg.extra) lastMsg.extra = {}; if (!lastMsg.extra.bb_social_swipes) lastMsg.extra.bb_social_swipes = {};
         if (!lastMsg.extra.bb_social_swipes[sId]) lastMsg.extra.bb_social_swipes[sId] = [];
-        lastMsg.extra.bb_social_swipes[sId].push({ name: charName, impact_level: "none", role_dynamic: status, reason: "Ручная смена статуса", emotion: "дебаг", scope: getCurrentPersonaScopeKey() });
+        lastMsg.extra.bb_social_swipes[sId].push({ name: charName, friendship_impact: "none", romance_impact: "none", status, manual_status: true, reason: "Ручная смена статуса", emotion: "дебаг", scope: getCurrentPersonaScopeKey() });
         saveChatDebounced(); recalculateAllStats(false); notifySuccess("Статус изменен.");
     });
 
@@ -530,11 +543,18 @@ export function setupExtensionSettings() {
         if (scopeState.snapshot_baseline?.characters) delete scopeState.snapshot_baseline.characters[canonicalName];
         if (scopeState.snapshot_baseline?.char_bases) delete scopeState.snapshot_baseline.char_bases[canonicalName];
         if (scopeState.snapshot_baseline?.char_bases_romance) delete scopeState.snapshot_baseline.char_bases_romance[canonicalName];
+        const matchesTargetCharacter = (value = '') => {
+            const raw = String(value || '').trim();
+            if (!raw) return false;
+            if (raw === name || raw === canonicalName) return true;
+            const resolvedTarget = resolveCharacterIdentity(raw, { allowCreate: false, allowSuggestions: false });
+            return (resolvedTarget?.primaryName || raw) === canonicalName;
+        };
         const chat = SillyTavern.getContext().chat;
         if(chat) {
             chat.forEach(msg => {
-                if(msg.extra?.bb_social_swipes) { for(const sId in msg.extra.bb_social_swipes) { if(Array.isArray(msg.extra.bb_social_swipes[sId])) msg.extra.bb_social_swipes[sId] = msg.extra.bb_social_swipes[sId].filter(u => (u?.scope && !aliasSet.has(u.scope)) || u.name !== canonicalName); } }
-                if(msg.extra?.bb_vn_char_traits_swipes) { for(const sId in msg.extra.bb_vn_char_traits_swipes) { if(Array.isArray(msg.extra.bb_vn_char_traits_swipes[sId])) msg.extra.bb_vn_char_traits_swipes[sId] = msg.extra.bb_vn_char_traits_swipes[sId].filter(t => (t?.scope && !aliasSet.has(t.scope)) || t.charName !== canonicalName); } }
+                if(msg.extra?.bb_social_swipes) { for(const sId in msg.extra.bb_social_swipes) { if(Array.isArray(msg.extra.bb_social_swipes[sId])) msg.extra.bb_social_swipes[sId] = msg.extra.bb_social_swipes[sId].filter(u => (u?.scope && !aliasSet.has(u.scope)) || !matchesTargetCharacter(u.name)); } }
+                if(msg.extra?.bb_vn_char_traits_swipes) { for(const sId in msg.extra.bb_vn_char_traits_swipes) { if(Array.isArray(msg.extra.bb_vn_char_traits_swipes[sId])) msg.extra.bb_vn_char_traits_swipes[sId] = msg.extra.bb_vn_char_traits_swipes[sId].filter(t => (t?.scope && !aliasSet.has(t.scope)) || !matchesTargetCharacter(t.charName)); } }
             });
         }
         saveChatDebounced(); recalculateAllStats(false); notifySuccess("Персонаж обнулен.");

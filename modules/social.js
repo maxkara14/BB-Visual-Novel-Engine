@@ -806,6 +806,10 @@ function dedupeMemoryEntries(entries = []) {
 function buildSocialUpdateDedupKey(update = {}) {
     const name = normalizeCharacterLookupName(update?.name || '');
     if (!name) return '';
+    if (isDebugInjectedUpdate(update)) {
+        const debugId = String(update?.debug_id || '').trim();
+        if (debugId) return `debug|${debugId}`;
+    }
 
     return [
         name,
@@ -1321,15 +1325,42 @@ function escapeRegExp(value = '') {
     return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function scoreCharacterMatch(sourceName = '', candidateName = '') {
-    const source = normalizeCharacterLookupName(sourceName);
-    const candidate = normalizeCharacterLookupName(candidateName);
+function transliterateLatinToCyrillicApprox(value = '') {
+    const digraphs = [
+        ['shch', 'щ'], ['sch', 'щ'], ['yo', 'ё'], ['jo', 'ё'],
+        ['zh', 'ж'], ['kh', 'х'], ['ts', 'ц'], ['ch', 'ч'], ['sh', 'ш'],
+        ['yu', 'ю'], ['ju', 'ю'], ['ya', 'я'], ['ja', 'я'], ['ye', 'е'], ['je', 'е'],
+    ];
+    const letters = {
+        a: 'а', b: 'б', c: 'к', d: 'д', e: 'е', f: 'ф', g: 'г', h: 'х',
+        i: 'и', j: 'й', k: 'к', l: 'л', m: 'м', n: 'н', o: 'о', p: 'п',
+        q: 'к', r: 'р', s: 'с', t: 'т', u: 'у', v: 'в', w: 'в', x: 'кс',
+        y: 'й', z: 'з',
+    };
+
+    return String(value || '').replace(/[a-z]+/gi, segment => {
+        let text = segment.toLowerCase();
+        digraphs.forEach(([from, to]) => {
+            text = text.split(from).join(to);
+        });
+        return text.replace(/[a-z]/g, letter => letters[letter] || letter);
+    });
+}
+
+function getCharacterMatchKeys(name = '') {
+    const normalized = normalizeCharacterLookupName(name);
+    const transliterated = normalizeCharacterLookupName(transliterateLatinToCyrillicApprox(normalized));
+    return [...new Set([normalized, transliterated].filter(Boolean))];
+}
+
+function scoreNormalizedCharacterMatch(source = '', candidate = '') {
     if (!source || !candidate) return 0;
     if (source === candidate) return 1;
     if (source.includes(candidate) || candidate.includes(source)) {
         const minLen = Math.min(source.length, candidate.length);
         const maxLen = Math.max(source.length, candidate.length);
-        return minLen / maxLen;
+        const ratio = minLen / maxLen;
+        return minLen >= 4 ? Math.max(ratio, 0.72) : ratio;
     }
 
     const sourceTokens = new Set(source.split(' ').filter(Boolean));
@@ -1342,7 +1373,21 @@ function scoreCharacterMatch(sourceName = '', candidateName = '') {
     });
 
     const union = new Set([...sourceTokens, ...candidateTokens]).size || 1;
-    return overlap / union;
+    const jaccard = overlap / union;
+    const subsetCoverage = overlap / Math.min(sourceTokens.size, candidateTokens.size);
+    const hasMeaningfulSharedToken = [...sourceTokens].some(token => candidateTokens.has(token) && token.length >= 4);
+    if (subsetCoverage === 1 && hasMeaningfulSharedToken) return Math.max(jaccard, 0.72);
+    return jaccard;
+}
+
+function scoreCharacterMatch(sourceName = '', candidateName = '') {
+    let bestScore = 0;
+    getCharacterMatchKeys(sourceName).forEach(source => {
+        getCharacterMatchKeys(candidateName).forEach(candidate => {
+            bestScore = Math.max(bestScore, scoreNormalizedCharacterMatch(source, candidate));
+        });
+    });
+    return bestScore;
 }
 
 function rememberMergeSuggestion(scopeState, sourceName, targetEntry, score) {
@@ -1875,10 +1920,12 @@ function filterStaleSceneUpdates(activeUpdates = [], msg = null, idx = -1, chat 
     const meta = activeUpdates.map(update => {
         const rawName = String(update?.name || '').trim();
         const canonical = getCanonicalCharacterNameWithoutMutation(rawName, scopeState) || rawName;
+        const manualStatus = isManualStatusOverrideUpdate(update);
+        const debugInjected = isDebugInjectedUpdate(update);
         const known = isKnownTrackedCharacterName(rawName, scopeState);
         const directMention = rawName ? textContainsCharacterReference(currentText, rawName, scopeState) : false;
         const evidence = sceneScores.get(canonical) || 0;
-        return { update, rawName, canonical, known, directMention, evidence };
+        return { update, rawName, canonical, manualStatus, debugInjected, known, directMention, evidence };
     });
 
     const hasPotentialNewCharacter = meta.some(item => item.rawName && !item.known);
@@ -1889,6 +1936,7 @@ function filterStaleSceneUpdates(activeUpdates = [], msg = null, idx = -1, chat 
 
     const dropped = [];
     const filtered = meta.filter(item => {
+        if (item.manualStatus || item.debugInjected) return true;
         if (!item.known) return true;
         if (item.directMention || item.evidence > 0) return true;
         dropped.push(item);
@@ -2046,19 +2094,33 @@ function getAffinityTierKey(affinity = 0) {
 function resolveStableRelationshipStatus(candidateStatus = '', previousStatus = '', previousAffinity = 0, nextAffinity = 0, options = {}) {
     const incoming = sanitizeRelationshipStatus(candidateStatus);
     const previous = sanitizeRelationshipStatus(previousStatus);
+    const allowOverride = options?.allowOverride === true;
+    if (allowOverride) return incoming || previous || '';
+
     const hasIncoming = isValidUserFacingStatus(incoming);
     const hasPrevious = isValidUserFacingStatus(previous);
-    const allowOverride = options?.allowOverride === true;
 
     if (!hasIncoming) return hasPrevious ? previous : '';
     if (!hasPrevious) return incoming;
-    if (allowOverride) return incoming;
 
     const previousTierKey = getAffinityTierKey(previousAffinity);
     const nextTierKey = getAffinityTierKey(nextAffinity);
     if (previousTierKey !== nextTierKey) return incoming;
 
     return previous;
+}
+
+function isDebugInjectedUpdate(update = {}) {
+    return update?.debug_event === true || update?.debug_injected === true;
+}
+
+function isManualStatusOverrideUpdate(update = {}, currentEmotion = '') {
+    const reason = String(update?.reason || '').trim().toLowerCase();
+    const emotion = String(currentEmotion || update?.emotion || update?.moodlet || '').trim().toLowerCase();
+    return update?.manual_status === true
+        || update?.status_override === true
+        || reason === 'ручная смена статуса'
+        || emotion === 'дебаг';
 }
 
 function hasAmbivalentRomanceConflictMarkers(reason = '', emotion = '', status = '') {
@@ -2125,7 +2187,7 @@ function getRecordedImpactEntries(friendshipDelta = 0, romanceDelta = 0) {
     return impacts.filter(entry => selectedBySign.get(Math.sign(entry.delta)) === entry);
 }
 
-export function appendCharacterMemory(charStats, delta, reason, moodlet = '') {
+export function appendCharacterMemory(charStats, delta, reason, moodlet = '', options = {}) {
     if (!charStats || !reason || delta === 0) return;
     const bucket = getMemoryBucket(delta);
     if (!bucket) return;
@@ -2137,7 +2199,7 @@ export function appendCharacterMemory(charStats, delta, reason, moodlet = '') {
         moodlet: sanitizeMoodlet(moodlet),
     };
     const memoryKey = buildMemoryEntryDedupKey(memory);
-    const hasDuplicate = charStats.memories[bucket].some(entry => buildMemoryEntryDedupKey(entry) === memoryKey);
+    const hasDuplicate = !options?.allowDuplicate && charStats.memories[bucket].some(entry => buildMemoryEntryDedupKey(entry) === memoryKey);
     if (memoryKey && hasDuplicate) return;
 
     charStats.memories[bucket].push(memory);
@@ -2212,7 +2274,7 @@ export function tryParseSocialUpdates(rawText) {
                 name: readTag('name'),
                 friendship_impact: normalizeImpactField(readTag('friendship_impact')),
                 romance_impact: normalizeImpactField(readTag('romance_impact')),
-                role_dynamic: readTag('role_dynamic'),
+                role_dynamic: readTag('user_label') || readTag('role_dynamic') || readTag('relationship_label'),
                 reason: readTag('reason'),
                 emotion: readTag('emotion'),
             };
@@ -2648,12 +2710,14 @@ export function recalculateAllStats(isNewMessage = false) {
                 f_delta = normalizedMixedDelta.friendshipDelta;
                 r_delta = normalizedMixedDelta.romanceDelta;
 
-                const repeatedUpdateKey = buildRecentRelationshipRepeatKey(charName, f_delta, r_delta, update.reason || '');
+                const isManualStatusOverride = isManualStatusOverrideUpdate(update, currentEmotion);
+                const isDebugInjected = isDebugInjectedUpdate(update);
+                const repeatedUpdateKey = (isManualStatusOverride || isDebugInjected) ? '' : buildRecentRelationshipRepeatKey(charName, f_delta, r_delta, update.reason || '');
                 const previousRepeatIndex = repeatedUpdateKey ? recentRelationshipUpdateIndexes.get(repeatedUpdateKey) : undefined;
                 if (repeatedUpdateKey && previousRepeatIndex !== undefined && (idx - previousRepeatIndex) <= RECENT_RELATION_UPDATE_REPEAT_WINDOW) {
                     return;
                 }
-                const semanticallyRepeatedUpdate = findRecentSemanticallyRepeatedUpdate(recentRelationshipUpdates, {
+                const semanticallyRepeatedUpdate = (isManualStatusOverride || isDebugInjected) ? null : findRecentSemanticallyRepeatedUpdate(recentRelationshipUpdates, {
                     charName,
                     friendshipDelta: f_delta,
                     romanceDelta: r_delta,
@@ -2688,7 +2752,6 @@ export function recalculateAllStats(isNewMessage = false) {
                 if (newStats[charName].romance > 100) newStats[charName].romance = 100;
                 if (newStats[charName].romance < -100) newStats[charName].romance = -100;
 
-                const isManualStatusOverride = update.reason === 'Ручная смена статуса' || currentEmotion === 'дебаг';
                 const safeStatus = resolveStableRelationshipStatus(
                     currentStatus,
                     previousStatus,
@@ -2713,15 +2776,17 @@ export function recalculateAllStats(isNewMessage = false) {
                     });
                 }
                 if (repeatedUpdateKey) recentRelationshipUpdateIndexes.set(repeatedUpdateKey, idx);
-                recentRelationshipUpdates.push({
-                    idx,
-                    charName,
-                    friendshipDelta: f_delta,
-                    romanceDelta: r_delta,
-                    reason: update.reason || '',
-                });
+                if (!isManualStatusOverride && !isDebugInjected) {
+                    recentRelationshipUpdates.push({
+                        idx,
+                        charName,
+                        friendshipDelta: f_delta,
+                        romanceDelta: r_delta,
+                        reason: update.reason || '',
+                    });
+                }
                 recordedImpacts.forEach(impact => {
-                    appendCharacterMemory(newStats[charName], impact.delta, update.reason || "", moodlet);
+                    appendCharacterMemory(newStats[charName], impact.delta, update.reason || "", moodlet, { allowDuplicate: isDebugInjected });
                 });
 
                 const previousTier = getTierInfo(previousAffinity).label;
