@@ -1,6 +1,6 @@
 /* global jQuery, SillyTavern */
 import { extension_settings } from '../../../extensions.js';
-import { MODULE_NAME, DEFAULT_SETTINGS, normalizeVnReplyLength } from './modules/constants.js';
+import { MODULE_NAME, DEFAULT_SETTINGS, normalizeImpactSettings, normalizeVnReplyLength } from './modules/constants.js';
 import { 
     injectCombinedSocialPrompt, 
     recalculateAllStats, 
@@ -56,6 +56,7 @@ extension_settings[MODULE_NAME] = {
     ...(extension_settings[MODULE_NAME] || {}),
 };
 extension_settings[MODULE_NAME].vnReplyLength = normalizeVnReplyLength(extension_settings[MODULE_NAME].vnReplyLength);
+extension_settings[MODULE_NAME].impactValues = normalizeImpactSettings(extension_settings[MODULE_NAME].impactValues);
 
 // Привязываем коллбэк отрисовки HUD к логике пересчета статов
 setRenderHudCallback(renderSocialHud);

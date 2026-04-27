@@ -7,7 +7,7 @@ import {
     setCurrentCalculatedStats,
     setSocialParseDebug
 } from './state.js';
-import { MODULE_NAME, SOCIAL_PROMPT, TOAST_MAX_VISIBLE } from './constants.js';
+import { MODULE_NAME, SOCIAL_PROMPT, TOAST_MAX_VISIBLE, normalizeImpactSettings } from './constants.js';
 import { 
     sanitizeMoodlet, 
     getMemoryBucket, 
@@ -2621,15 +2621,7 @@ export function recalculateAllStats(isNewMessage = false) {
                 }
             }
 
-            const IMPACT_MAP = {
-                unforgivable: -20,
-                major_negative: -8,
-                minor_negative: -2,
-                none: 0,
-                minor_positive: 2,
-                major_positive: 8,
-                life_changing: 20,
-            };
+            const IMPACT_MAP = normalizeImpactSettings(extension_settings[MODULE_NAME]?.impactValues);
             const normalizeImpactToken = (value) => String(value || '')
                 .trim()
                 .toLowerCase()

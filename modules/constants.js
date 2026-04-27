@@ -1,4 +1,13 @@
 export const MODULE_NAME = "BB-Visual-Novel";
+export const DEFAULT_IMPACT_VALUES = {
+    unforgivable: -20,
+    major_negative: -8,
+    minor_negative: -2,
+    none: 0,
+    minor_positive: 2,
+    major_positive: 8,
+    life_changing: 20,
+};
 export const DEFAULT_SETTINGS = {
     autoSend: true,
     autoGen: false,
@@ -9,6 +18,7 @@ export const DEFAULT_SETTINGS = {
     useMacro: false,
     emotionalChoiceFraming: true,
     vnReplyLength: 'medium',
+    impactValues: { ...DEFAULT_IMPACT_VALUES },
 };
 
 export function normalizeVnReplyLength(value = '') {
@@ -17,6 +27,22 @@ export function normalizeVnReplyLength(value = '') {
         return normalized;
     }
     return DEFAULT_SETTINGS.vnReplyLength;
+}
+
+export function normalizeImpactValue(value, fallback = 0) {
+    const parsed = parseInt(value, 10);
+    if (Number.isNaN(parsed)) return fallback;
+    return Math.max(-100, Math.min(100, parsed));
+}
+
+export function normalizeImpactSettings(value = {}) {
+    const source = value && typeof value === 'object' ? value : {};
+    return Object.fromEntries(
+        Object.entries(DEFAULT_IMPACT_VALUES).map(([key, fallback]) => [
+            key,
+            normalizeImpactValue(source[key], fallback),
+        ]),
+    );
 }
 
 export const SOCIAL_PROMPT = `[SYSTEM INSTRUCTION: VISUAL NOVEL ENGINE]
