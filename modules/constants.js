@@ -18,7 +18,8 @@ export const DEFAULT_SETTINGS = {
     useMacro: false,
     emotionalChoiceFraming: true,
     vnReplyLength: 'medium',
-    impactValues: { ...DEFAULT_IMPACT_VALUES },
+    friendshipImpactValues: { ...DEFAULT_IMPACT_VALUES },
+    romanceImpactValues: { ...DEFAULT_IMPACT_VALUES },
 };
 
 export function normalizeVnReplyLength(value = '') {
@@ -43,6 +44,15 @@ export function normalizeImpactSettings(value = {}) {
             normalizeImpactValue(source[key], fallback),
         ]),
     );
+}
+
+export function resolveImpactScaleSettings(settings = {}) {
+    const source = settings && typeof settings === 'object' ? settings : {};
+    const legacyImpactValues = normalizeImpactSettings(source.impactValues);
+    return {
+        friendshipImpactValues: normalizeImpactSettings(source.friendshipImpactValues ?? legacyImpactValues),
+        romanceImpactValues: normalizeImpactSettings(source.romanceImpactValues ?? legacyImpactValues),
+    };
 }
 
 export const SOCIAL_PROMPT = `[SYSTEM INSTRUCTION: VISUAL NOVEL ENGINE]

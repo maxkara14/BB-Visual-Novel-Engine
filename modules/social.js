@@ -2621,16 +2621,17 @@ export function recalculateAllStats(isNewMessage = false) {
                 }
             }
 
-            const IMPACT_MAP = normalizeImpactSettings(extension_settings[MODULE_NAME]?.impactValues);
+            const FRIENDSHIP_IMPACT_MAP = normalizeImpactSettings(extension_settings[MODULE_NAME]?.friendshipImpactValues);
+            const ROMANCE_IMPACT_MAP = normalizeImpactSettings(extension_settings[MODULE_NAME]?.romanceImpactValues);
             const normalizeImpactToken = (value) => String(value || '')
                 .trim()
                 .toLowerCase()
                 .replace(/\s+/g, '_')
                 .replace(/-/g, '_');
-            const parseImpactDelta = (rawImpact) => {
+            const parseImpactDelta = (rawImpact, impactMap) => {
                 const token = normalizeImpactToken(rawImpact);
                 if (!token) return 0;
-                if (Object.prototype.hasOwnProperty.call(IMPACT_MAP, token)) return IMPACT_MAP[token];
+                if (Object.prototype.hasOwnProperty.call(impactMap, token)) return impactMap[token];
 
                 const aliases = {
                     neutral: 'none',
@@ -2656,8 +2657,8 @@ export function recalculateAllStats(isNewMessage = false) {
                     отсутствует: 'none',
                 };
                 const normalizedAlias = aliases[token];
-                if (normalizedAlias && Object.prototype.hasOwnProperty.call(IMPACT_MAP, normalizedAlias)) {
-                    return IMPACT_MAP[normalizedAlias];
+                if (normalizedAlias && Object.prototype.hasOwnProperty.call(impactMap, normalizedAlias)) {
+                    return impactMap[normalizedAlias];
                 }
 
                 const numeric = parseInt(token, 10);
@@ -2685,8 +2686,8 @@ export function recalculateAllStats(isNewMessage = false) {
                 if (!charName || isCollectiveEntityName(charName) || isUserPersonaCharacterName(charName)) return;
                 if (chat_metadata['bb_vn_ignored_chars'].includes(charName)) return;
 
-                let f_delta = parseImpactDelta(update.friendship_impact || update.impact_level);
-                let r_delta = parseImpactDelta(update.romance_impact || update.romantic_impact || update.love_impact);
+                let f_delta = parseImpactDelta(update.friendship_impact || update.impact_level, FRIENDSHIP_IMPACT_MAP);
+                let r_delta = parseImpactDelta(update.romance_impact || update.romantic_impact || update.love_impact, ROMANCE_IMPACT_MAP);
                 if (!chat_metadata['bb_vn_platonic_chars']) chat_metadata['bb_vn_platonic_chars'] = [];
                 if (chat_metadata['bb_vn_platonic_chars'].includes(charName)) r_delta = 0;
 

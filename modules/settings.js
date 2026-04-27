@@ -1,7 +1,7 @@
  /* global SillyTavern */
 import { chat_metadata, saveChatDebounced, saveSettingsDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
-import { MODULE_NAME, normalizeImpactSettings, normalizeImpactValue, normalizeVnReplyLength } from './constants.js';
+import { MODULE_NAME, normalizeImpactSettings, normalizeImpactValue, normalizeVnReplyLength, resolveImpactScaleSettings } from './constants.js';
 import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog, bindActivePersonaState, getCurrentPersonaScopeKey, mergeCharacterRecords, resolveCharacterIdentity, exportActivePersonaSnapshot, importActivePersonaSnapshot, clearActivePersonaSnapshot } from './social.js';
 import { notifySuccess, notifyInfo, notifyError, showHudToast } from './toasts.js';
 import { restoreVNOptions, clearSavedVNOptions } from './generator.js';
@@ -14,6 +14,18 @@ const IMPACT_SETTING_FIELDS = [
     { key: 'minor_positive', token: 'minor_positive', title: 'Слабый плюс', hint: 'Лёгкое улучшение отношения' },
     { key: 'major_positive', token: 'major_positive', title: 'Сильный плюс', hint: 'Хорошо заметный рост' },
     { key: 'life_changing', token: 'life_changing', title: 'Судьбоносный плюс', hint: 'Крупный переломный сдвиг' },
+];
+const IMPACT_SCALE_GROUPS = [
+    {
+        key: 'friendshipImpactValues',
+        title: '🤝 Шкала дружбы',
+        note: 'Меняет только доверие, лояльность, тепло и социальную дистанцию.',
+    },
+    {
+        key: 'romanceImpactValues',
+        title: '💖 Шкала романтики',
+        note: 'Меняет только влечение, искру, личную тягу и романтическое охлаждение.',
+    },
 ];
 
 function renderMergeSuggestionsList() {
@@ -186,9 +198,8 @@ export function setupExtensionSettings() {
     
     const s = extension_settings[MODULE_NAME];
     const selectedReplyLength = normalizeVnReplyLength(s.vnReplyLength);
-    const impactValues = normalizeImpactSettings(s.impactValues);
-    s.impactValues = impactValues;
-    const impactFieldsHtml = IMPACT_SETTING_FIELDS.map(field => `
+    Object.assign(s, resolveImpactScaleSettings(s));
+    const buildImpactFieldsHtml = (scaleKey, values) => IMPACT_SETTING_FIELDS.map(field => `
         <div style="display:grid; grid-template-columns:minmax(0, 1fr) 88px; gap:8px; align-items:center; padding:10px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05);">
             <div style="display:flex; flex-direction:column; gap:3px; min-width:0;">
                 <span style="font-size:12px; color:#e2e8f0; font-weight:700;">${field.title}</span>
@@ -199,13 +210,28 @@ export function setupExtensionSettings() {
                 type="number"
                 inputmode="numeric"
                 class="text_pole bb-vn-impact-input"
+                data-impact-scale="${scaleKey}"
                 data-impact-key="${field.key}"
                 min="-100"
                 max="100"
                 step="1"
-                value="${impactValues[field.key]}"
+                value="${values[field.key]}"
                 style="text-align:center; font-weight:700;"
             >
+        </div>
+    `).join('');
+    const impactGroupsHtml = IMPACT_SCALE_GROUPS.map(group => `
+        <div class="inline-drawer" style="margin-top: 8px;">
+            <div class="inline-drawer-toggle inline-drawer-header" onclick="$(this).parent().toggleClass('open'); $(this).find('.fa-chevron-down').toggleClass('up down');">
+                <b>${group.title}</b>
+                <div class="inline-drawer-icon fa-solid fa-chevron-down down"></div>
+            </div>
+            <div class="inline-drawer-content" style="padding: 10px; background: rgba(255,255,255,0.025); border-radius: 8px; margin-top: 8px; display: none; flex-direction: column; gap: 8px;">
+                <span style="font-size: 11px; color: #94a3b8; line-height: 1.45;">${group.note}</span>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    ${buildImpactFieldsHtml(group.key, normalizeImpactSettings(s[group.key]))}
+                </div>
+            </div>
         </div>
     `).join('');
     const settingsHtml = `
@@ -250,12 +276,10 @@ export function setupExtensionSettings() {
                         <div class="inline-drawer-icon fa-solid fa-chevron-down down"></div>
                     </div>
                     <div class="inline-drawer-content" style="padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; margin-top: 8px; display: none; flex-direction: column; gap: 8px;">
-                        <span style="font-size: 11px; color: #94a3b8; line-height: 1.45;">Здесь вы можете задать свои значения для шкалы отношений. После изменения шкалы отношения сразу пересчитываются по всей истории.</span>
-                        <div style="display:flex; flex-direction:column; gap:8px;">
-                            ${impactFieldsHtml}
-                        </div>
+                        <span style="font-size: 11px; color: #94a3b8; line-height: 1.45;">Здесь вы можете задать свои значения для шкал дружбы и романтики. После изменения отношения сразу пересчитываются по всей истории.</span>
+                        ${impactGroupsHtml}
                         <button id="bb-vn-impact-reset" class="menu_button" style="color:#cbd5e1; border-color:rgba(148,163,184,0.28);">
-                            <i class="fa-solid fa-rotate-left"></i>&ensp; Сбросить значения по умолчанию
+                            <i class="fa-solid fa-rotate-left"></i>&ensp; Сбросить обе шкалы
                         </button>
                     </div>
                 </div>
@@ -466,12 +490,13 @@ export function setupExtensionSettings() {
     });
     jQuery('#bb-vn-cfg-usemacro').on('change', function() { extension_settings[MODULE_NAME].useMacro = jQuery(this).is(':checked'); saveSettingsDebounced(); injectCombinedSocialPrompt(); });
     jQuery('.bb-vn-impact-input').on('change', function() {
+        const scaleKey = String(jQuery(this).data('impact-scale') || '').trim();
         const key = String(jQuery(this).data('impact-key') || '').trim();
-        if (!key) return;
-        const currentImpactValues = normalizeImpactSettings(extension_settings[MODULE_NAME].impactValues);
+        if (!scaleKey || !key) return;
+        const currentImpactValues = normalizeImpactSettings(extension_settings[MODULE_NAME][scaleKey]);
         const fallback = currentImpactValues[key];
         const normalized = normalizeImpactValue(jQuery(this).val(), fallback);
-        extension_settings[MODULE_NAME].impactValues = {
+        extension_settings[MODULE_NAME][scaleKey] = {
             ...currentImpactValues,
             [key]: normalized,
         };
@@ -480,14 +505,17 @@ export function setupExtensionSettings() {
         recalculateAllStats(false);
     });
     jQuery('#bb-vn-impact-reset').on('click', function() {
-        const normalizedDefaults = normalizeImpactSettings();
-        extension_settings[MODULE_NAME].impactValues = normalizedDefaults;
-        IMPACT_SETTING_FIELDS.forEach(field => {
-            jQuery(`.bb-vn-impact-input[data-impact-key="${field.key}"]`).val(normalizedDefaults[field.key]);
+        const defaults = resolveImpactScaleSettings();
+        extension_settings[MODULE_NAME].friendshipImpactValues = defaults.friendshipImpactValues;
+        extension_settings[MODULE_NAME].romanceImpactValues = defaults.romanceImpactValues;
+        IMPACT_SCALE_GROUPS.forEach(group => {
+            IMPACT_SETTING_FIELDS.forEach(field => {
+                jQuery(`.bb-vn-impact-input[data-impact-scale="${group.key}"][data-impact-key="${field.key}"]`).val(defaults[group.key][field.key]);
+            });
         });
         saveSettingsDebounced();
         recalculateAllStats(false);
-        notifySuccess("Шкала отношений сброшена.");
+        notifySuccess("Обе шкалы сброшены.");
     });
 
     jQuery('#bb-vn-btn-connect').on('click', async function() {
