@@ -991,6 +991,7 @@ ${lastRaw}`;
 }
 
 export function getActiveChoiceContext() {
+    if (extension_settings[MODULE_NAME]?.disableRelationshipTracker === true) return null;
     const context = SillyTavern.getContext?.();
     const chat = Array.isArray(context?.chat) ? context.chat : [];
     const pendingChoiceContext = chat_metadata['bb_vn_pending_choice_context'];
@@ -1017,6 +1018,7 @@ export function getActiveChoiceContext() {
 }
 
 export function buildChoiceContextPrompt() {
+    if (extension_settings[MODULE_NAME]?.disableRelationshipTracker === true) return '';
     const choiceContext = getActiveChoiceContext();
     if (!choiceContext || !choiceContext.intent) return '';
     const useEmotionalChoiceFraming = !!extension_settings[MODULE_NAME]?.emotionalChoiceFraming;
@@ -1059,6 +1061,7 @@ EXECUTION PROTOCOL:
 }
 
 export function tryBindPendingChoiceContextToMessage(msg) {
+    if (extension_settings[MODULE_NAME]?.disableRelationshipTracker === true) return false;
     const pendingChoiceContext = chat_metadata['bb_vn_pending_choice_context'];
     if (!pendingChoiceContext || !msg || !msg.is_user) return false;
     if (msg.extra?.bb_vn_choice_context) return false;

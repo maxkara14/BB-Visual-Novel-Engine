@@ -10,7 +10,6 @@ const IMPACT_SETTING_FIELDS = [
     { key: 'unforgivable', token: 'unforgivable', title: 'Критический минус', hint: 'Тяжёлый удар по доверию или влечению' },
     { key: 'major_negative', token: 'major_negative', title: 'Сильный минус', hint: 'Заметное ухудшение за один ход' },
     { key: 'minor_negative', token: 'minor_negative', title: 'Слабый минус', hint: 'Небольшая негативная реакция' },
-    { key: 'none', token: 'none', title: 'Без изменений', hint: 'Нейтральный результат, без сдвига' },
     { key: 'minor_positive', token: 'minor_positive', title: 'Слабый плюс', hint: 'Лёгкое улучшение отношения' },
     { key: 'major_positive', token: 'major_positive', title: 'Сильный плюс', hint: 'Хорошо заметный рост' },
     { key: 'life_changing', token: 'life_changing', title: 'Судьбоносный плюс', hint: 'Крупный переломный сдвиг' },
@@ -200,11 +199,11 @@ export function setupExtensionSettings() {
     const selectedReplyLength = normalizeVnReplyLength(s.vnReplyLength);
     Object.assign(s, resolveImpactScaleSettings(s));
     const buildImpactFieldsHtml = (scaleKey, values) => IMPACT_SETTING_FIELDS.map(field => `
-        <div style="display:grid; grid-template-columns:minmax(0, 1fr) 88px; gap:8px; align-items:center; padding:10px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05);">
-            <div style="display:flex; flex-direction:column; gap:3px; min-width:0;">
-                <span style="font-size:12px; color:#e2e8f0; font-weight:700;">${field.title}</span>
-                <span style="font-size:10px; color:#94a3b8; letter-spacing:0.2px;">${field.token}</span>
-                <span style="font-size:11px; color:#64748b; line-height:1.4;">${field.hint}</span>
+        <div class="bb-vn-impact-row">
+            <div class="bb-vn-impact-copy">
+                <span class="bb-vn-impact-title">${field.title}</span>
+                <span class="bb-vn-impact-token">${field.token}</span>
+                <span class="bb-vn-impact-hint">${field.hint}</span>
             </div>
             <input
                 type="number"
@@ -216,19 +215,18 @@ export function setupExtensionSettings() {
                 max="100"
                 step="1"
                 value="${values[field.key]}"
-                style="text-align:center; font-weight:700;"
             >
         </div>
     `).join('');
     const impactGroupsHtml = IMPACT_SCALE_GROUPS.map(group => `
-        <div class="inline-drawer" style="margin-top: 8px;">
-            <div class="inline-drawer-toggle inline-drawer-header" onclick="$(this).parent().toggleClass('open'); $(this).find('.fa-chevron-down').toggleClass('up down');">
+        <div class="inline-drawer bb-vn-settings-drawer">
+            <div class="inline-drawer-toggle inline-drawer-header">
                 <b>${group.title}</b>
                 <div class="inline-drawer-icon fa-solid fa-chevron-down down"></div>
             </div>
-            <div class="inline-drawer-content" style="padding: 10px; background: rgba(255,255,255,0.025); border-radius: 8px; margin-top: 8px; display: none; flex-direction: column; gap: 8px;">
-                <span style="font-size: 11px; color: #94a3b8; line-height: 1.45;">${group.note}</span>
-                <div style="display:flex; flex-direction:column; gap:8px;">
+            <div class="inline-drawer-content bb-vn-settings-drawer-content">
+                <span class="bb-vn-settings-note">${group.note}</span>
+                <div class="bb-vn-impact-list">
                     ${buildImpactFieldsHtml(group.key, normalizeImpactSettings(s[group.key]))}
                 </div>
             </div>
@@ -237,64 +235,64 @@ export function setupExtensionSettings() {
     const settingsHtml = `
         <div id="bb-social-settings-wrapper" class="inline-drawer">
             <div class="inline-drawer-toggle inline-drawer-header"><b>💖 BB Visual Novel Engine</b><div class="inline-drawer-icon fa-solid fa-chevron-down down"></div></div>
-            <div class="inline-drawer-content" style="padding: 10px;">
-                <span style="font-size: 13px; color: #cbd5e1; font-weight:bold;">Настройки Интерактивного Кино:</span>
-                <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
-                    <label class="checkbox_label"><input type="checkbox" id="bb-vn-cfg-autosend" ${s.autoSend ? 'checked' : ''}><span>Авто-отправка при выборе</span></label>
-                    <label class="checkbox_label"><input type="checkbox" id="bb-vn-cfg-autogen" ${s.autoGen ? 'checked' : ''}><span>Авто-показ вариантов действий</span></label>
-                    <label class="checkbox_label"><input type="checkbox" id="bb-vn-cfg-emotional-choice" ${s.emotionalChoiceFraming ? 'checked' : ''}><span>Emotional Choice Framing</span></label>
-                    <div style="display:flex; flex-direction:column; gap:6px; margin-top: 4px; padding: 10px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
-                        <label for="bb-vn-cfg-reply-length" style="font-size: 12px; color: #cbd5e1; font-weight: 700;">Длина VN-ответа</label>
+            <div class="inline-drawer-content bb-vn-settings-shell">
+                <span class="bb-vn-settings-intro">Настройки Интерактивного Кино</span>
+                <div class="bb-vn-settings-card">
+                    <div class="bb-vn-settings-toggle-grid">
+                        <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-autosend" ${s.autoSend ? 'checked' : ''}><span>Авто-отправка при выборе</span></label>
+                        <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-autogen" ${s.autoGen ? 'checked' : ''}><span>Авто-показ вариантов действий</span></label>
+                        <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-emotional-choice" ${s.emotionalChoiceFraming ? 'checked' : ''}><span>Тон и прогноз вариантов</span></label>
+                        <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-disable-tracker" ${s.disableRelationshipTracker ? 'checked' : ''}><span>Отключить трекер отношений</span></label>
+                    </div>
+                    <div class="bb-vn-settings-panel">
+                        <label for="bb-vn-cfg-reply-length" class="bb-vn-settings-panel-label">Длина VN-ответа</label>
                         <select id="bb-vn-cfg-reply-length" class="text_pole">
                             <option value="short" ${selectedReplyLength === 'short' ? 'selected' : ''}>Короткий - быстрый темп</option>
                             <option value="medium" ${selectedReplyLength === 'medium' ? 'selected' : ''}>Средний - баланс</option>
                             <option value="long" ${selectedReplyLength === 'long' ? 'selected' : ''}>Длинный - больше сцены</option>
                         </select>
-                        <span style="font-size: 11px; color: #94a3b8; line-height: 1.45;">Влияет и на длину вариантов действий, и на то, насколько активно VN продвигает следующий ответ.</span>
+                        <span class="bb-vn-settings-note">Влияет и на длину вариантов действий, и на то, насколько активно VN продвигает следующий ответ.</span>
                     </div>
                 </div>
-                <hr style="border-color: rgba(255,255,255,0.1); margin: 10px 0;">
-                <span style="font-size: 13px; color: #cbd5e1; font-weight:bold;">⚡ Custom API:</span>
-                <label class="checkbox_label" style="margin-top: 5px;"><input type="checkbox" id="bb-vn-cfg-usecustom" ${s.useCustomApi ? 'checked' : ''}><span>Использовать свой API-ключ</span></label>
-                <div id="bb-vn-custom-api-block" style="display: ${s.useCustomApi ? 'flex' : 'none'}; flex-direction: column; gap: 8px; margin-top: 8px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
-                    <input type="text" id="bb-vn-cfg-url" class="text_pole" placeholder="URL" value="${s.customApiUrl || ''}">
-                    <input type="password" id="bb-vn-cfg-key" class="text_pole" placeholder="API Ключ" value="${s.customApiKey || ''}">
-                    <div id="bb-vn-custom-api-status" class="bb-custom-api-status is-idle">
-                        <span class="bb-custom-api-status-dot"></span>
-                        <span class="bb-custom-api-status-text">Подключение не проверено</span>
+                <div class="bb-vn-settings-card bb-vn-settings-card--accent">
+                    <span class="bb-vn-settings-section-title">⚡ Custom API</span>
+                    <label class="checkbox_label bb-vn-setting-pill bb-vn-setting-pill--single"><input type="checkbox" id="bb-vn-cfg-usecustom" ${s.useCustomApi ? 'checked' : ''}><span>Использовать свой API-ключ</span></label>
+                    <div id="bb-vn-custom-api-block" class="bb-vn-settings-stack" style="display: ${s.useCustomApi ? 'flex' : 'none'};">
+                        <input type="text" id="bb-vn-cfg-url" class="text_pole" placeholder="URL" value="${s.customApiUrl || ''}">
+                        <input type="password" id="bb-vn-cfg-key" class="text_pole" placeholder="API Ключ" value="${s.customApiKey || ''}">
+                        <div id="bb-vn-custom-api-status" class="bb-custom-api-status is-idle">
+                            <span class="bb-custom-api-status-dot"></span>
+                            <span class="bb-custom-api-status-text">Подключение не проверено</span>
+                        </div>
+                        <button id="bb-vn-btn-connect" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-plug"></i>&nbsp; Подключиться</button>
+                        <select id="bb-vn-cfg-model" class="text_pole" ${!s.customApiModel ? 'disabled' : ''}><option value="${s.customApiModel || ''}">${s.customApiModel || 'Модели не загружены'}</option></select>
                     </div>
-                    <button id="bb-vn-btn-connect" class="menu_button"><i class="fa-solid fa-plug"></i>&nbsp; Подключиться</button>
-                    <select id="bb-vn-cfg-model" class="text_pole" ${!s.customApiModel ? 'disabled' : ''}><option value="${s.customApiModel || ''}">${s.customApiModel || 'Модели не загружены'}</option></select>
                 </div>
-                <hr style="border-color: rgba(255,255,255,0.1); margin: 10px 0;">
-                <label class="checkbox_label"><input type="checkbox" id="bb-vn-cfg-usemacro" ${s.useMacro ? 'checked' : ''}><span>Использовать макрос {{bb_vn}}</span></label>
-                <hr style="border-color: rgba(255,255,255,0.1); margin: 10px 0;">
-                
-                <div class="inline-drawer">
-                    <div class="inline-drawer-toggle inline-drawer-header" onclick="$(this).parent().toggleClass('open'); $(this).find('.fa-chevron-down').toggleClass('up down');">
+                <label class="checkbox_label bb-vn-setting-pill bb-vn-setting-pill--single"><input type="checkbox" id="bb-vn-cfg-usemacro" ${s.useMacro ? 'checked' : ''}><span>Использовать макрос {{bb_vn}}</span></label>
+
+                <div class="inline-drawer bb-vn-settings-drawer">
+                    <div class="inline-drawer-toggle inline-drawer-header">
                         <b>🎚️ Кастомная шкала отношений</b>
                         <div class="inline-drawer-icon fa-solid fa-chevron-down down"></div>
                     </div>
-                    <div class="inline-drawer-content" style="padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; margin-top: 8px; display: none; flex-direction: column; gap: 8px;">
-                        <span style="font-size: 11px; color: #94a3b8; line-height: 1.45;">Здесь вы можете задать свои значения для шкал дружбы и романтики. После изменения отношения сразу пересчитываются по всей истории.</span>
+                    <div class="inline-drawer-content bb-vn-settings-drawer-content">
+                        <span class="bb-vn-settings-note">Здесь вы можете задать свои значения для шкал дружбы и романтики. После изменения отношения сразу пересчитываются по всей истории.</span>
                         ${impactGroupsHtml}
-                        <button id="bb-vn-impact-reset" class="menu_button" style="color:#cbd5e1; border-color:rgba(148,163,184,0.28);">
+                        <button id="bb-vn-impact-reset" class="menu_button bb-vn-settings-button bb-vn-settings-button--ghost">
                             <i class="fa-solid fa-rotate-left"></i>&ensp; Сбросить обе шкалы
                         </button>
                     </div>
                 </div>
 
-                <hr style="border-color: rgba(255,255,255,0.1); margin: 10px 0;">
-
-                <div class="inline-drawer">
-                    <div class="inline-drawer-toggle inline-drawer-header" onclick="$(this).parent().toggleClass('open'); $(this).find('.fa-chevron-down').toggleClass('up down');">
+                <div class="inline-drawer bb-vn-settings-drawer">
+                    <div class="inline-drawer-toggle inline-drawer-header">
                         <b>🛠️ Консоль Разработчика</b>
                         <div class="inline-drawer-icon fa-solid fa-chevron-down down"></div>
                     </div>
-                    <div class="inline-drawer-content" style="padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; margin-top: 8px; display: none; flex-direction: column; gap: 8px;">
+                    <div class="inline-drawer-content bb-vn-settings-drawer-content">
                         <input type="text" id="bb-debug-char-name" class="text_pole" placeholder="Имя персонажа">
                         <input type="text" id="bb-debug-reason" class="text_pole" placeholder="Текст причины" value="Дебаг-действие">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                        <div class="bb-vn-settings-actions-grid">
                             <button id="bb-dbg-add-pts" class="menu_button">➕ Дружба</button>
                             <button id="bb-dbg-sub-pts" class="menu_button">➖ Дружба</button>
                             <button id="bb-dbg-add-romance" class="menu_button" style="color:#f472b6; border-color:rgba(244,114,182,0.3);">💖 Романтика</button>
@@ -305,32 +303,33 @@ export function setupExtensionSettings() {
                             <button id="bb-dbg-add-trait-pos" class="menu_button" style="color:#86efac; border-color:rgba(74,222,128,0.3);">💎 Светлая черта</button>
                             <button id="bb-dbg-add-trait-neg" class="menu_button" style="color:#fca5a5; border-color:rgba(251,113,133,0.3);">💎 Мрачная черта</button>
                         </div>
-                        <button id="bb-dbg-set-status" class="menu_button" style="color:#93c5fd; border-color:rgba(147,197,253,0.3);">🔄 Изменить статус к вам</button>
-                        <hr style="border-color: rgba(255,255,255,0.05); margin: 4px 0;">
-                        <span style="font-size: 11px; color: #cbd5e1; font-weight:bold;">🧬 Слияние дубликатов:</span>
-                        <div style="display: flex; gap: 6px;"><input type="text" id="bb-dbg-merge-from" class="text_pole" placeholder="Кого" style="flex:1;"><input type="text" id="bb-dbg-merge-to" class="text_pole" placeholder="В кого" style="flex:1;"></div>
-                        <button id="bb-dbg-btn-merge" class="menu_button" style="color:#c084fc; border-color:rgba(192, 132, 252, 0.3);"><i class="fa-solid fa-code-merge"></i>&ensp; Слить в одного</button>
+                        <button id="bb-dbg-set-status" class="menu_button bb-vn-settings-button" style="color:#93c5fd; border-color:rgba(147,197,253,0.3);">🔄 Изменить статус к вам</button>
+                        <hr class="bb-vn-settings-divider">
+                        <span class="bb-vn-settings-section-title bb-vn-settings-section-title--small">🧬 Слияние дубликатов</span>
+                        <div class="bb-vn-settings-split"><input type="text" id="bb-dbg-merge-from" class="text_pole" placeholder="Кого"><input type="text" id="bb-dbg-merge-to" class="text_pole" placeholder="В кого"></div>
+                        <button id="bb-dbg-btn-merge" class="menu_button bb-vn-settings-button" style="color:#c084fc; border-color:rgba(192, 132, 252, 0.3);"><i class="fa-solid fa-code-merge"></i>&ensp; Слить в одного</button>
                         <div id="bb-dbg-merge-suggestions" style="display:flex; flex-direction:column; gap: 0; margin-top: 4px;"></div>
-                        <hr style="border-color: rgba(255,255,255,0.05); margin: 4px 0;">
-                        <button id="bb-dbg-reset-char" class="menu_button" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: #ef4444;">💀 Полностью обнулить персонажа</button>
-                        <button id="bb-dbg-toast" class="menu_button"><i class="fa-solid fa-bell"></i>&ensp; Рандомное уведомление</button>
+                        <hr class="bb-vn-settings-divider">
+                        <button id="bb-dbg-reset-char" class="menu_button bb-vn-settings-button" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: #ef4444;">💀 Полностью обнулить персонажа</button>
+                        <button id="bb-dbg-toast" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-bell"></i>&ensp; Рандомное уведомление</button>
                     </div>
                 </div>
 
-                <hr style="border-color: rgba(255,255,255,0.1); margin: 10px 0;">
-                <div style="display:flex; flex-direction:column; gap: 6px; margin-bottom: 10px; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.05);">
-                    <span style="font-size: 12px; color: #cbd5e1; font-weight:bold;">Снимок базы связей</span>
-                    <span style="font-size: 11px; color: #94a3b8; line-height: 1.45;">Экспорт сохраняет текущие связи, воспоминания, черты, журнал и дневник. Импорт подключает этот снимок как базу текущей персоны и продолжает считать только новые события.</span>
+                <div class="bb-vn-settings-card bb-vn-settings-card--snapshot">
+                    <span class="bb-vn-settings-section-title">Снимок базы связей</span>
+                    <span class="bb-vn-settings-note">Экспорт сохраняет текущие связи, воспоминания, черты, журнал и дневник. Импорт подключает этот снимок как базу текущей персоны и продолжает считать только новые события.</span>
                     <input type="file" id="bb-social-snapshot-file" accept=".json,application/json" style="display:none;">
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 6px;">
-                        <button id="bb-social-export-btn" class="menu_button"><i class="fa-solid fa-file-export"></i>&ensp; Экспорт</button>
-                        <button id="bb-social-import-btn" class="menu_button"><i class="fa-solid fa-file-import"></i>&ensp; Импорт</button>
+                    <div class="bb-vn-settings-actions-grid">
+                        <button id="bb-social-export-btn" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-file-export"></i>&ensp; Экспорт</button>
+                        <button id="bb-social-import-btn" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-file-import"></i>&ensp; Импорт</button>
                     </div>
-                    <button id="bb-social-clear-snapshot-btn" class="menu_button" style="width:100%; color:#fda4af; border-color:rgba(244,114,182,0.22);">Очистить snapshot-базу</button>
+                    <button id="bb-social-clear-snapshot-btn" class="menu_button bb-vn-settings-button" style="color:#fda4af; border-color:rgba(244,114,182,0.22);">Очистить snapshot-базу</button>
                 </div>
-                <button id="bb-social-restore-chars-btn" class="menu_button" style="width: 100%; margin-bottom: 5px;">Вернуть скрытых персонажей</button>
-                <button id="bb-social-clear-log-btn" class="menu_button" style="width: 100%; margin-bottom: 5px;">Очистить журнал</button>
-                <button id="bb-social-wipe-btn" class="menu_button" style="width: 100%; background: rgba(239, 68, 68, 0.2); color: #ef4444;">Сбросить историю</button>
+                <div class="bb-vn-settings-stack">
+                    <button id="bb-social-restore-chars-btn" class="menu_button bb-vn-settings-button">Вернуть скрытых персонажей</button>
+                    <button id="bb-social-clear-log-btn" class="menu_button bb-vn-settings-button">Очистить журнал</button>
+                    <button id="bb-social-wipe-btn" class="menu_button bb-vn-settings-button bb-vn-settings-button--danger">Сбросить историю</button>
+                </div>
             </div>
         </div>
     `;
@@ -457,6 +456,16 @@ export function setupExtensionSettings() {
         restoreVNOptions(false);
         injectCombinedSocialPrompt();
     });
+    jQuery('#bb-vn-cfg-disable-tracker').on('change', function() {
+        extension_settings[MODULE_NAME].disableRelationshipTracker = jQuery(this).is(':checked');
+        saveSettingsDebounced();
+        clearSavedVNOptions();
+        restoreVNOptions(false);
+        injectCombinedSocialPrompt();
+        recalculateAllStats(false);
+        if (typeof window.updateHudVisibility === 'function') window.updateHudVisibility();
+        if (typeof window.renderSocialHud === 'function') window.renderSocialHud();
+    });
     jQuery('#bb-vn-cfg-reply-length').on('change', function() {
         extension_settings[MODULE_NAME].vnReplyLength = normalizeVnReplyLength(jQuery(this).val());
         saveSettingsDebounced();
@@ -466,7 +475,13 @@ export function setupExtensionSettings() {
     });
     jQuery('#bb-vn-cfg-usecustom').on('change', function() { 
         const isChecked = jQuery(this).is(':checked'); extension_settings[MODULE_NAME].useCustomApi = isChecked;
-        if (isChecked) jQuery('#bb-vn-custom-api-block').slideDown(200); else jQuery('#bb-vn-custom-api-block').slideUp(200);
+        if (isChecked) {
+            jQuery('#bb-vn-custom-api-block').stop(true, true).css('display', 'none').slideDown(200, function() {
+                jQuery(this).css('display', 'flex');
+            });
+        } else {
+            jQuery('#bb-vn-custom-api-block').stop(true, true).slideUp(200);
+        }
         if (!isChecked) lastVerifiedCustomApiFingerprint = '';
         clearCustomApiRuntimeState();
         saveSettingsDebounced();

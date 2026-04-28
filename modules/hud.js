@@ -669,6 +669,14 @@ function buildCharacterCardHtml(charName = '') {
 
 export function renderSocialHud() {
     bindActivePersonaState();
+    if (extension_settings[MODULE_NAME]?.disableRelationshipTracker === true) {
+        const charsBox = document.getElementById('bb-hud-chars');
+        const momentsBox = document.getElementById('bb-hud-moments');
+        if (charsBox) charsBox.innerHTML = '<div class="bb-empty-hud">Трекер отношений отключён.</div>';
+        if (momentsBox) momentsBox.innerHTML = '<div class="bb-empty-hud">Трекер отношений отключён.</div>';
+        syncToastContainerWithHud();
+        return;
+    }
     const context = SillyTavern.getContext?.();
     const chat = Array.isArray(context?.chat) ? context.chat : [];
     const lastChatMessage = chat.length > 0 ? chat[chat.length - 1] : null;
@@ -1186,6 +1194,11 @@ export function renderSocialHud() {
 }
 
 export function updateHudVisibility() {
+    if (extension_settings[MODULE_NAME]?.disableRelationshipTracker === true) {
+        jQuery('#bb-social-hud-toggle, #bb-social-hud-mobile-launcher').hide();
+        closeSocialHud();
+        return;
+    }
     const context = SillyTavern.getContext();
     if (!hasContextInitialized(context)) {
         if (!hudVisibilityRetryTimer) {

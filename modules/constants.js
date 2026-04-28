@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS = {
     customApiModel: '',
     useMacro: false,
     emotionalChoiceFraming: true,
+    disableRelationshipTracker: false,
     vnReplyLength: 'medium',
     friendshipImpactValues: { ...DEFAULT_IMPACT_VALUES },
     romanceImpactValues: { ...DEFAULT_IMPACT_VALUES },

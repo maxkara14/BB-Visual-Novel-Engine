@@ -44,6 +44,10 @@ function hashString(input = '') {
     return Math.abs(hash >>> 0).toString(36);
 }
 
+function isRelationshipTrackerDisabled() {
+    return extension_settings[MODULE_NAME]?.disableRelationshipTracker === true;
+}
+
 const shownLiveToastKeys = [];
 const promptedMergeSuggestionKeys = new Set();
 const pendingMergeSuggestionQueue = [];
@@ -2025,6 +2029,10 @@ export function getCombinedSocial() {
 
 export function injectCombinedSocialPrompt() {
     try {
+        if (isRelationshipTrackerDisabled()) {
+            setExtensionPrompt('bb_social_injector', '', extension_prompt_types.IN_CHAT, 1, false, extension_prompt_roles.SYSTEM);
+            return;
+        }
         bindActivePersonaState();
         const useMacroMode = extension_settings[MODULE_NAME]?.useMacro === true;
         const promptText = useMacroMode ? '' : getCombinedSocial();
@@ -2444,6 +2452,11 @@ export async function handleNewCharacterInterviews(chars) {
 }
 
 export function recalculateAllStats(isNewMessage = false) {
+    if (extension_settings[MODULE_NAME]?.disableRelationshipTracker === true) {
+        setCurrentCalculatedStats({});
+        currentStoryMoments.length = 0;
+        return;
+    }
     const { scopeKey, scopeState, aliasSet } = bindActivePersonaState();
     const newStats = {};
     const liveToastCandidates = [];
