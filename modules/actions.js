@@ -285,7 +285,9 @@ export function renderVNOptionsFromData(parsedOptions, autoOpen = false) {
         chat_metadata['bb_vn_choice_context'] = choiceContext;
         chat_metadata['bb_vn_pending_choice_context'] = choiceContext;
         saveChatDebounced();
-        injectCombinedSocialPrompt();
+        if (extension_settings[MODULE_NAME]?.disableRelationshipTracker !== true) {
+            injectCombinedSocialPrompt();
+        }
 
         const textarea = document.querySelector('#send_textarea');
         if (textarea instanceof HTMLTextAreaElement && message) {

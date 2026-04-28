@@ -103,6 +103,10 @@ function replaceMacroDeep(target, promptText) {
     return walk(target).replacements;
 }
 
+function isRelationshipTrackerDisabled() {
+    return extension_settings[MODULE_NAME]?.disableRelationshipTracker === true;
+}
+
 jQuery(async () => {
     try {
         const { eventSource, event_types } = SillyTavern.getContext();
@@ -291,7 +295,7 @@ jQuery(async () => {
         const context = SillyTavern.getContext();
         if (context.registerMacro) {
             context.registerMacro('bb_vn', () => {
-                return extension_settings[MODULE_NAME].useMacro ? getCombinedSocial() : '';
+                return !isRelationshipTrackerDisabled() && extension_settings[MODULE_NAME].useMacro ? getCombinedSocial() : '';
             });
         }
 
@@ -369,7 +373,7 @@ jQuery(async () => {
         }
 
         eventSource.on(event_types.GENERATE_AFTER_DATA, (generate_data) => {
-            if (extension_settings[MODULE_NAME].useMacro && generate_data) {
+            if (!isRelationshipTrackerDisabled() && extension_settings[MODULE_NAME].useMacro && generate_data) {
                 const promptText = getCombinedSocial();
                 let replacements = 0;
 

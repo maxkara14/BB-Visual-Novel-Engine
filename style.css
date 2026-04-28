@@ -1622,6 +1622,271 @@ body.bb-hud-popup-active #bb-social-toast-container {
     box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.16);
 }
 
+/* Settings polish */
+#bb-social-settings-wrapper .inline-drawer-content.bb-vn-settings-shell {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-intro,
+#bb-social-settings-wrapper .bb-vn-settings-section-title {
+    display: block;
+    color: #e2e8f0;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-section-title--small {
+    font-size: 12px;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-note {
+    color: #94a3b8;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-card,
+#bb-social-settings-wrapper .bb-vn-settings-panel,
+#bb-social-settings-wrapper .bb-vn-settings-card--snapshot {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(11, 18, 32, 0.72), rgba(8, 13, 22, 0.68));
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-card--accent {
+    background:
+        radial-gradient(circle at top right, rgba(96, 165, 250, 0.08), transparent 34%),
+        linear-gradient(180deg, rgba(11, 18, 32, 0.76), rgba(8, 13, 22, 0.7));
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-toggle-grid,
+#bb-social-settings-wrapper .bb-vn-settings-actions-grid,
+#bb-social-settings-wrapper .bb-vn-settings-split {
+    display: grid;
+    gap: 8px;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-toggle-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-actions-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-split {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#bb-social-settings-wrapper .bb-vn-setting-pill {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-height: 44px;
+    padding: 10px 12px;
+    margin: 0;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+#bb-social-settings-wrapper .bb-vn-setting-pill:hover {
+    background: rgba(255,255,255,0.045);
+    border-color: rgba(125, 211, 252, 0.22);
+    transform: translateY(-1px);
+}
+
+#bb-social-settings-wrapper .bb-vn-setting-pill input {
+    margin-top: 2px;
+    flex: 0 0 auto;
+}
+
+#bb-social-settings-wrapper .bb-vn-setting-pill span {
+    color: #e2e8f0;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+#bb-social-settings-wrapper .bb-vn-setting-pill--single {
+    width: 100%;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-panel-label {
+    color: #cbd5e1;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.15px;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-drawer {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#bb-social-settings-wrapper .inline-drawer-toggle.inline-drawer-header {
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+#bb-social-settings-wrapper .inline-drawer-toggle.inline-drawer-header b {
+    color: #e2e8f0;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+#bb-social-settings-wrapper .inline-drawer-toggle.inline-drawer-header .inline-drawer-icon {
+    margin-left: auto;
+}
+
+#bb-social-settings-wrapper:not(.open) > .inline-drawer-content.bb-vn-settings-shell,
+#bb-social-settings-wrapper .bb-vn-settings-drawer:not(.open) > .inline-drawer-content.bb-vn-settings-drawer-content {
+    display: none;
+}
+
+#bb-social-settings-wrapper.open > .inline-drawer-content.bb-vn-settings-shell,
+#bb-social-settings-wrapper .bb-vn-settings-drawer.open > .inline-drawer-content.bb-vn-settings-drawer-content {
+    display: flex;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-drawer-content {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.018));
+    border-radius: 14px;
+    margin-top: 0;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+#bb-social-settings-wrapper .bb-vn-impact-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#bb-social-settings-wrapper .bb-vn-impact-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 88px;
+    gap: 8px;
+    align-items: center;
+    padding: 10px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+#bb-social-settings-wrapper .bb-vn-impact-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+#bb-social-settings-wrapper .bb-vn-impact-title {
+    color: #e2e8f0;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+#bb-social-settings-wrapper .bb-vn-impact-token {
+    color: #94a3b8;
+    font-size: 10px;
+    letter-spacing: 0.2px;
+}
+
+#bb-social-settings-wrapper .bb-vn-impact-hint {
+    color: #64748b;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+#bb-social-settings-wrapper .bb-vn-impact-input {
+    text-align: center;
+    font-weight: 800;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-button {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    justify-content: center;
+    min-height: 38px;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-button--ghost {
+    color: #cbd5e1;
+    border-color: rgba(148, 163, 184, 0.28);
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-button--danger {
+    background: rgba(239, 68, 68, 0.18);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.28);
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-divider {
+    border: 0;
+    height: 1px;
+    width: 100%;
+    margin: 2px 0;
+    background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.16), transparent);
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-card--snapshot {
+    margin-top: 2px;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-card .text_pole,
+#bb-social-settings-wrapper .bb-vn-settings-card select,
+#bb-social-settings-wrapper .bb-vn-settings-card--snapshot .text_pole,
+#bb-social-settings-wrapper .bb-vn-settings-card--snapshot select,
+#bb-social-settings-wrapper .bb-vn-settings-drawer-content .text_pole {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-card .menu_button,
+#bb-social-settings-wrapper .bb-vn-settings-card--snapshot .menu_button,
+#bb-social-settings-wrapper .bb-vn-settings-drawer-content .menu_button {
+    border-radius: 12px;
+}
+
+@media (max-width: 900px) {
+    #bb-social-settings-wrapper .bb-vn-settings-toggle-grid,
+    #bb-social-settings-wrapper .bb-vn-settings-actions-grid,
+    #bb-social-settings-wrapper .bb-vn-settings-split {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #bb-social-settings-wrapper .bb-vn-impact-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #bb-social-settings-wrapper .bb-vn-impact-input {
+        width: 100%;
+    }
+}
+
 /* Compact relationship cards */
 .bb-char-summary {
     display: grid;
