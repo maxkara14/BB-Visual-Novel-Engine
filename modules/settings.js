@@ -10,7 +10,6 @@ const IMPACT_SETTING_FIELDS = [
     { key: 'unforgivable', token: 'unforgivable', title: 'Критический минус', hint: 'Тяжёлый удар по доверию или влечению' },
     { key: 'major_negative', token: 'major_negative', title: 'Сильный минус', hint: 'Заметное ухудшение за один ход' },
     { key: 'minor_negative', token: 'minor_negative', title: 'Слабый минус', hint: 'Небольшая негативная реакция' },
-    { key: 'none', token: 'none', title: 'Без изменений', hint: 'Нейтральный результат, без сдвига' },
     { key: 'minor_positive', token: 'minor_positive', title: 'Слабый плюс', hint: 'Лёгкое улучшение отношения' },
     { key: 'major_positive', token: 'major_positive', title: 'Сильный плюс', hint: 'Хорошо заметный рост' },
     { key: 'life_changing', token: 'life_changing', title: 'Судьбоносный плюс', hint: 'Крупный переломный сдвиг' },
@@ -476,7 +475,13 @@ export function setupExtensionSettings() {
     });
     jQuery('#bb-vn-cfg-usecustom').on('change', function() { 
         const isChecked = jQuery(this).is(':checked'); extension_settings[MODULE_NAME].useCustomApi = isChecked;
-        if (isChecked) jQuery('#bb-vn-custom-api-block').slideDown(200); else jQuery('#bb-vn-custom-api-block').slideUp(200);
+        if (isChecked) {
+            jQuery('#bb-vn-custom-api-block').stop(true, true).css('display', 'none').slideDown(200, function() {
+                jQuery(this).css('display', 'flex');
+            });
+        } else {
+            jQuery('#bb-vn-custom-api-block').stop(true, true).slideUp(200);
+        }
         if (!isChecked) lastVerifiedCustomApiFingerprint = '';
         clearCustomApiRuntimeState();
         saveSettingsDebounced();

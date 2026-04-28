@@ -1624,10 +1624,22 @@ body.bb-hud-popup-active #bb-social-toast-container {
 
 /* Settings polish */
 #bb-social-settings-wrapper .inline-drawer-content.bb-vn-settings-shell {
-    padding: 14px;
+    padding: 12px;
     display: flex;
     flex-direction: column;
+    align-items: stretch;
     gap: 12px;
+}
+
+#bb-social-settings-wrapper .inline-drawer-content.bb-vn-settings-shell > * {
+    width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
+    margin: 0;
+}
+
+#bb-social-settings-wrapper .inline-drawer-content.bb-vn-settings-shell > * + * {
+    margin-top: 12px !important;
 }
 
 #bb-social-settings-wrapper .bb-vn-settings-intro,
@@ -1654,12 +1666,18 @@ body.bb-hud-popup-active #bb-social-toast-container {
 #bb-social-settings-wrapper .bb-vn-settings-card--snapshot {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    align-items: stretch;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
     padding: 12px;
+    margin: 0;
     border-radius: 14px;
     background: linear-gradient(180deg, rgba(11, 18, 32, 0.72), rgba(8, 13, 22, 0.68));
     border: 1px solid rgba(148, 163, 184, 0.12);
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    overflow: visible;
 }
 
 #bb-social-settings-wrapper .bb-vn-settings-card--accent {
@@ -1677,6 +1695,7 @@ body.bb-hud-popup-active #bb-social-toast-container {
 
 #bb-social-settings-wrapper .bb-vn-settings-toggle-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-bottom: 2px;
 }
 
 #bb-social-settings-wrapper .bb-vn-settings-actions-grid {
@@ -1728,32 +1747,44 @@ body.bb-hud-popup-active #bb-social-toast-container {
     letter-spacing: 0.15px;
 }
 
+#bb-social-settings-wrapper .bb-vn-settings-panel {
+    gap: 8px;
+}
+
 #bb-social-settings-wrapper .bb-vn-settings-stack {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    align-items: stretch;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
 }
 
 #bb-social-settings-wrapper .bb-vn-settings-drawer {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    align-items: stretch;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    overflow: visible;
 }
 
-#bb-social-settings-wrapper .inline-drawer-toggle.inline-drawer-header {
+#bb-social-settings-wrapper .bb-vn-settings-drawer > .inline-drawer-toggle.inline-drawer-header {
     padding: 10px 12px;
     border-radius: 12px;
     background: rgba(255,255,255,0.03);
     border: 1px solid rgba(148, 163, 184, 0.1);
 }
 
-#bb-social-settings-wrapper .inline-drawer-toggle.inline-drawer-header b {
+#bb-social-settings-wrapper .bb-vn-settings-drawer > .inline-drawer-toggle.inline-drawer-header b {
     color: #e2e8f0;
     font-size: 12px;
     font-weight: 800;
 }
 
-#bb-social-settings-wrapper .inline-drawer-toggle.inline-drawer-header .inline-drawer-icon {
+#bb-social-settings-wrapper .bb-vn-settings-drawer > .inline-drawer-toggle.inline-drawer-header .inline-drawer-icon {
     margin-left: auto;
 }
 
@@ -1771,11 +1802,51 @@ body.bb-hud-popup-active #bb-social-toast-container {
     padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    align-items: stretch;
+    gap: 12px;
     background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.018));
     border-radius: 14px;
     margin-top: 0;
     border: 1px solid rgba(148, 163, 184, 0.1);
+    width: 100%;
+    box-sizing: border-box;
+    overflow: visible;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-drawer-content > * {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-drawer-content > * + * {
+    margin-top: 12px !important;
+}
+
+#bb-social-settings-wrapper .menu_button {
+    margin: 0;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-card .checkbox_label,
+#bb-social-settings-wrapper .bb-vn-settings-card .text_pole,
+#bb-social-settings-wrapper .bb-vn-settings-card select,
+#bb-social-settings-wrapper .bb-vn-settings-card .menu_button,
+#bb-social-settings-wrapper .bb-vn-settings-card--snapshot .menu_button,
+#bb-social-settings-wrapper .bb-vn-settings-drawer-content .text_pole,
+#bb-social-settings-wrapper .bb-vn-settings-drawer-content select,
+#bb-social-settings-wrapper .bb-vn-settings-drawer-content .menu_button,
+#bb-social-settings-wrapper #bb-vn-custom-api-block > * {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+#bb-social-settings-wrapper .bb-vn-setting-pill span,
+#bb-social-settings-wrapper .bb-vn-settings-note,
+#bb-social-settings-wrapper .bb-vn-settings-panel-label,
+#bb-social-settings-wrapper .bb-custom-api-status-text {
+    min-width: 0;
 }
 
 #bb-social-settings-wrapper .bb-vn-impact-list {
@@ -1860,9 +1931,13 @@ body.bb-hud-popup-active #bb-social-toast-container {
 #bb-social-settings-wrapper .bb-vn-settings-card select,
 #bb-social-settings-wrapper .bb-vn-settings-card--snapshot .text_pole,
 #bb-social-settings-wrapper .bb-vn-settings-card--snapshot select,
-#bb-social-settings-wrapper .bb-vn-settings-drawer-content .text_pole {
+#bb-social-settings-wrapper .bb-vn-settings-drawer-content .text_pole,
+#bb-social-settings-wrapper .bb-vn-settings-drawer-content select {
     width: 100%;
     box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+    float: none;
 }
 
 #bb-social-settings-wrapper .bb-vn-settings-card .menu_button,
