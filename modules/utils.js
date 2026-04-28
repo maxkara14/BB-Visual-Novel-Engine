@@ -11,6 +11,61 @@ export function escapeHtml(unsafe) {
         .replace(/'/g, "&#039;");
 }
 
+const CP1251_SPECIAL_CHAR_TO_BYTE = new Map([
+    ['\u0402', 0x80], ['\u0403', 0x81], ['\u201a', 0x82], ['\u0453', 0x83],
+    ['\u201e', 0x84], ['\u2026', 0x85], ['\u2020', 0x86], ['\u2021', 0x87],
+    ['\u20ac', 0x88], ['\u2030', 0x89], ['\u0409', 0x8A], ['\u2039', 0x8B],
+    ['\u040a', 0x8C], ['\u040c', 0x8D], ['\u040b', 0x8E], ['\u040f', 0x8F],
+    ['\u0452', 0x90], ['\u2018', 0x91], ['\u2019', 0x92], ['\u201c', 0x93],
+    ['\u201d', 0x94], ['\u2022', 0x95], ['\u2013', 0x96], ['\u2014', 0x97],
+    ['\u2122', 0x99], ['\u0459', 0x9A], ['\u203a', 0x9B], ['\u045a', 0x9C],
+    ['\u045c', 0x9D], ['\u045b', 0x9E], ['\u045f', 0x9F], ['\u00a0', 0xA0],
+    ['\u040e', 0xA1], ['\u045e', 0xA2], ['\u0408', 0xA3], ['\u00a4', 0xA4],
+    ['\u0490', 0xA5], ['\u00a6', 0xA6], ['\u00a7', 0xA7], ['\u0401', 0xA8],
+    ['\u00a9', 0xA9], ['\u0404', 0xAA], ['\u00ab', 0xAB], ['\u00ac', 0xAC],
+    ['\u00ad', 0xAD], ['\u00ae', 0xAE], ['\u0407', 0xAF], ['\u00b0', 0xB0],
+    ['\u00b1', 0xB1], ['\u0406', 0xB2], ['\u0456', 0xB3], ['\u0491', 0xB4],
+    ['\u00b5', 0xB5], ['\u00b6', 0xB6], ['\u00b7', 0xB7], ['\u0451', 0xB8],
+    ['\u2116', 0xB9], ['\u0454', 0xBA], ['\u00bb', 0xBB], ['\u0458', 0xBC],
+    ['\u0405', 0xBD], ['\u0455', 0xBE], ['\u0457', 0xBF],
+]);
+
+function getCp1251Byte(char = '') {
+    const code = char.charCodeAt(0);
+    if (Number.isNaN(code)) return null;
+    if (code <= 0x7F) return code;
+    if (code >= 0x0410 && code <= 0x044F) return code - 0x350;
+    return CP1251_SPECIAL_CHAR_TO_BYTE.get(char) ?? null;
+}
+
+function looksLikeMojibake(value = '') {
+    return /(?:Р.|С.|вЂ.|В.|Ѓ|Ђ|™|€|љ|њ|ќ|ў|Ј)/.test(String(value || ''));
+}
+
+export function repairLikelyMojibake(value = "") {
+    const source = String(value || '');
+    if (!source || !looksLikeMojibake(source)) return source;
+
+    try {
+        const bytes = [];
+        for (const char of source) {
+            const byte = getCp1251Byte(char);
+            if (byte === null) return source;
+            bytes.push(byte);
+        }
+
+        const decoded = new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(bytes));
+        if (!decoded || decoded === source) return source;
+
+        const originalSignals = (source.match(/[РСЃѓЂ™€љњќўЈ]/g) || []).length;
+        const decodedSignals = (decoded.match(/[РСЃѓЂ™€љњќўЈ]/g) || []).length;
+        return decodedSignals < originalSignals ? decoded : source;
+    } catch (error) {
+        void error;
+        return source;
+    }
+}
+
 export function buildIntentFallback(tone = "", risk = "") {
     const t = String(tone || '').toLowerCase();
     const r = String(risk || '').toLowerCase();
@@ -43,6 +98,23 @@ export function sanitizeIntentLabel(intent = "", tone = "", risk = "") {
 
     const normalized = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
     return normalized.slice(0, 64);
+}
+
+
+
+export function sanitizeForecastLabel(forecast = "", risk = "") {
+    const raw = String(forecast || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!raw) return getLegacyForecastFromRisk(risk);
+
+    if (raw.length <= 96) return raw;
+
+    return raw
+        .slice(0, 95)
+        .replace(/[\s,.;:!?-]+$/g, '')
+        .trim() + '…';
 }
 
 export function normalizeGeneratedMessage(message = "") {
@@ -326,6 +398,52 @@ export function normalizeTraitResponse(raw = "") {
     return text;
 }
 
+export function isLikelyModelRefusalText(raw = "") {
+    const original = String(raw || '').trim();
+    if (!original) return false;
+
+    const normalized = original
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (/^(i(?:'| a)?m sorry|sorry|apologies|не могу|я не могу|извините|ошибка\b|error\b)/i.test(original)) {
+        return true;
+    }
+
+    const refusalPatterns = [
+        /\bi can'?t\b/i,
+        /\bi cannot\b/i,
+        /\bunable to\b/i,
+        /\bwon'?t\b/i,
+        /\bpolicy\b/i,
+        /\bsafety\b/i,
+        /\bcontent policy\b/i,
+        /\brequest failed\b/i,
+        /\binternal error\b/i,
+        /\bmodel error\b/i,
+        /не могу помочь/i,
+        /не могу выполнить/i,
+        /не могу ответить/i,
+        /не могу продолжить/i,
+        /не могу с этим помочь/i,
+        /не удалось/i,
+        /не поддержива/i,
+        /правил[ао] безопасности/i,
+        /политик[аи] контента/i,
+        /сработал[аи]? цензур/i,
+        /ошибка генерац/i,
+        /внутренняя ошибка/i,
+    ];
+
+    let matches = 0;
+    refusalPatterns.forEach((pattern) => {
+        if (pattern.test(normalized)) matches++;
+    });
+
+    return matches >= 1;
+}
+
 export function getLegacyToneFromRisk(risk = "") {
     const value = String(risk).toLowerCase();
     if (value.includes('низк') || value.includes('low')) return 'нежно';
@@ -345,7 +463,7 @@ export function getLegacyForecastFromRisk(risk = "") {
 export function normalizeOptionData(option = {}) {
     const legacyRisk = option.risk || "";
     const tone = option.tone || getLegacyToneFromRisk(legacyRisk);
-    const forecast = option.forecast || getLegacyForecastFromRisk(legacyRisk);
+    const forecast = sanitizeForecastLabel(option.forecast || '', legacyRisk);
     const targets = Array.isArray(option.targets)
         ? option.targets.filter(Boolean)
         : typeof option.target === 'string' && option.target.trim()

@@ -1,25 +1,50 @@
 /* global SillyTavern */
 import { chat_metadata, saveChatDebounced, generateQuietPrompt } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
-import { MODULE_NAME, OPTIONS_PROMPT } from './constants.js';
+import { MODULE_NAME, OPTIONS_PROMPT, normalizeVnReplyLength } from './constants.js';
 import { 
     normalizeOptionData, 
     dedupeOptions, 
     escapeHtml,
     parseModelJson,
-    normalizeTraitResponse
+    normalizeTraitResponse,
+    isLikelyModelRefusalText,
+    getToneClass,
 } from './utils.js';
 import { notifyInfo, notifyError } from './toasts.js';
 import { 
     vnGenerationAbortController, 
     isVnGenerationCancelled, 
     setVnGenerationAbortController, 
-    setIsVnGenerationCancelled 
+    setIsVnGenerationCancelled,
+    createVnOptionsGenerationToken,
+    isActiveVnOptionsGenerationToken,
 } from './state.js';
 import { injectCombinedSocialPrompt } from './social.js';
+import {
+    resetVnOptionsContainer,
+    setVnGenerateButtonIdle,
+    setVnGenerateButtonLoading,
+} from './vn-ui.js';
 
 let lastCustomApiFallbackNoticeAt = 0;
 const MIN_RENDERABLE_OPTIONS = 2;
+const CUSTOM_API_HEALTH_EVENT = 'bb-vn-custom-api-health';
+const VN_GENERATION_CANCELLED_MESSAGE = 'Отменено пользователем';
+const OPTIONS_RESPONSE_LENGTH_TOKENS = {
+    short: 2800,
+    medium: 5200,
+    long: 8000,
+};
+const JSON_REPAIR_RESPONSE_LENGTH_TOKENS = 5200;
+
+function emitCustomApiHealth(detail = {}) {
+    try {
+        window.dispatchEvent(new CustomEvent(CUSTOM_API_HEALTH_EVENT, { detail }));
+    } catch (error) {
+        console.debug('[BB VN][debug] custom api health event skipped', error);
+    }
+}
 
 function maybeNotifyCustomApiFallback() {
     const now = Date.now();
@@ -27,20 +52,207 @@ function maybeNotifyCustomApiFallback() {
     lastCustomApiFallbackNoticeAt = now;
     notifyInfo('Кастомная модель не ответила. Генерация продолжена на основной модели.');
 }
+function getActiveVnReplyLength() {
+    return normalizeVnReplyLength(extension_settings[MODULE_NAME]?.vnReplyLength);
+}
 
-export async function runMainGen(promptText) {
+function buildOptionLengthDirective(lengthPreset = '') {
+    switch (normalizeVnReplyLength(lengthPreset)) {
+        case 'short':
+            return 'Length preset: SHORT. Each "message" should still feel like a complete mini-scene: usually 1-2 compact paragraphs, about 450-900 Russian characters total. Include a quick scene setup, one clear action or short dialogue beat, and a neat stopping point. Keep it concise, but do not reduce it to a one-line reaction.';
+        case 'long':
+            return 'Length preset: LONG. Each "message" must read like a substantial VN scene fragment, not just an expanded reaction: usually 4-8 paragraphs, about 1800-3200 Russian characters total. Include multiple connected beats inside one reply: scene movement, physical action, dialogue exchange, emotional shift, and a clear end state or strong hook. Build an actual scene with actions, dialogue, and progression.';
+        case 'medium':
+        default:
+            return 'Length preset: MEDIUM. Each "message" should feel like one developed scene beat: usually 2-4 paragraphs, about 900-1600 Russian characters total. Balance action, dialogue, internal thought, and a noticeable consequence while keeping the pace active.';
+    }
+}
+
+function getOptionsResponseLength(lengthPreset = '') {
+    return OPTIONS_RESPONSE_LENGTH_TOKENS[normalizeVnReplyLength(lengthPreset)] || OPTIONS_RESPONSE_LENGTH_TOKENS.medium;
+}
+
+function getVnOptionsJsonSchema() {
+    return {
+        name: 'bb_vn_options',
+        description: 'Three distinct visual novel action options.',
+        strict: true,
+        value: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['options'],
+            properties: {
+                options: {
+                    type: 'array',
+                    minItems: 3,
+                    maxItems: 3,
+                    items: {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['intent', 'tone', 'forecast', 'targets', 'risk', 'message'],
+                        properties: {
+                            intent: { type: 'string' },
+                            tone: { type: 'string' },
+                            forecast: { type: 'string' },
+                            targets: {
+                                type: 'array',
+                                maxItems: 3,
+                                items: { type: 'string' },
+                            },
+                            risk: { type: 'string' },
+                            message: { type: 'string' },
+                        },
+                    },
+                },
+            },
+        },
+    };
+}
+
+function buildAssistantLengthDirective(lengthPreset = '') {
+    switch (normalizeVnReplyLength(lengthPreset)) {
+        case 'short':
+            return 'Keep the reply compact but complete: usually 1-2 concise paragraphs with a short setup, one concrete interaction or dialogue beat, and a clean stopping point. It should feel like a mini-scene, not a stub.';
+        case 'long':
+            return 'Write a substantial scene with multiple meaningful beats: usually 4-8 paragraphs. Include actions, dialogue, emotional movement, and visible consequences. The reply must materially advance the scene and feel like a real VN scene fragment.';
+        case 'medium':
+        default:
+            return 'Keep the reply medium in length: usually 2-4 paragraphs with one developed interaction, clear scene progression, and a noticeable consequence. Avoid filler, but let the scene breathe.';
+    }
+}
+
+function normalizeOptionsGenerationRequest(request = []) {
+    if (Array.isArray(request)) {
+        return {
+            excludedIntents: request.map(item => String(item || '').trim()).filter(Boolean),
+            excludedTones: [],
+            guidance: '',
+            mode: 'default',
+        };
+    }
+
+    if (request && typeof request === 'object') {
+        return {
+            excludedIntents: Array.isArray(request.excludedIntents)
+                ? request.excludedIntents.map(item => String(item || '').trim()).filter(Boolean)
+                : [],
+            excludedTones: Array.isArray(request.excludedTones)
+                ? request.excludedTones.map(item => String(item || '').trim()).filter(Boolean)
+                : [],
+            guidance: String(request.guidance || request.wish || '').trim(),
+            mode: String(request.mode || 'default').trim() || 'default',
+        };
+    }
+
+    return {
+        excludedIntents: [],
+        excludedTones: [],
+        guidance: String(request || '').trim(),
+        mode: 'default',
+    };
+}
+
+function createVnGenerationCancelledError() {
+    return new Error(VN_GENERATION_CANCELLED_MESSAGE);
+}
+
+function ensureActiveVnOptionsGeneration(token) {
+    if (!isActiveVnOptionsGenerationToken(token) || isVnGenerationCancelled) {
+        throw createVnGenerationCancelledError();
+    }
+}
+
+function canonicalizeToneKey(tone = '') {
+    const normalizedTone = String(tone || '')
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!normalizedTone) return '';
+
+    const toneClass = getToneClass(normalizedTone);
+    if (toneClass && toneClass !== 'tone-neutral') {
+        return toneClass;
+    }
+
+    return normalizedTone.split(' ').slice(0, 2).join(' ');
+}
+
+function hasWeakToneDiversity(options = []) {
+    if (!Array.isArray(options) || options.length < 2) return false;
+    const toneKeys = options
+        .map(option => canonicalizeToneKey(normalizeOptionData(option).tone))
+        .filter(Boolean);
+    if (toneKeys.length < 2) return false;
+    return new Set(toneKeys).size < Math.min(options.length, 3);
+}
+
+function summarizeOptionsForPrompt(options = []) {
+    return options.map((option, index) => {
+        const normalized = normalizeOptionData(option);
+        const tone = String(normalized.tone || '').trim() || 'без тона';
+        const intent = String(normalized.intent || '').trim() || `Вариант ${index + 1}`;
+        const forecast = String(normalized.forecast || '').trim();
+        const messagePreview = String(normalized.message || '').replace(/\s+/g, ' ').trim().slice(0, 140);
+        return `${index + 1}. [tone=${tone}] [intent=${intent}]${forecast ? ` [forecast=${forecast}]` : ''}${messagePreview ? ` :: ${messagePreview}` : ''}`;
+    }).join('\n');
+}
+
+function persistOptionsForCurrentSwipe(chat, options = []) {
+    const lastMsg = chat[chat.length - 1];
+    const swipeId = lastMsg.swipe_id || 0;
+    if (!lastMsg.extra) lastMsg.extra = {};
+    if (!lastMsg.extra.bb_vn_options_swipes) lastMsg.extra.bb_vn_options_swipes = {};
+    lastMsg.extra.bb_vn_options_swipes[swipeId] = options;
+    saveChatDebounced();
+}
+
+export async function runMainGen(promptText, options = {}) {
+    const request = { quietPrompt: promptText };
+    if (Number.isFinite(options.responseLength) && options.responseLength > 0) {
+        request.responseLength = Math.round(options.responseLength);
+    }
+    if (options.jsonSchema) {
+        request.jsonSchema = options.jsonSchema;
+    }
+
     if (typeof generateQuietPrompt === 'function') {
-        return await generateQuietPrompt(promptText);
+        return await generateQuietPrompt(request);
     } else if (typeof window['generateQuietPrompt'] === 'function') {
-        return await window['generateQuietPrompt'](promptText);
+        return await window['generateQuietPrompt'](request);
     } else {
         throw new Error("Функция генерации Таверны не найдена. Обновите SillyTavern.");
+    }
+}
+
+export function isVnGenerationAbortError(error) {
+    const message = String(error?.message || error || '').toLowerCase();
+    return message.includes('abort')
+        || message.includes('cancel')
+        || message.includes('отмен');
+}
+
+export function cancelVnGeneration() {
+    setIsVnGenerationCancelled(true);
+
+    if (vnGenerationAbortController) {
+        vnGenerationAbortController.abort();
+    }
+
+    try {
+        SillyTavern.getContext?.().stopGeneration?.();
+    } catch (error) {
+        console.debug('[BB VN] stopGeneration failed:', error);
     }
 }
 
 export async function generateFastPrompt(promptText, options = {}) {
     const responseFormat = options.responseFormat === 'text' ? 'text' : 'json';
     const includeMeta = options.includeMeta === true;
+    const responseLength = Number.isFinite(options.responseLength) && options.responseLength > 0
+        ? Math.round(options.responseLength)
+        : null;
+    const jsonSchema = options.jsonSchema || null;
     const s = extension_settings[MODULE_NAME];
     if (s.useCustomApi && s.customApiUrl && s.customApiModel) {
         try {
@@ -58,7 +270,7 @@ export async function generateFastPrompt(promptText, options = {}) {
                 },
                 body: JSON.stringify({
                     model: s.customApiModel,
-                    messages: [
+                    messages:[
                         {
                             role: 'system',
                             content: responseFormat === 'text'
@@ -68,7 +280,7 @@ export async function generateFastPrompt(promptText, options = {}) {
                         { role: 'user', content: promptText }
                     ],
                     temperature: 0.7,
-                    max_tokens: 4000,
+                    max_tokens: Math.max(4000, responseLength || 0),
                     stream: false
                 })
             });
@@ -79,6 +291,15 @@ export async function generateFastPrompt(promptText, options = {}) {
             const finishReason = data?.choices?.[0]?.finish_reason || '';
             const content = data?.choices?.[0]?.message?.content || "";
             if (!content.trim()) throw new Error("Прокси вернул пустой текст (Сработал фильтр).");
+            emitCustomApiHealth({
+                state: 'connected',
+                url: s.customApiUrl || '',
+                key: s.customApiKey || '',
+                model: s.customApiModel || '',
+                message: s.customApiModel
+                    ? `Кастомная модель ${s.customApiModel} ответила успешно.`
+                    : 'Кастомная модель ответила успешно.',
+            });
             if (includeMeta) {
                 return {
                     content,
@@ -93,8 +314,17 @@ export async function generateFastPrompt(promptText, options = {}) {
         } catch (e) {
             if (e.name === 'AbortError') throw new Error("Отменено пользователем");
             console.warn(`[BB VN] Ошибка кастомного API (${e.message}), перехват на основной API...`);
+            emitCustomApiHealth({
+                state: 'error',
+                url: s.customApiUrl || '',
+                key: s.customApiKey || '',
+                model: s.customApiModel || '',
+                message: s.customApiModel
+                    ? `Запрос к ${s.customApiModel} сорвался. Генерация временно ушла на основную модель.`
+                    : 'Запрос к кастомной модели сорвался. Генерация временно ушла на основную модель.',
+            });
             maybeNotifyCustomApiFallback();
-            const fallbackContent = await runMainGen(promptText);
+            const fallbackContent = await runMainGen(promptText, { responseLength, jsonSchema });
             if (includeMeta) {
                 return {
                     content: fallbackContent,
@@ -110,7 +340,7 @@ export async function generateFastPrompt(promptText, options = {}) {
             setVnGenerationAbortController(null);
         }
     } else {
-        const content = await runMainGen(promptText);
+        const content = await runMainGen(promptText, { responseLength, jsonSchema });
         if (includeMeta) {
             return {
                 content,
@@ -141,8 +371,25 @@ function extractOptionsFromGeneration(rawText = '') {
         options: null,
         repaired: false,
         source: '',
-        errors: parsed.errors || [],
+        errors: parsed.errors ||[],
     };
+}
+
+function logOptionsJsonFailure(rawText = '', errors = [], stage = 'initial') {
+    const text = String(rawText || '');
+    const position = errors
+        .map(error => String(error || '').match(/position\s+(\d+)/i)?.[1])
+        .map(value => Number.parseInt(value, 10))
+        .find(Number.isFinite);
+    const snippetStart = Number.isFinite(position) ? Math.max(0, position - 260) : 0;
+    const snippetEnd = Number.isFinite(position) ? Math.min(text.length, position + 260) : Math.min(text.length, 520);
+
+    console.warn(`[BB VN] Options JSON ${stage} parse diagnostic`, {
+        length: text.length,
+        position: Number.isFinite(position) ? position : null,
+        tail: text.slice(Math.max(0, text.length - 520)),
+        aroundError: text.slice(snippetStart, snippetEnd),
+    });
 }
 
 async function repairOptionsJson(rawText = '') {
@@ -152,12 +399,17 @@ Return ONLY a valid JSON array with exactly 3 objects.
 Do not add markdown fences, comments, or explanations.
 Preserve the original Russian wording as much as possible.
 Every "message" value must be a valid JSON string. Escape paragraph breaks as \\n\\n.
-If a field is missing, use an empty string or [] instead of removing the object.
+If a field is missing, use an empty string or[] instead of removing the object.
 
 BROKEN INPUT:
 ${String(rawText || '').trim()}`;
 
-    const generationResult = await generateFastPrompt(repairPrompt, { responseFormat: 'json', includeMeta: true });
+    const generationResult = await generateFastPrompt(repairPrompt, {
+        responseFormat: 'json',
+        includeMeta: true,
+        responseLength: JSON_REPAIR_RESPONSE_LENGTH_TOKENS,
+        jsonSchema: getVnOptionsJsonSchema(),
+    });
     return typeof generationResult === 'string'
         ? generationResult
         : generationResult?.content || '';
@@ -184,8 +436,8 @@ function maybeNotifyPartialOptions(count = 0) {
     notifyInfo(`Модель собрала ${count} варианта из 3. Показываю то, что удалось получить.`);
 }
 
-async function fillMissingOptions(basePrompt = '', existingOptions = []) {
-    let distinctOptions = dedupeOptions(Array.isArray(existingOptions) ? existingOptions : []);
+async function fillMissingOptions(basePrompt = '', existingOptions =[]) {
+    let distinctOptions = dedupeOptions(Array.isArray(existingOptions) ? existingOptions :[]);
     if (distinctOptions.length >= 3) return distinctOptions.slice(0, 3);
 
     for (let attempt = 0; attempt < 2 && distinctOptions.length < 3; attempt++) {
@@ -209,7 +461,12 @@ Return ONLY a valid JSON array with the same schema.
 [EXISTING OPTIONS]
 ${existingSummary}`;
 
-        const recoveryResult = await generateFastPrompt(recoveryPrompt, { responseFormat: 'json', includeMeta: true });
+        const recoveryResult = await generateFastPrompt(recoveryPrompt, {
+            responseFormat: 'json',
+            includeMeta: true,
+            responseLength: JSON_REPAIR_RESPONSE_LENGTH_TOKENS,
+            jsonSchema: getVnOptionsJsonSchema(),
+        });
         const recoveryText = typeof recoveryResult === 'string'
             ? recoveryResult
             : recoveryResult?.content || '';
@@ -224,15 +481,431 @@ ${existingSummary}`;
     return distinctOptions.slice(0, 3);
 }
 
+async function diversifyOptionTones(basePrompt = '', existingOptions = []) {
+    const normalizedOptions = dedupeOptions(Array.isArray(existingOptions) ? existingOptions : []);
+    if (!hasWeakToneDiversity(normalizedOptions)) {
+        return normalizedOptions.slice(0, 3);
+    }
+
+    const diversifyPrompt = `${basePrompt}
+
+[TONE DIVERSITY RETRY]
+The previous set was rejected because the tones repeated or felt too similar.
+Generate a completely fresh set of EXACTLY 3 replacement options.
+
+Hard rules:
+1. All 3 "tone" values must be clearly different from each other.
+2. Do NOT reuse the same emotional family twice. Avoid pairs like two soft tones, two cold tones, or two aggressive tones together.
+3. The "forecast" must match the tone and the action.
+4. Keep the intents clearly distinct and proactive.
+5. Return ONLY a valid JSON array with the same schema.
+
+[REJECTED SET]
+${summarizeOptionsForPrompt(normalizedOptions)}`;
+
+    const diversifiedResult = await generateFastPrompt(diversifyPrompt, {
+        responseFormat: 'json',
+        includeMeta: true,
+        responseLength: JSON_REPAIR_RESPONSE_LENGTH_TOKENS,
+        jsonSchema: getVnOptionsJsonSchema(),
+    });
+    const diversifiedText = typeof diversifiedResult === 'string'
+        ? diversifiedResult
+        : diversifiedResult?.content || '';
+    const parsedDiversified = extractOptionsFromGeneration(diversifiedText);
+    if (!parsedDiversified.ok || !Array.isArray(parsedDiversified.options) || parsedDiversified.options.length === 0) {
+        return normalizedOptions.slice(0, 3);
+    }
+
+    const filledDiversified = await fillMissingOptions(basePrompt, parsedDiversified.options);
+    if (!hasWeakToneDiversity(filledDiversified)) {
+        return filledDiversified.slice(0, 3);
+    }
+
+    return normalizedOptions.slice(0, 3);
+}
+
 function isValidTraitResult(value = '') {
     const text = String(value || '').trim();
     if (!text || text.length > 240) return false;
     if (/[{}\[\]]/.test(text)) return false;
-    return text.length >= 3;
+    if (isLikelyModelRefusalText(text)) return false;
+
+    const separatorIndex = text.indexOf(':');
+    if (separatorIndex <= 0 || separatorIndex >= text.length - 2) return false;
+
+    const traitName = text.slice(0, separatorIndex).trim();
+    const traitDescription = text.slice(separatorIndex + 1).trim();
+    if (!traitName || !traitDescription) return false;
+    if (traitName.split(/\s+/).length > 6) return false;
+    return traitDescription.length >= 8;
 }
 
-export async function crystallizeTraitFromMemories({ charName = '', userName = '', memories = [], isPositive = true } = {}) {
-    const selectedMemories = Array.isArray(memories) ? memories.slice(-5) : [];
+function sanitizeCharacterDescriptionResult(value = '') {
+    return String(value || '')
+        .replace(/```[\s\S]*?```/g, ' ')
+        .replace(/^["'«»„“]+|["'«»„“]+$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 520);
+}
+
+function isValidCharacterDescriptionResult(value = '') {
+    const text = sanitizeCharacterDescriptionResult(value);
+    if (!text || text.length < 60) return false;
+    if (/[{}\[\]]/.test(text)) return false;
+    if (isLikelyModelRefusalText(text)) return false;
+    return true;
+}
+
+function sanitizeStructuredCharacterDescriptionResult(value = '') {
+    return String(value || '')
+        .replace(/```[\s\S]*?```/g, ' ')
+        .replace(/^["'«»„“]+|["'«»„“]+$/g, '')
+        .replace(/\r/g, '')
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .join('\n');
+}
+
+function isValidStructuredCharacterDescriptionResult(value = '') {
+    const text = sanitizeStructuredCharacterDescriptionResult(value);
+    if (!text || text.length < 140) return false;
+    if (/[{}\[\]]/.test(text)) return false;
+    if (isLikelyModelRefusalText(text)) return false;
+    return text.includes(':');
+}
+
+function collectCharacterDescriptionPromptContext() {
+    try {
+        const context = SillyTavern.getContext?.();
+        const chat = Array.isArray(context?.chat) ? context.chat : [];
+        const userName = String(context?.substituteParams?.('{{user}}') || 'пользователь').trim() || 'пользователь';
+        const personaText = clipPromptBlock(context?.substituteParams?.('{{persona}}') || '', 3200);
+
+        let remainingChars = 5600;
+        const recentLines = [];
+        for (const message of chat.slice(-18).reverse()) {
+            const rawText = String(message?.mes || message?.text || '')
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (!rawText) continue;
+
+            const speaker = message?.is_user
+                ? userName
+                : String(message?.name || 'Сцена').trim() || 'Сцена';
+            const line = `${speaker}: ${rawText}`;
+            if (line.length > remainingChars && recentLines.length > 0) break;
+            recentLines.unshift(line.slice(0, remainingChars));
+            remainingChars -= line.length + 1;
+            if (remainingChars <= 0) break;
+        }
+
+        return {
+            userName,
+            personaText,
+            recentChat: recentLines.join('\n'),
+        };
+    } catch (error) {
+        void error;
+        return {
+            userName: 'пользователь',
+            personaText: '',
+            recentChat: '',
+        };
+    }
+}
+
+function clipPromptBlock(value = '', maxLength = 1200, { singleLine = false } = {}) {
+    let text = String(value || '')
+        .replace(/\r/g, '')
+        .trim();
+
+    if (!text) return '';
+
+    if (singleLine) {
+        text = text.replace(/\s+/g, ' ');
+    } else {
+        text = text
+            .split('\n')
+            .map(line => line.trim())
+            .filter(Boolean)
+            .join('\n')
+            .replace(/\n{3,}/g, '\n\n');
+    }
+
+    return text.slice(0, maxLength).trim();
+}
+
+function normalizeCharacterNameForMatch(value = '') {
+    return String(value || '')
+        .toLocaleLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function findMatchingContextCharacter(context, charName = '') {
+    const target = normalizeCharacterNameForMatch(charName);
+    if (!target || !Array.isArray(context?.characters)) return null;
+
+    for (let index = 0; index < context.characters.length; index++) {
+        const character = context.characters[index];
+        if (!character) continue;
+        if (normalizeCharacterNameForMatch(character.name) === target) {
+            return { character, chid: index };
+        }
+    }
+
+    return null;
+}
+
+async function collectCharacterDescriptionSourceContext({ charName = '', userName = '', personaText = '' } = {}) {
+    const context = SillyTavern.getContext?.();
+    const result = {
+        matchedCharacterName: '',
+        cardContext: '',
+        worldInfoText: '',
+    };
+
+    if (!context || typeof context !== 'object') {
+        return result;
+    }
+
+    const matched = findMatchingContextCharacter(context, charName);
+    let cardFields = null;
+
+    if (matched && typeof context.getCharacterCardFields === 'function') {
+        try {
+            cardFields = context.getCharacterCardFields({ chid: matched.chid }) || null;
+            result.matchedCharacterName = String(matched.character?.name || '').trim();
+        } catch (error) {
+            console.debug('[BB VN] Failed to resolve character card fields for profile generation:', error);
+        }
+    }
+
+    if (cardFields) {
+        const alternateGreetings = Array.isArray(cardFields.alternateGreetings)
+            ? cardFields.alternateGreetings
+                .map(item => clipPromptBlock(item, 320))
+                .filter(Boolean)
+                .slice(0, 2)
+            : [];
+
+        const cardLines = [
+            result.matchedCharacterName ? `Совпавшая карточка: ${result.matchedCharacterName}` : '',
+            cardFields.version ? `Версия карточки: ${clipPromptBlock(cardFields.version, 120, { singleLine: true })}` : '',
+            cardFields.description ? `Описание карточки: ${clipPromptBlock(cardFields.description, 1500)}` : '',
+            cardFields.personality ? `Характер из карточки: ${clipPromptBlock(cardFields.personality, 1000)}` : '',
+            cardFields.scenario ? `Сценарий / сеттинг: ${clipPromptBlock(cardFields.scenario, 1000)}` : '',
+            cardFields.creatorNotes ? `Creator notes: ${clipPromptBlock(cardFields.creatorNotes, 1200)}` : '',
+            cardFields.charDepthPrompt ? `Глубинный prompt карточки: ${clipPromptBlock(cardFields.charDepthPrompt, 900)}` : '',
+            cardFields.system ? `Системный prompt карточки: ${clipPromptBlock(cardFields.system, 900)}` : '',
+            cardFields.firstMessage ? `Первое сообщение: ${clipPromptBlock(cardFields.firstMessage, 700)}` : '',
+            cardFields.mesExamples ? `Примеры речи: ${clipPromptBlock(cardFields.mesExamples, 1200)}` : '',
+            alternateGreetings.length > 0 ? `Альтернативные приветствия: ${alternateGreetings.join(' | ')}` : '',
+        ].filter(Boolean);
+
+        result.cardContext = cardLines.join('\n');
+    }
+
+    if (typeof context.getWorldInfoPrompt === 'function') {
+        try {
+            const chat = Array.isArray(context.chat) ? context.chat : [];
+            const chatForWI = chat
+                .slice(-18)
+                .map(message => {
+                    const rawText = clipPromptBlock(message?.mes || message?.text || '', 420, { singleLine: true });
+                    if (!rawText) return '';
+
+                    const speaker = message?.is_user
+                        ? (String(userName || '').trim() || 'пользователь')
+                        : String(message?.name || 'Сцена').trim() || 'Сцена';
+                    return `${speaker}: ${rawText}`;
+                })
+                .filter(Boolean)
+                .reverse();
+
+            const globalScanData = {
+                personaDescription: clipPromptBlock(personaText, 2600),
+                characterDescription: clipPromptBlock(cardFields?.description, 1800),
+                characterPersonality: clipPromptBlock(cardFields?.personality, 1200),
+                characterDepthPrompt: clipPromptBlock(cardFields?.charDepthPrompt, 900),
+                scenario: clipPromptBlock(cardFields?.scenario, 1000),
+                creatorNotes: clipPromptBlock(cardFields?.creatorNotes, 1200),
+                trigger: 'quiet',
+            };
+
+            const wiPrompt = await context.getWorldInfoPrompt(
+                chatForWI,
+                Number(context.maxContext) || 4096,
+                true,
+                globalScanData,
+            );
+
+            result.worldInfoText = clipPromptBlock(wiPrompt?.worldInfoString || '', 3200);
+        } catch (error) {
+            console.debug('[BB VN] Failed to collect World Info context for profile generation:', error);
+        }
+    }
+
+    return result;
+}
+
+async function generateStructuredCharacterDescription({ charName = '', stats = {}, currentDescription = '' } = {}) {
+    const safeCharName = String(charName || '').trim() || 'персонаж';
+    const affinity = parseInt(stats?.affinity, 10) || 0;
+    const romance = parseInt(stats?.romance, 10) || 0;
+    const status = String(stats?.status || '').trim() || 'нейтральный фактор';
+    const memories = stats?.memories && typeof stats.memories === 'object' ? stats.memories : {};
+    const coreTraits = Array.isArray(stats?.core_traits)
+        ? stats.core_traits
+            .map(item => String(item?.trait || '').trim())
+            .filter(Boolean)
+            .slice(0, 5)
+        : [];
+    const notableMemories = [
+        ...(Array.isArray(memories.deep) ? memories.deep.slice(-4) : []),
+        ...(Array.isArray(memories.soft) ? memories.soft.slice(-3) : []),
+    ]
+        .map(memory => String(memory?.text || '').trim())
+        .filter(Boolean)
+        .slice(0, 5);
+    const historySummary = Array.isArray(stats?.history)
+        ? stats.history.slice(-6).map(entry => {
+            const delta = parseInt(entry?.delta, 10) || 0;
+            const reason = String(entry?.reason || '').replace(/\s+/g, ' ').trim();
+            return `${delta > 0 ? '+' : ''}${delta}${reason ? ` :: ${reason}` : ''}`;
+        }).filter(Boolean)
+        : [];
+    const currentProfile = clipPromptBlock(currentDescription, 3200);
+    const { userName, personaText, recentChat } = collectCharacterDescriptionPromptContext();
+    const sourceContext = await collectCharacterDescriptionSourceContext({
+        charName: safeCharName,
+        userName,
+        personaText,
+    });
+
+    const prompt = `Собери цельный профиль персонажа для prompt-инжекта в ролевом чате.
+
+Нужно вернуть не художественный абзац, а компактное досье: достаточно подробное, чтобы модель уверенно держала внешность, прошлое, голос, роль и внутреннюю логику персонажа в будущих сценах.
+Опирайся на историю чата, персону пользователя, динамику отношений, карточку персонажа, creator notes, примеры речи и релевантный world info / lorebook.
+
+[ФОРМАТ ОТВЕТА]
+Верни только готовый профиль на русском языке, без markdown, без пояснений и без вступления.
+Сделай ровно 10 строк в формате:
+Имя: ...
+Возраст / этап жизни: ...
+Роль и положение: ...
+Внешность: ...
+Одежда и узнаваемые детали: ...
+Характер и внутренняя опора: ...
+Манера речи и поведения: ...
+Прошлое и личный контекст: ...
+Отношение к ${userName}: ...
+Сценический гайд: ...
+
+[ПРАВИЛА]
+1. Профиль должен быть законченным. Не пиши "не указано", "данных мало", "может быть", "возможно", "неясно" и другие заглушки.
+2. Если в источниках есть пробелы, аккуратно дострой образ до конца на основе уже известных фактов, тона сцены, world info, карточки и поведения персонажа.
+3. Домысливание разрешено только там, где оно не ломает явный канон. Явные факты из карточки, creator notes, world info и чата важнее домысливания.
+4. Если можно трактовать образ по-разному, выбери одну наиболее правдоподобную и согласованную версию, а не оставляй несколько вариантов.
+5. Внешность должна быть конкретной: телосложение, лицо, волосы, глаза, голос, заметные привычки, шрамы, запах или манера двигаться, если это уместно.
+6. Прошлое должно давать игровые крючки: происхождение, социальное положение, связи, тайны, травмы, цели, страхи или долг.
+7. Сценический гайд должен объяснять, как писать персонажа: что подчёркивать в реакциях, чего избегать, какие темы цепляют сильнее всего.
+8. Если текущее описание уже содержит полезные факты, сохрани их и расширь, а не игнорируй.
+9. Не превращай профиль в анкету с пустыми пунктами. Каждая строка должна быть плотной и пригодной для prompt-инжекта.
+10. Держи ответ компактным и насыщенным, обычно в пределах 1400-2800 символов.
+
+[ДАННЫЕ О ПЕРСОНАЖЕ]
+Имя: ${safeCharName}
+Статус связи: ${status}
+Доверие: ${affinity > 0 ? '+' : ''}${affinity}
+Романтическая линия: ${romance > 0 ? '+' : ''}${romance}
+Черты: ${coreTraits.length > 0 ? coreTraits.join('; ') : 'нет явных данных'}
+Значимые события: ${notableMemories.length > 0 ? notableMemories.join(' | ') : 'нет явных данных'}
+Последние сдвиги: ${historySummary.length > 0 ? historySummary.join(' | ') : 'нет данных'}
+Текущее описание: ${currentProfile || 'пусто'}
+
+[КАРТОЧКА / ДОПОЛНИТЕЛЬНЫЕ ИСТОЧНИКИ]
+${sourceContext.cardContext || 'Совпавшая карточка в текущем чате не найдена или дополнительных полей нет.'}
+
+[АКТИВНЫЙ WORLD INFO / LOREBOOK]
+${sourceContext.worldInfoText || 'Нет активированных записей world info для этого среза контекста.'}
+
+[ПЕРСОНА ПОЛЬЗОВАТЕЛЯ]
+${personaText || 'не указана'}
+
+[НЕДАВНИЙ ФРАГМЕНТ ЧАТА]
+${recentChat || 'нет доступных сообщений'}`;
+
+    const generated = await generateFastPrompt(prompt, { responseFormat: 'text' });
+    const result = sanitizeStructuredCharacterDescriptionResult(generated);
+    if (!isValidStructuredCharacterDescriptionResult(result)) {
+        throw new Error('INVALID_CHARACTER_DESCRIPTION_RESULT');
+    }
+    return result;
+}
+
+export async function generateCharacterDescription({ charName = '', stats = {}, currentDescription = '' } = {}) {
+    return await generateStructuredCharacterDescription({ charName, stats, currentDescription });
+    const safeCharName = String(charName || '').trim() || 'персонаж';
+    const affinity = parseInt(stats?.affinity, 10) || 0;
+    const romance = parseInt(stats?.romance, 10) || 0;
+    const status = String(stats?.status || '').trim() || 'нейтральный фактор';
+    const memories = stats?.memories && typeof stats.memories === 'object' ? stats.memories : {};
+    const coreTraits = Array.isArray(stats?.core_traits)
+        ? stats.core_traits
+            .map(item => String(item?.trait || '').trim())
+            .filter(Boolean)
+            .slice(0, 4)
+        : [];
+    const notableMemories = [
+        ...(Array.isArray(memories.deep) ? memories.deep.slice(-3) : []),
+        ...(Array.isArray(memories.soft) ? memories.soft.slice(-2) : []),
+    ]
+        .map(memory => String(memory?.text || '').trim())
+        .filter(Boolean)
+        .slice(0, 4);
+    const trendText = Array.isArray(stats?.history) && stats.history.length > 1
+        ? 'история отношений уже накопилась и менялась по ходу сюжета'
+        : 'история отношений пока короткая';
+    const currentProfile = String(currentDescription || '').trim();
+
+    const prompt = `Собери краткое описание персонажа для ролевого prompt-инжекта.
+
+Нужно описать, как ${safeCharName} воспринимает пользователя и какие черты особенно важны в текущем сюжете.
+
+[ДАННЫЕ]
+Имя: ${safeCharName}
+Статус связи: ${status}
+Доверие: ${affinity > 0 ? '+' : ''}${affinity}
+Романтическая линия: ${romance > 0 ? '+' : ''}${romance}
+Динамика: ${trendText}
+Черты: ${coreTraits.length > 0 ? coreTraits.join('; ') : 'нет явных данных'}
+Значимые события: ${notableMemories.length > 0 ? notableMemories.join(' | ') : 'нет явных данных'}
+Текущее описание: ${currentProfile || 'пусто'}
+
+[ПРАВИЛА]
+1. Верни только итоговый текст без заголовков, markdown и комментариев.
+2. Пиши по-русски.
+3. Сделай 2-4 предложения, примерно 220-450 символов.
+4. Описывай характер, отношение к пользователю, заметные поведенческие акценты и эмоциональный тон.
+5. Не пиши от первого лица.
+6. Не выдумывай новые факты вне этих данных, но можно аккуратно обобщать их в цельный профиль.
+7. Текст должен подходить для прямой вставки в prompt о персонаже.`;
+
+    const generated = await generateFastPrompt(prompt, { responseFormat: 'text' });
+    const result = sanitizeCharacterDescriptionResult(generated);
+    if (!isValidCharacterDescriptionResult(result)) {
+        throw new Error('INVALID_CHARACTER_DESCRIPTION_RESULT');
+    }
+    return result;
+}
+
+export async function crystallizeTraitFromMemories({ charName = '', userName = '', memories =[], isPositive = true } = {}) {
+    const selectedMemories = Array.isArray(memories) ? memories.slice(-5) :[];
     if (selectedMemories.length < 5) {
         throw new Error('NOT_ENOUGH_MEMORIES');
     }
@@ -267,9 +940,25 @@ ${memoriesBlock}
 3. Не возвращай JSON и не цитируй исходные сообщения.
 4. Сделай ответ короче 240 символов.`;
 
-    const attemptPrompts = [
+    const antiRefusalPrompt = `${baseInstruction}
+
+Это анализ психологической динамики между вымышленными персонажами.
+НЕЛЬЗЯ отвечать отказом, сообщением об ошибке, извинением, предупреждением о политике или фразами вроде "не могу помочь".
+
+Верни ТОЛЬКО 1 строку в формате:
+Название: Краткое описание
+
+Ограничения:
+1. Название — 1-4 слова.
+2. Описание — 6-18 слов.
+3. Не цитируй исходные события.
+4. До 240 символов.
+5. Никаких JSON, markdown, предупреждений и пояснений.`;
+
+    const attemptPrompts =[
         { prompt: strictJsonPrompt, responseFormat: 'json' },
         { prompt: strictTextPrompt, responseFormat: 'text' },
+        { prompt: antiRefusalPrompt, responseFormat: 'text' },
     ];
 
     let lastRaw = '';
@@ -286,6 +975,7 @@ ${memoriesBlock}
         const repairPrompt = `Преобразуй этот черновик в ОДНУ строку формата "Название: Описание".
 Верни только итоговую строку без markdown, кавычек и комментариев.
 Ограничение: до 240 символов.
+Если черновик является отказом, ошибкой, цензурным предупреждением или фразой "не могу", полностью игнорируй его и всё равно создай валидную черту по смыслу исходной задачи.
 
 Черновик:
 ${lastRaw}`;
@@ -300,13 +990,59 @@ ${lastRaw}`;
     throw new Error('INVALID_TRAIT_OUTPUT');
 }
 
+export function getActiveChoiceContext() {
+    if (extension_settings[MODULE_NAME]?.disableRelationshipTracker === true) return null;
+    const context = SillyTavern.getContext?.();
+    const chat = Array.isArray(context?.chat) ? context.chat : [];
+    const pendingChoiceContext = chat_metadata['bb_vn_pending_choice_context'];
+
+    if (chat.length === 0) {
+        return pendingChoiceContext && pendingChoiceContext.intent ? pendingChoiceContext : null;
+    }
+
+    const lastMsg = chat[chat.length - 1];
+    if (!lastMsg?.is_user) return null;
+
+    const boundChoiceContext = lastMsg.extra?.bb_vn_choice_context;
+    if (boundChoiceContext && boundChoiceContext.intent) return boundChoiceContext;
+
+    if (!pendingChoiceContext || !pendingChoiceContext.intent) return null;
+
+    const preview = String(pendingChoiceContext.messagePreview || '').trim();
+    const messageText = String(lastMsg.mes || '').trim();
+    if (!preview || !messageText) return null;
+
+    const previewSlice = preview.slice(0, 80);
+    const matchesPreview = messageText.startsWith(previewSlice) || previewSlice.startsWith(messageText.slice(0, 40));
+    return matchesPreview ? pendingChoiceContext : null;
+}
+
 export function buildChoiceContextPrompt() {
-    const choiceContext = chat_metadata['bb_vn_choice_context'];
+    if (extension_settings[MODULE_NAME]?.disableRelationshipTracker === true) return '';
+    const choiceContext = getActiveChoiceContext();
     if (!choiceContext || !choiceContext.intent) return '';
+    const useEmotionalChoiceFraming = !!extension_settings[MODULE_NAME]?.emotionalChoiceFraming;
+    const responseLengthDirective = buildAssistantLengthDirective(getActiveVnReplyLength());
 
     const targets = Array.isArray(choiceContext.targets) && choiceContext.targets.length > 0
         ? choiceContext.targets.join(', ')
         : 'general scene';
+
+    if (!useEmotionalChoiceFraming) {
+        return `
+[DIRECTOR'S COMMAND FOR THIS TURN]:
+The player has just made a SPECIFIC narrative choice. You MUST execute it in this very response.
+
+- INTENT: "${choiceContext.intent}"
+- FOCUS: ${targets !== 'general scene' ? `Make sure ${targets} reacts clearly to this.` : 'Shift the scene in a clear, noticeable way.'}
+
+EXECUTION PROTOCOL:
+1. Do not ignore, soften away, or overwrite the chosen action.
+2. Advance the scene immediately instead of stalling or looping in place.
+3. Keep the response natural to the scene without forcing extra tone or forecast framing.
+4. LENGTH & PACING: ${responseLengthDirective}
+`.trim();
+    }
 
     return `
 [DIRECTOR'S STRICT COMMAND FOR THIS TURN]:
@@ -320,10 +1056,12 @@ EXECUTION PROTOCOL:
 1. FOCUS: ${targets !== 'general scene' ? `Make sure ${targets} reacts strongly to this.` : 'Shift the entire scene dynamic based on the forecast.'}
 2. OUTCOME: You are FORBIDDEN from stalling. The "FORCED OUTCOME" must actually happen or clearly begin to manifest in this very response.
 3. THEME: Adapt your vocabulary, pacing, and character reactions to perfectly match the "${choiceContext.tone || 'neutral'}" tone.
+4. LENGTH & PACING: ${responseLengthDirective}
 `.trim();
 }
 
 export function tryBindPendingChoiceContextToMessage(msg) {
+    if (extension_settings[MODULE_NAME]?.disableRelationshipTracker === true) return false;
     const pendingChoiceContext = chat_metadata['bb_vn_pending_choice_context'];
     if (!pendingChoiceContext || !msg || !msg.is_user) return false;
     if (msg.extra?.bb_vn_choice_context) return false;
@@ -341,7 +1079,7 @@ export function tryBindPendingChoiceContextToMessage(msg) {
         intent: pendingChoiceContext.intent || '',
         tone: pendingChoiceContext.tone || '',
         forecast: pendingChoiceContext.forecast || '',
-        targets: Array.isArray(pendingChoiceContext.targets) ? pendingChoiceContext.targets : [],
+        targets: Array.isArray(pendingChoiceContext.targets) ? pendingChoiceContext.targets :[],
         at: pendingChoiceContext.at || Date.now(),
     };
 
@@ -349,41 +1087,65 @@ export function tryBindPendingChoiceContextToMessage(msg) {
     return true;
 }
 
-export async function bbVnGenerateOptionsFlow(excludedIntents = []) {
+export async function bbVnGenerateOptionsFlow(request = []) {
     const btn = jQuery('#bb-vn-btn-generate');
+    const generationRequest = normalizeOptionsGenerationRequest(request);
     
     if (btn.hasClass('loading')) {
-        setIsVnGenerationCancelled(true);
-        if (vnGenerationAbortController) vnGenerationAbortController.abort();
-        btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия VN').show();
+        createVnOptionsGenerationToken();
+        cancelVnGeneration();
+        restoreVNOptions(false);
         notifyInfo("Генерация вариантов отменена");
         return;
     }
 
+    const requestToken = createVnOptionsGenerationToken();
+    let completed = false;
     setIsVnGenerationCancelled(false);
 
-    btn.show().addClass('loading').html('<i class="fa-solid fa-spinner fa-spin"></i> Сценарий в обработке... <i class="fa-solid fa-xmark" style="margin-left: 6px; color: #ef4444;" title="Отменить"></i>');
-    jQuery('#bb-vn-options-container').removeClass('active').empty();
+    setVnGenerateButtonLoading();
+    resetVnOptionsContainer({ clear: true });
 
     try {
-        const chat = SillyTavern.getContext().chat;
+        const context = SillyTavern.getContext();
+        const chat = context.chat;
         if (!chat || chat.length === 0) throw new Error("Чат пуст");
         
-        const recentMessages = chat.slice(-4).map(m => `${m.name}: ${m.mes}`).join('\\n\\n');
-        const lastMessageText = chat[chat.length - 1] ? chat[chat.length - 1].mes : ""; 
+        const recentMessages = chat.slice(-10).map(message => `${message.name}: ${message.mes}`).join('\\n\\n');
+        const lastMessageText = chat[chat.length - 1]?.mes || '';
+        const replyLength = getActiveVnReplyLength();
+        const useEmotionalChoiceFraming = !!extension_settings[MODULE_NAME]?.emotionalChoiceFraming;
 
-        const persona = SillyTavern.getContext().substituteParams('{{persona}}');
-        
         let prompt = OPTIONS_PROMPT
             .replace('{{chat}}', recentMessages)
-            .replace('{{persona}}', persona)
-            .replace('{{lastMessage}}', lastMessageText); 
+            .replace('{{lastMessage}}', lastMessageText);
 
-        const cleanedExcludedIntents = Array.isArray(excludedIntents)
-            ? excludedIntents.map(item => String(item || '').trim()).filter(Boolean)
-            : [];
-        if (cleanedExcludedIntents.length > 0) {
-            prompt += `\n\n[DO NOT REPEAT THESE PREVIOUS ACTION IDEAS]\n${cleanedExcludedIntents.map((item, idx) => `${idx + 1}. ${item}`).join('\n')}\nGenerate clearly different actions.`;
+        prompt = context.substituteParams(prompt);
+        prompt += `\n\n[ACTIVE LENGTH DIRECTIVE]\n${buildOptionLengthDirective(replyLength)}`;
+        prompt += '\n\n[STRUCTURED OUTPUT COMPATIBILITY]\nPreferred output is the JSON array from the template. If the runtime provides a JSON schema wrapper, return {"options":[...]} with exactly 3 option objects and no extra fields.';
+
+        if (useEmotionalChoiceFraming) {
+            prompt += '\n\n[TONE DIVERSITY RULE]\nAll 3 options MUST use clearly different emotional colors. Do not reuse the same tone family twice, even with different wording.';
+        }
+
+        if (generationRequest.excludedIntents.length > 0) {
+            prompt += `\n\n[DO NOT REPEAT THESE PREVIOUS ACTION IDEAS]\n${generationRequest.excludedIntents.map((item, idx) => `${idx + 1}. ${item}`).join('\n')}\nGenerate clearly different actions instead of cosmetic rewrites.`;
+        }
+
+        if (generationRequest.excludedTones.length > 0) {
+            prompt += `\n\n[AVOID REUSING THESE PREVIOUS TONES]\n${generationRequest.excludedTones.map((item, idx) => `${idx + 1}. ${item}`).join('\n')}\nChoose other emotional colors this time.`;
+        }
+
+        if (generationRequest.guidance) {
+            prompt += `\n\n[USER GUIDANCE FOR THIS GENERATION]\n${generationRequest.guidance}\nTreat this as a strong preference across intent, tone, forecast, and message while still keeping all 3 options clearly distinct.`;
+        }
+
+        if (generationRequest.mode === 'smart-reroll') {
+            prompt += '\n\n[SMART REROLL MODE]\nThis is a guided reroll. Avoid shallow paraphrases of the previous set and produce noticeably fresher options.';
+        } else if (generationRequest.mode === 'guided') {
+            prompt += '\n\n[GUIDED GENERATION MODE]\nThis is the first guided generation. Apply the user guidance proactively across all 3 options instead of treating it like a reroll.';
+        } else if (generationRequest.mode === 'reroll') {
+            prompt += '\n\n[REROLL MODE]\nReturn a fresh set, not cosmetic rewrites of the previous options.';
         }
 
         if (typeof window['bbGetSceneDirectorPrompt'] === 'function') {
@@ -394,19 +1156,40 @@ export async function bbVnGenerateOptionsFlow(excludedIntents = []) {
             }
         }
 
-        const generationResult = await generateFastPrompt(prompt, { responseFormat: 'json', includeMeta: true });
+        const finalizeOptionsSet = async (rawOptions = []) => {
+            ensureActiveVnOptionsGeneration(requestToken);
+            const rawCount = Array.isArray(rawOptions) ? rawOptions.length : 0;
+            let finalOptions = await fillMissingOptions(prompt, rawOptions);
+            ensureActiveVnOptionsGeneration(requestToken);
+            if (useEmotionalChoiceFraming && hasWeakToneDiversity(finalOptions)) {
+                finalOptions = await diversifyOptionTones(prompt, finalOptions);
+                ensureActiveVnOptionsGeneration(requestToken);
+            }
+            return {
+                rawCount,
+                finalOptions: dedupeOptions(finalOptions).slice(0, 3),
+            };
+        };
+
+        const generationResult = await generateFastPrompt(prompt, {
+            responseFormat: 'json',
+            includeMeta: true,
+            responseLength: getOptionsResponseLength(replyLength),
+            jsonSchema: getVnOptionsJsonSchema(),
+        });
+        ensureActiveVnOptionsGeneration(requestToken);
         const result = typeof generationResult === 'string'
             ? generationResult
             : generationResult?.content || '';
         const finishReason = generationResult?.meta?.finishReason || '';
         const provider = generationResult?.meta?.provider || 'unknown';
-        console.debug(`[BB VN][debug] generated result length=${String(result || '').length} provider=${provider} finish_reason=${finishReason || 'none'}`);
+        console.debug(`[BB VN][debug] generated result length=${String(result || '').length} provider=${provider} finish_reason=${finishReason || 'none'} mode=${generationRequest.mode || 'default'} length=${replyLength}`);
 
         if (provider === 'custom-api' && finishReason === 'length') {
-            throw new Error('Кастомный API обрезал ответ по лимиту токенов (finish_reason=length). Уменьшите объём запроса или сделайте реролл.');
+            throw new Error('Кастомный API обрезал ответ по лимиту токенов (finish_reason=length). Уменьшите объём запроса, переключите длину на более короткую или сделайте реролл.');
         }
 
-        if (isVnGenerationCancelled) throw new Error("Отменено пользователем");
+        ensureActiveVnOptionsGeneration(requestToken);
 
         let recoveredPayload = extractOptionsFromGeneration(result);
         let recoveredOptions = recoveredPayload.options;
@@ -414,37 +1197,37 @@ export async function bbVnGenerateOptionsFlow(excludedIntents = []) {
             console.warn('[BB VN] Initial options JSON parse failed. Attempting repair...', {
                 errors: recoveredPayload.errors,
             });
+            logOptionsJsonFailure(result, recoveredPayload.errors, 'initial');
 
             const repairedResult = await repairOptionsJson(result);
+            ensureActiveVnOptionsGeneration(requestToken);
             recoveredPayload = extractOptionsFromGeneration(repairedResult);
             recoveredOptions = recoveredPayload.options;
+            if (!recoveredPayload.ok) {
+                logOptionsJsonFailure(repairedResult, recoveredPayload.errors, 'repair');
+            }
         }
 
         if (recoveredPayload.ok && recoveredOptions && recoveredOptions.length > 0) {
-            const recoveredRawCount = recoveredOptions.length;
-            recoveredOptions = await fillMissingOptions(prompt, recoveredOptions);
-            const recoveredError = buildOptionsCountError(recoveredRawCount, recoveredOptions.length);
+            const { rawCount, finalOptions } = await finalizeOptionsSet(recoveredOptions);
+            ensureActiveVnOptionsGeneration(requestToken);
+            const recoveredError = buildOptionsCountError(rawCount, finalOptions.length);
             if (recoveredError) throw new Error(recoveredError);
-            maybeNotifyPartialOptions(recoveredOptions.length);
+            maybeNotifyPartialOptions(finalOptions.length);
 
-            const lastMsg = chat[chat.length - 1];
-            const swipeId = lastMsg.swipe_id || 0;
-            if (!lastMsg.extra) lastMsg.extra = {};
-            if (!lastMsg.extra.bb_vn_options_swipes) lastMsg.extra.bb_vn_options_swipes = {};
-            lastMsg.extra.bb_vn_options_swipes[swipeId] = recoveredOptions;
-            saveChatDebounced();
-
+            persistOptionsForCurrentSwipe(chat, finalOptions);
             if (typeof window['renderVNOptionsFromData'] === 'function') {
-                window['renderVNOptionsFromData'](recoveredOptions, true);
+                window['renderVNOptionsFromData'](finalOptions, true);
             }
+            completed = true;
             return;
         }
 
         if (provider === 'custom-api' && finishReason === 'length') {
-            throw new Error('Кастомный API обрезал ответ по лимиту токенов (finish_reason=length). Уменьшите объём запроса или сделайте реролл.');
+            throw new Error('Кастомный API обрезал ответ по лимиту токенов (finish_reason=length). Уменьшите объём запроса, переключите длину на более короткую или сделайте реролл.');
         }
 
-        if (isVnGenerationCancelled) throw new Error("Отменено пользователем");
+        ensureActiveVnOptionsGeneration(requestToken);
 
         const extractTopLevelJsonArray = (rawText = '') => {
             const source = String(rawText || '');
@@ -508,30 +1291,33 @@ export async function bbVnGenerateOptionsFlow(excludedIntents = []) {
         }
 
         if (parsedOptions && parsedOptions.length > 0) {
-            const parsedRawCount = parsedOptions.length;
-            parsedOptions = await fillMissingOptions(prompt, parsedOptions);
-            const parsedError = buildOptionsCountError(parsedRawCount, parsedOptions.length);
+            const { rawCount, finalOptions } = await finalizeOptionsSet(parsedOptions);
+            ensureActiveVnOptionsGeneration(requestToken);
+            const parsedError = buildOptionsCountError(rawCount, finalOptions.length);
             if (parsedError) throw new Error(parsedError);
-            maybeNotifyPartialOptions(parsedOptions.length);
+            maybeNotifyPartialOptions(finalOptions.length);
             
-            const lastMsg = chat[chat.length - 1];
-            const swipeId = lastMsg.swipe_id || 0;
-            if (!lastMsg.extra) lastMsg.extra = {};
-            if (!lastMsg.extra.bb_vn_options_swipes) lastMsg.extra.bb_vn_options_swipes = {};
-            lastMsg.extra.bb_vn_options_swipes[swipeId] = parsedOptions;
-            saveChatDebounced();
+            persistOptionsForCurrentSwipe(chat, finalOptions);
 
             if (typeof window['renderVNOptionsFromData'] === 'function') {
-                window['renderVNOptionsFromData'](parsedOptions, true);
+                window['renderVNOptionsFromData'](finalOptions, true);
             }
-        } else { throw new Error("Ответ пуст"); }
+            completed = true;
+        } else { throw new Error('Ответ пуст'); }
 
     } catch (e) {
-        if (e.message !== "Отменено пользователем") {
-            console.error("[BB VN] Ошибка генерации:", e);
-            notifyError(e.message || "Не удалось сгенерировать варианты");
-            btn.removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия VN').show();
+        if (e.message !== VN_GENERATION_CANCELLED_MESSAGE) {
+            console.error('[BB VN] Ошибка генерации:', e);
+            notifyError(e.message || 'Не удалось сгенерировать варианты');
         }
+    } finally {
+        if (!isActiveVnOptionsGenerationToken(requestToken)) return;
+
+        if (!completed && btn.hasClass('loading')) {
+            restoreVNOptions(false);
+        }
+
+        setIsVnGenerationCancelled(false);
     }
 }
 
@@ -559,9 +1345,40 @@ export function restoreVNOptions(autoOpen = false) {
 }
 
 export function clearVNOptions() {
-    jQuery('#bb-vn-options-container').empty().removeClass('active');
+    resetVnOptionsContainer({ clear: true });
     const ta = document.querySelector('#send_textarea');
-    if (ta instanceof HTMLTextAreaElement && ta.value.trim().length === 0) {
-        jQuery('#bb-vn-btn-generate').show().removeClass('loading').html('<i class="fa-solid fa-clapperboard"></i> Действия VN');
+    const btn = jQuery('#bb-vn-btn-generate');
+    setVnGenerateButtonIdle({ hasSaved: false });
+    if (ta instanceof HTMLTextAreaElement && ta.value.trim().length > 0) {
+        btn.hide();
+        return;
     }
+    btn.show();
+}
+
+export function clearSavedVNOptions() {
+    const chat = SillyTavern.getContext().chat;
+    if (!chat || chat.length === 0) {
+        clearVNOptions();
+        return false;
+    }
+
+    const lastMsg = chat[chat.length - 1];
+    if (!lastMsg || lastMsg.is_user) {
+        clearVNOptions();
+        return false;
+    }
+
+    const swipeId = lastMsg.swipe_id || 0;
+    const swipesMap = lastMsg.extra?.bb_vn_options_swipes;
+    if (swipesMap && Object.prototype.hasOwnProperty.call(swipesMap, swipeId)) {
+        delete swipesMap[swipeId];
+        if (Object.keys(swipesMap).length === 0 && lastMsg.extra) {
+            delete lastMsg.extra.bb_vn_options_swipes;
+        }
+        saveChatDebounced();
+    }
+
+    clearVNOptions();
+    return true;
 }
