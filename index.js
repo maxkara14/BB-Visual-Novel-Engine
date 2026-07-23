@@ -6,7 +6,8 @@ import {
     recalculateAllStats, 
     setRenderHudCallback,
     getCombinedSocial,
-    getCurrentPersonaScopeKey
+    getCurrentPersonaScopeKey,
+    queueSnapshotReplayForGeneratedSwipe
 } from './modules/social.js';
 import { 
     ensureHudContainer, 
@@ -346,9 +347,10 @@ jQuery(async () => {
             restoreVNOptions(false);
             recalculateAllStats();
         });
-        eventSource.on(event_types.MESSAGE_SWIPED, () => {
+        eventSource.on(event_types.MESSAGE_SWIPED, (messageId) => {
             resetAutoGenQueue();
             restoreVNOptions(false);
+            queueSnapshotReplayForGeneratedSwipe(messageId);
             recalculateAllStats();
         });
         eventSource.on(event_types.MESSAGE_UPDATED, () => { recalculateAllStats(); });

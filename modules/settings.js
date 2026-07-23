@@ -2,7 +2,7 @@
 import { chat_metadata, saveChatDebounced, saveSettingsDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { MODULE_NAME, normalizeImpactSettings, normalizeImpactValue, normalizeVnReplyLength, resolveImpactScaleSettings } from './constants.js';
-import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog, bindActivePersonaState, getCurrentPersonaScopeKey, mergeCharacterRecords, resolveCharacterIdentity, exportActivePersonaSnapshot, importActivePersonaSnapshot, clearActivePersonaSnapshot } from './social.js';
+import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog, bindActivePersonaState, getCurrentPersonaScopeKey, mergeCharacterRecords, resolveCharacterIdentity, exportActivePersonaSnapshot, importActivePersonaSnapshot, clearActivePersonaSnapshot, markSnapshotReplayMessage, getLatestAssistantMessageEntry } from './social.js';
 import { notifySuccess, notifyInfo, notifyError, showHudToast } from './toasts.js';
 import { restoreVNOptions, clearSavedVNOptions } from './generator.js';
 
@@ -69,6 +69,10 @@ function makeDebugEventId(prefix = 'debug') {
     return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function makeDebugEventTimestamp() {
+    return new Date().toISOString();
+}
+
 function makeSnapshotFilename() {
     const scopeKey = getCurrentPersonaScopeKey().replace(/[^\w-]+/g, '_');
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -94,13 +98,16 @@ export function injectDebugData(impact, isRomance = false) {
     if(!charName) return notifyError("Укажите имя!");
     const chat = SillyTavern.getContext().chat;
     if (!chat?.length) return;
-    const lastMsg = chat[chat.length - 1];
+    const targetMessage = getLatestAssistantMessageEntry(chat);
+    if (!targetMessage) return notifyError("Нет сообщения персонажа для привязки debug-события.");
+    const lastMsg = targetMessage.message;
     if (!lastMsg.extra) lastMsg.extra = {};
     if (!lastMsg.extra.bb_social_swipes) lastMsg.extra.bb_social_swipes = {};
     const sId = lastMsg.swipe_id || 0;
     if (!lastMsg.extra.bb_social_swipes[sId]) lastMsg.extra.bb_social_swipes[sId] = [];
     const reason = String(jQuery('#bb-debug-reason').val() || '').trim() || (isRomance ? 'Дебаг-романтика' : 'Дебаг-доверие');
-    lastMsg.extra.bb_social_swipes[sId].push({ name: charName, friendship_impact: isRomance ? "none" : impact, romance_impact: isRomance ? impact : "none", role_dynamic: "", reason, emotion: "тест", debug_event: true, debug_id: makeDebugEventId('impact'), scope: getCurrentPersonaScopeKey() });
+    lastMsg.extra.bb_social_swipes[sId].push({ name: charName, friendship_impact: isRomance ? "none" : impact, romance_impact: isRomance ? impact : "none", role_dynamic: "", reason, emotion: "тест", debug_event: true, debug_id: makeDebugEventId('impact'), event_created_at: makeDebugEventTimestamp(), scope: getCurrentPersonaScopeKey() });
+    markSnapshotReplayMessage(targetMessage.messageId, sId, 'debug-impact');
     saveChatDebounced(); recalculateAllStats(false); notifySuccess("Данные внедрены.");
 }
 
@@ -110,7 +117,9 @@ export function injectMixedDeepDebugData() {
     if(!charName) return notifyError("Укажите имя!");
     const chat = SillyTavern.getContext().chat;
     if (!chat?.length) return;
-    const lastMsg = chat[chat.length - 1];
+    const targetMessage = getLatestAssistantMessageEntry(chat);
+    if (!targetMessage) return notifyError("Нет сообщения персонажа для привязки debug-события.");
+    const lastMsg = targetMessage.message;
     if (!lastMsg.extra) lastMsg.extra = {};
     if (!lastMsg.extra.bb_social_swipes) lastMsg.extra.bb_social_swipes = {};
     const sId = lastMsg.swipe_id || 0;
@@ -125,8 +134,10 @@ export function injectMixedDeepDebugData() {
         emotion: "опасное влечение",
         debug_event: true,
         debug_id: makeDebugEventId('mixed'),
+        event_created_at: makeDebugEventTimestamp(),
         scope: getCurrentPersonaScopeKey(),
     });
+    markSnapshotReplayMessage(targetMessage.messageId, sId, 'debug-mixed');
     saveChatDebounced();
     recalculateAllStats(false);
     notifySuccess("Смешанное незабываемое событие внедрено.");
@@ -173,6 +184,8 @@ export function wipeAllSocialData() {
     scopeState.snapshot_baseline = null;
     scopeState.snapshot_cutoff_index = 0;
     scopeState.snapshot_restore_state = null;
+    scopeState.snapshot_post_import_replay_keys = {};
+    scopeState.snapshot_post_import_pending_swipes = {};
     chat_metadata['bb_vn_global_log'] = scopeState.global_log;
     chat_metadata['bb_vn_char_bases'] = scopeState.char_bases;
     chat_metadata['bb_vn_ignored_chars'] = scopeState.ignored_chars;
@@ -592,10 +605,13 @@ export function setupExtensionSettings() {
         const trait = normalizeDebugTraitText(jQuery('#bb-debug-reason').val(), 'Светлая черта');
         if(!charName || !trait) return notifyError("Укажите имя и текст черты!");
         const chat = SillyTavern.getContext().chat; if (!chat?.length) return;
-        const lastMsg = chat[chat.length - 1]; const sId = lastMsg.swipe_id || 0;
+        const targetMessage = getLatestAssistantMessageEntry(chat);
+        if (!targetMessage) return notifyError("Нет сообщения персонажа для привязки черты.");
+        const lastMsg = targetMessage.message; const sId = lastMsg.swipe_id || 0;
         if (!lastMsg.extra) lastMsg.extra = {}; if (!lastMsg.extra.bb_vn_char_traits_swipes) lastMsg.extra.bb_vn_char_traits_swipes = {};
         if (!lastMsg.extra.bb_vn_char_traits_swipes[sId]) lastMsg.extra.bb_vn_char_traits_swipes[sId] = [];
         lastMsg.extra.bb_vn_char_traits_swipes[sId].push({ charName, trait, type: 'positive', scope: getCurrentPersonaScopeKey() });
+        markSnapshotReplayMessage(targetMessage.messageId, sId, 'debug-trait');
         saveChatDebounced(); recalculateAllStats(false); notifySuccess("Черта внедрена.");
     });
 
@@ -604,10 +620,13 @@ export function setupExtensionSettings() {
         const trait = normalizeDebugTraitText(jQuery('#bb-debug-reason').val(), 'Мрачная черта');
         if(!charName || !trait) return notifyError("Укажите имя и текст черты!");
         const chat = SillyTavern.getContext().chat; if (!chat?.length) return;
-        const lastMsg = chat[chat.length - 1]; const sId = lastMsg.swipe_id || 0;
+        const targetMessage = getLatestAssistantMessageEntry(chat);
+        if (!targetMessage) return notifyError("Нет сообщения персонажа для привязки черты.");
+        const lastMsg = targetMessage.message; const sId = lastMsg.swipe_id || 0;
         if (!lastMsg.extra) lastMsg.extra = {}; if (!lastMsg.extra.bb_vn_char_traits_swipes) lastMsg.extra.bb_vn_char_traits_swipes = {};
         if (!lastMsg.extra.bb_vn_char_traits_swipes[sId]) lastMsg.extra.bb_vn_char_traits_swipes[sId] = [];
         lastMsg.extra.bb_vn_char_traits_swipes[sId].push({ charName, trait, type: 'negative', scope: getCurrentPersonaScopeKey() });
+        markSnapshotReplayMessage(targetMessage.messageId, sId, 'debug-trait');
         saveChatDebounced(); recalculateAllStats(false); notifySuccess("Черта внедрена.");
     });
 
@@ -616,10 +635,13 @@ export function setupExtensionSettings() {
         const status = String(jQuery('#bb-debug-reason').val()).trim();
         if(!charName || !status) return notifyError("Укажите имя и статус!");
         const chat = SillyTavern.getContext().chat; if (!chat?.length) return;
-        const lastMsg = chat[chat.length - 1]; const sId = lastMsg.swipe_id || 0;
+        const targetMessage = getLatestAssistantMessageEntry(chat);
+        if (!targetMessage) return notifyError("Нет сообщения персонажа для привязки статуса.");
+        const lastMsg = targetMessage.message; const sId = lastMsg.swipe_id || 0;
         if (!lastMsg.extra) lastMsg.extra = {}; if (!lastMsg.extra.bb_social_swipes) lastMsg.extra.bb_social_swipes = {};
         if (!lastMsg.extra.bb_social_swipes[sId]) lastMsg.extra.bb_social_swipes[sId] = [];
-        lastMsg.extra.bb_social_swipes[sId].push({ name: charName, friendship_impact: "none", romance_impact: "none", status, manual_status: true, reason: "Ручная смена статуса", emotion: "дебаг", scope: getCurrentPersonaScopeKey() });
+        lastMsg.extra.bb_social_swipes[sId].push({ name: charName, friendship_impact: "none", romance_impact: "none", status, manual_status: true, reason: "Ручная смена статуса", emotion: "дебаг", event_created_at: makeDebugEventTimestamp(), scope: getCurrentPersonaScopeKey() });
+        markSnapshotReplayMessage(targetMessage.messageId, sId, 'debug-status');
         saveChatDebounced(); recalculateAllStats(false); notifySuccess("Статус изменен.");
     });
 

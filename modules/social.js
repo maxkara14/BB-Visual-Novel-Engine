@@ -1010,6 +1010,8 @@ function ensurePersonaStateShape(scopeState = {}) {
     scopeState.snapshot_cutoff_index = parseInt(scopeState.snapshot_cutoff_index, 10) || 0;
     if (!scopeState.snapshot_baseline || typeof scopeState.snapshot_baseline !== 'object') scopeState.snapshot_baseline = null;
     if (!scopeState.snapshot_restore_state || typeof scopeState.snapshot_restore_state !== 'object') scopeState.snapshot_restore_state = null;
+    if (!scopeState.snapshot_post_import_replay_keys || typeof scopeState.snapshot_post_import_replay_keys !== 'object' || Array.isArray(scopeState.snapshot_post_import_replay_keys)) scopeState.snapshot_post_import_replay_keys = {};
+    if (!scopeState.snapshot_post_import_pending_swipes || typeof scopeState.snapshot_post_import_pending_swipes !== 'object' || Array.isArray(scopeState.snapshot_post_import_pending_swipes)) scopeState.snapshot_post_import_pending_swipes = {};
     if (!scopeState.label) scopeState.label = getCurrentPersonaLabel();
     return scopeState;
 }
@@ -1194,6 +1196,8 @@ export function importActivePersonaSnapshot(rawSnapshot = '') {
         char_bases_romance: cloneJsonData(snapshotData.char_bases_romance, {}),
     };
     scopeState.snapshot_cutoff_index = Array.isArray(chat) ? chat.length : 0;
+    scopeState.snapshot_post_import_replay_keys = {};
+    scopeState.snapshot_post_import_pending_swipes = {};
     scopeState.log_cutoff_index = Array.isArray(chat) ? chat.length : 0;
     if (parsedSnapshot?.persona_label) scopeState.label = String(parsedSnapshot.persona_label);
 
@@ -1225,11 +1229,186 @@ export function clearActivePersonaSnapshot() {
     scopeState.snapshot_baseline = null;
     scopeState.snapshot_cutoff_index = 0;
     scopeState.snapshot_restore_state = null;
+    scopeState.snapshot_post_import_replay_keys = {};
+    scopeState.snapshot_post_import_pending_swipes = {};
     if (!restoreState) {
         scopeState.log_cutoff_index = 0;
     }
     bindActivePersonaState();
     return hadSnapshot;
+}
+
+function getSnapshotReplayStores(scopeState = {}) {
+    if (!scopeState.snapshot_post_import_replay_keys || typeof scopeState.snapshot_post_import_replay_keys !== 'object' || Array.isArray(scopeState.snapshot_post_import_replay_keys)) {
+        scopeState.snapshot_post_import_replay_keys = {};
+    }
+    if (!scopeState.snapshot_post_import_pending_swipes || typeof scopeState.snapshot_post_import_pending_swipes !== 'object' || Array.isArray(scopeState.snapshot_post_import_pending_swipes)) {
+        scopeState.snapshot_post_import_pending_swipes = {};
+    }
+
+    return {
+        replayKeys: scopeState.snapshot_post_import_replay_keys,
+        pendingSwipes: scopeState.snapshot_post_import_pending_swipes,
+    };
+}
+
+function hasActiveSnapshotBaseline(scopeState = {}) {
+    return !!scopeState.snapshot_baseline && (parseInt(scopeState.snapshot_cutoff_index, 10) || 0) > 0;
+}
+
+function getMessageSwipeId(msg = null) {
+    const swipeId = Number(msg?.swipe_id ?? 0);
+    return Number.isFinite(swipeId) ? Math.max(0, Math.trunc(swipeId)) : 0;
+}
+
+function buildSnapshotReplayKey(messageId, swipeId) {
+    const safeMessageId = Number(messageId);
+    const safeSwipeId = Number(swipeId);
+    if (!Number.isInteger(safeMessageId) || safeMessageId < 0) return '';
+    return `${safeMessageId}|${Number.isFinite(safeSwipeId) ? Math.max(0, Math.trunc(safeSwipeId)) : 0}`;
+}
+
+function buildSnapshotPendingSignature(msg = null) {
+    if (!msg || typeof msg !== 'object') return '';
+    return JSON.stringify([
+        String(msg.mes || ''),
+        String(msg.send_date || ''),
+        String(msg.gen_started || ''),
+        String(msg.gen_finished || ''),
+        String(msg.name || msg.original_name || ''),
+        getMessageSwipeId(msg),
+    ]);
+}
+
+function getSnapshotCutoffIndex(scopeState = {}, chat = []) {
+    return Math.min(parseInt(scopeState.snapshot_cutoff_index, 10) || 0, Array.isArray(chat) ? chat.length : 0);
+}
+
+function isMessageBeforeSnapshotCutoff(messageId, scopeState = {}, chat = []) {
+    const safeMessageId = Number(messageId);
+    return Number.isInteger(safeMessageId) && safeMessageId >= 0 && safeMessageId < getSnapshotCutoffIndex(scopeState, chat);
+}
+
+function activateSnapshotReplayKey(scopeState = {}, messageId, swipeId, source = 'manual') {
+    const key = buildSnapshotReplayKey(messageId, swipeId);
+    if (!key) return false;
+    const { replayKeys } = getSnapshotReplayStores(scopeState);
+    replayKeys[key] = {
+        source: String(source || 'manual'),
+        at: Date.now(),
+    };
+    return true;
+}
+
+export function markSnapshotReplayMessage(messageId = null, swipeId = null, source = 'manual') {
+    const { scopeState } = bindActivePersonaState();
+    if (!hasActiveSnapshotBaseline(scopeState)) return false;
+
+    const chat = SillyTavern.getContext().chat || [];
+    const resolvedMessageId = messageId === null || messageId === undefined ? chat.length - 1 : Number(messageId);
+    if (!isMessageBeforeSnapshotCutoff(resolvedMessageId, scopeState, chat)) return false;
+
+    const msg = chat[resolvedMessageId];
+    if (!msg || msg.is_user) return false;
+
+    const resolvedSwipeId = swipeId === null || swipeId === undefined ? getMessageSwipeId(msg) : swipeId;
+    return activateSnapshotReplayKey(scopeState, resolvedMessageId, resolvedSwipeId, source);
+}
+
+export function getLatestAssistantMessageEntry(chatOverride = null) {
+    const chat = Array.isArray(chatOverride) ? chatOverride : (SillyTavern.getContext().chat || []);
+    for (let messageId = chat.length - 1; messageId >= 0; messageId--) {
+        const message = chat[messageId];
+        if (message && !message.is_user) return { message, messageId };
+    }
+    return null;
+}
+
+export function queueSnapshotReplayForGeneratedSwipe(messageId = null) {
+    const { scopeState } = bindActivePersonaState();
+    if (!hasActiveSnapshotBaseline(scopeState)) return false;
+
+    const chat = SillyTavern.getContext().chat || [];
+    const resolvedMessageId = messageId === null || messageId === undefined ? chat.length - 1 : Number(messageId);
+    if (!isMessageBeforeSnapshotCutoff(resolvedMessageId, scopeState, chat)) return false;
+
+    const msg = chat[resolvedMessageId];
+    if (!msg || msg.is_user) return false;
+
+    const swipeId = getMessageSwipeId(msg);
+    const swipesLength = Array.isArray(msg.swipes) ? msg.swipes.length : 0;
+    if (swipeId < swipesLength) return false;
+
+    const key = buildSnapshotReplayKey(resolvedMessageId, swipeId);
+    if (!key) return false;
+
+    const { pendingSwipes } = getSnapshotReplayStores(scopeState);
+    pendingSwipes[String(resolvedMessageId)] = {
+        key,
+        swipe_id: swipeId,
+        signature: buildSnapshotPendingSignature(msg),
+        at: Date.now(),
+    };
+    return true;
+}
+
+function promoteSnapshotReplayPendingSwipes(chat = [], scopeState = {}) {
+    if (!hasActiveSnapshotBaseline(scopeState)) return false;
+
+    const { replayKeys, pendingSwipes } = getSnapshotReplayStores(scopeState);
+    let changed = false;
+
+    Object.entries(pendingSwipes).forEach(([messageIdKey, pending]) => {
+        const messageId = Number(messageIdKey);
+        const pendingSwipeId = Number(pending?.swipe_id);
+        const msg = Array.isArray(chat) ? chat[messageId] : null;
+
+        if (!Number.isInteger(messageId) || !Number.isFinite(pendingSwipeId) || !msg || msg.is_user) {
+            delete pendingSwipes[messageIdKey];
+            changed = true;
+            return;
+        }
+
+        const currentSwipeId = getMessageSwipeId(msg);
+        if (currentSwipeId !== Math.trunc(pendingSwipeId)) {
+            delete pendingSwipes[messageIdKey];
+            changed = true;
+            return;
+        }
+
+        const swipesLength = Array.isArray(msg.swipes) ? msg.swipes.length : 0;
+        if (currentSwipeId >= swipesLength) return;
+
+        if (buildSnapshotPendingSignature(msg) === String(pending?.signature || '')) return;
+
+        const key = pending?.key || buildSnapshotReplayKey(messageId, currentSwipeId);
+        if (key) {
+            replayKeys[key] = {
+                source: 'swipe',
+                at: Date.now(),
+            };
+        }
+        delete pendingSwipes[messageIdKey];
+        changed = true;
+    });
+
+    return changed;
+}
+
+function shouldProcessSnapshotReplayMessage(scopeState = {}, messageId, msg = null) {
+    if (!hasActiveSnapshotBaseline(scopeState)) return false;
+    const key = buildSnapshotReplayKey(messageId, getMessageSwipeId(msg));
+    if (!key) return false;
+    const { replayKeys } = getSnapshotReplayStores(scopeState);
+    return !!replayKeys[key];
+}
+
+function getRelationshipEventTimestamp(update = {}, msg = null) {
+    const rawTimestamp = String(update?.event_created_at || update?.created_at || msg?.send_date || '').trim();
+    if (!rawTimestamp) return '';
+    const parsedTimestamp = new Date(rawTimestamp);
+    if (Number.isNaN(parsedTimestamp.getTime())) return '';
+    return parsedTimestamp.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
 
 function saveActivePersonaCutoff() {
@@ -2535,12 +2714,15 @@ export function recalculateAllStats(isNewMessage = false) {
         return;
     }
 
+    if (promoteSnapshotReplayPendingSwipes(chat, scopeState)) needsSave = true;
+
     const journalCutoffIndex = getJournalCutoffIndex(chat);
-    const statsCutoffIndex = Math.min(parseInt(scopeState.snapshot_cutoff_index, 10) || 0, chat.length);
+    const statsCutoffIndex = getSnapshotCutoffIndex(scopeState, chat);
 
     chat.forEach((msg, idx) => {
-        if (idx < statsCutoffIndex) return;
-        const shouldRecordJournal = idx >= journalCutoffIndex;
+        const isSnapshotReplayMessage = idx < statsCutoffIndex && shouldProcessSnapshotReplayMessage(scopeState, idx, msg);
+        if (idx < statsCutoffIndex && !isSnapshotReplayMessage) return;
+        const shouldRecordJournal = idx >= journalCutoffIndex || isSnapshotReplayMessage;
         if (msg?.is_user && chat_metadata['bb_vn_pending_choice_context']) {
             if (tryBindPendingChoiceContextToMessage(msg)) needsSave = true;
         }
@@ -2838,8 +3020,7 @@ export function recalculateAllStats(isNewMessage = false) {
                     let pointsHtml = '';
                     if (f_delta !== 0) pointsHtml += `<div class="bb-glog-points" style="margin-right: 4px; padding: 4px 10px; border-radius: 8px;">🤝 Доверие: ${f_delta > 0 ? '+' : ''}${f_delta}</div>`;
                     if (r_delta !== 0) pointsHtml += `<div class="bb-glog-points" style="color: #f472b6; border-color: rgba(244,114,182,0.35); background: rgba(190,24,93,0.28); margin-right: 4px; padding: 4px 10px; border-radius: 8px;">💖 Влечение: ${r_delta > 0 ? '+' : ''}${r_delta}</div>`;
-                    let timeStr = "";
-                    if (msg.send_date) { try { timeStr = new Date(msg.send_date).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); } catch(e) {} }
+                    const timeStr = getRelationshipEventTimestamp(update, msg);
                     const logText = `<div class="bb-glog-main" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;"><span class="bb-glog-char">${escapeHtml(charName)}</span>${moodlet ? `<span class="bb-glog-delta" style="align-self: flex-start;">${escapeHtml(moodlet)}</span>` : ''}</div>${update.reason ? `<div class="bb-glog-reason" style="margin-top: 4px;">${escapeHtml(update.reason)}</div>` : ''}<div style="display:flex; flex-wrap:wrap; margin-top:6px;">${pointsHtml}</div>`;
                     addGlobalLog(logType, logText, timeStr);
                 }

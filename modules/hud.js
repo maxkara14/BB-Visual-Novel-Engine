@@ -24,7 +24,9 @@ import {
     getCharacterProfile,
     updateCharacterProfile,
     renameCharacterRecord,
-    mergeCharacterRecords
+    mergeCharacterRecords,
+    markSnapshotReplayMessage,
+    getLatestAssistantMessageEntry
 } from './social.js';
 import { cancelVnGeneration, crystallizeTraitFromMemories, generateCharacterDescription, isVnGenerationAbortError } from './generator.js';
 
@@ -1125,12 +1127,15 @@ export function renderSocialHud() {
                     }));
                     if (!result || result.length > 240) throw new Error('INVALID_TRAIT_OUTPUT');
                     const chat = SillyTavern.getContext().chat;
-                    const lastMsg = chat[chat.length - 1];
+                    const targetMessage = getLatestAssistantMessageEntry(chat);
+                    if (!targetMessage) throw new Error('NO_ASSISTANT_MESSAGE');
+                    const lastMsg = targetMessage.message;
                     const sId = lastMsg.swipe_id || 0;
                     if (!lastMsg.extra) lastMsg.extra = {};
                     if (!lastMsg.extra.bb_vn_char_traits_swipes) lastMsg.extra.bb_vn_char_traits_swipes = {};
                     if (!lastMsg.extra.bb_vn_char_traits_swipes[sId]) lastMsg.extra.bb_vn_char_traits_swipes[sId] = [];
                     lastMsg.extra.bb_vn_char_traits_swipes[sId].push({ charName: charName, trait: result, type: isPositive ? 'positive' : 'negative', scope: getCurrentPersonaScopeKey() });
+                    markSnapshotReplayMessage(targetMessage.messageId, sId, 'hud-trait');
                     saveChatDebounced();
                     recalculateAllStats();
                     showTraitCrystallizedToast({
