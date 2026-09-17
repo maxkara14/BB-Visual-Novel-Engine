@@ -667,7 +667,7 @@ test('profile output containing only reasoning fails without repair', async () =
     assert.equal(JSON.stringify(h.logs).includes('Private reasoning'), false);
 });
 
-test('legacy settings retain the custom source; explicit main overrides it for VN only', async () => {
+test('legacy settings retain the custom source; explicit main overrides it for all generations', async () => {
     const h = await harness({ custom: true });
     assert.equal(h.connections.resolveVnGenerationSource(h.settings['BB-Visual-Novel']), 'custom');
     h.settings['BB-Visual-Novel'].vnGenerationSource = 'main';
@@ -676,12 +676,12 @@ test('legacy settings retain the custom source; explicit main overrides it for V
     h.respond(0);
     await run;
     run = h.api.generateFastPrompt('utility');
-    assert.equal(h.calls[1].kind, 'custom');
+    assert.equal(h.calls[1].kind, 'main');
     h.respond(1);
     await run;
 });
 
-test('explicit custom source works for VN without enabling it for utility calls', async () => {
+test('explicit custom source works without rewriting legacy settings', async () => {
     const h = await harness();
     h.settings['BB-Visual-Novel'].vnGenerationSource = 'custom';
     const run = h.api.bbVnGenerateOptionsFlow();
@@ -821,4 +821,51 @@ test('profile schema uses Tavern override payload without switching connection',
 test('explicit JSON mode refuses unsupported main route before transport',async()=>{
     const h=await harness();h.settings['BB-Visual-Novel'].vnJsonMode='json';
     await h.api.bbVnGenerateOptionsFlow();assert.equal(h.calls.length,0);assert.equal(h.saves,0);assert.equal(h.errors.length,1);
+});
+
+test('all generation routes share the selected connection without rewriting legacy settings', async () => {
+    for (const source of ['main', 'custom', 'profile']) {
+        const h = await harness({ custom: source === 'main' });
+        Object.assign(h.settings['BB-Visual-Novel'], { vnGenerationSource: source, vnConnectionProfileId: 'profile-a' });
+        const before = JSON.stringify(h.settings);
+        const run = h.api.generateFastPrompt('Generate character traits', {responseFormat:'text'});
+        await h.waitForCalls(1);
+        assert.equal(h.calls[0].kind, source);
+        if (source === 'custom') assert.equal(h.calls[0].body.response_format, undefined);
+        if (source === 'profile') assert.equal(h.calls[0].overridePayload.json_schema, undefined);
+        h.respond(0, 'Character traits');
+        assert.equal(await run, 'Character traits');
+        assert.equal(JSON.stringify(h.settings), before);
+    }
+});
+test('profile utility cancellation stays independent from VN generation', async () => {
+    const h = await harness();
+    selectProfile(h);
+    const controller = new AbortController();
+    const utility = h.api.generateFastPrompt('Character description', { signal: controller.signal, responseFormat:'text' });
+    await h.waitForCalls(1);
+    const vn = h.api.bbVnGenerateOptionsFlow();
+    await h.waitForCalls(2);
+    const rejected = assert.rejects(utility, error => error.code === 'cancelled');
+    controller.abort();
+    await rejected;
+    assert.equal(h.calls[0].signal.aborted, true);
+    assert.equal(h.calls[1].signal.aborted, false);
+    h.respond(1);
+    await vn;
+    assert.equal(h.saves, 1);
+    assert.equal(h.stops, 0);
+});
+test('unavailable common profile fails utility generation without silently changing source', async () => {
+    const h = await harness(); selectProfile(h); h.profileState.profiles = [];
+    await assert.rejects(h.api.generateFastPrompt('Character traits'), error => error.code === 'profile_missing');
+    assert.equal(h.calls.length, 0);
+});
+test('technical controls are collapsed and no separate utility connection is shown', async () => {
+    const source = await readFile(new URL('modules/settings.js', root), 'utf8');
+    const advanced = source.match(/<details id="bb-vn-advanced-settings">([\s\S]*?)<\/details>/);
+    assert.ok(advanced);
+    assert.ok(advanced[1].includes('id="bb-vn-cfg-json-mode"'));
+    assert.ok(advanced[1].includes('id="bb-vn-cfg-extra-requests"'));
+    assert.ok(!source.includes('bb-vn-cfg-usecustom'));
 });

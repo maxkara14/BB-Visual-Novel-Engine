@@ -358,15 +358,15 @@ async function generateFastPromptOnce(promptText, options = {}) {
     const s = { ...(token ? activeVnOptionsOperation.settings : extension_settings[MODULE_NAME]) };
     const signal = token ? activeVnOptionsOperation.controller.signal : options.signal;
     if (signal?.aborted) throw new VnRequestError('cancelled');
-    const source = token ? resolveVnGenerationSource(s) : (s.useCustomApi ? 'custom' : 'main');
+    const source = resolveVnGenerationSource(s);
     if (token && options.jsonMode === 'json' && source !== 'custom') throw new VnRequestError('json_mode_custom_only');
     if (token && options.jsonMode === 'schema' && source === 'main'
         && SillyTavern.getContext().mainApi && SillyTavern.getContext().mainApi !== 'openai') throw new VnRequestError('unsupported_format');
     if (source === 'profile') {
         const result = await generateWithProfile(promptText, s, {
-            signal, responseLength, jsonSchema, assertCurrent: () => ensureActiveVnOptionsGeneration(token),
+            signal, responseLength, jsonSchema, assertCurrent: token ? () => ensureActiveVnOptionsGeneration(token) : undefined,
         });
-        ensureActiveVnOptionsGeneration(token);
+        if (token) ensureActiveVnOptionsGeneration(token);
         reportGenerationSource(`профиль ${result.profileName}${result.model ? ` · ${result.model}` : ''}`);
         return includeMeta ? {
             content: result.content,

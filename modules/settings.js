@@ -275,9 +275,8 @@ export function setupExtensionSettings() {
                 <div class="bb-vn-settings-card bb-vn-settings-card--accent">
                     <span class="bb-vn-settings-section-title">⚡ Подключения</span>
                     <div id="bb-vn-connection-controls" class="bb-vn-settings-stack"></div>
-                    <span class="bb-vn-settings-note">Источник VN используется для вариантов и их исправлений. Для описаний персонажей и черт можно использовать Custom API ниже, иначе — основную модель.</span>
-                    <label class="checkbox_label bb-vn-setting-pill bb-vn-setting-pill--single"><input type="checkbox" id="bb-vn-cfg-usecustom" ${s.useCustomApi ? 'checked' : ''}><span>Custom API для описаний персонажей и черт</span></label>
-                    <div id="bb-vn-custom-api-block" class="bb-vn-settings-stack" style="display: ${s.useCustomApi || resolveVnGenerationSource(s) === 'custom' ? 'flex' : 'none'};">
+                    <span class="bb-vn-settings-note">Используется для вариантов ответа, описаний персонажей и черт характера.</span>
+                    <div id="bb-vn-custom-api-block" class="bb-vn-settings-stack" style="display: ${resolveVnGenerationSource(s) === 'custom' ? 'flex' : 'none'};">
                         <input type="text" id="bb-vn-cfg-url" class="text_pole" placeholder="URL">
                         <input type="password" id="bb-vn-cfg-key" class="text_pole" placeholder="API Ключ">
                         <div id="bb-vn-custom-api-status" class="bb-custom-api-status is-idle">
@@ -289,6 +288,10 @@ export function setupExtensionSettings() {
                         <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-fallback" ${s.allowMainFallback === true ? 'checked' : ''}><span>Разрешить резервную основную модель при сбое Custom API</span></label>
                         <span class="bb-vn-settings-note">Может вызвать дополнительный запрос к другой модели. Не применяется при отмене, ошибке ключа, квоте или блокировке провайдером.</span>
                     </div>
+                    <details id="bb-vn-advanced-settings">
+                    <summary>Дополнительно</summary>
+                    <div class="bb-vn-settings-stack">
+                    <span class="bb-vn-settings-note">Обычно менять эти настройки не нужно. Оставьте формат Auto: расширение само выберет способ получения вариантов.</span>
                     <label for="bb-vn-cfg-timeout">Тайм-аут одного запроса (секунды)</label>
                     <input type="number" id="bb-vn-cfg-timeout" class="text_pole" min="15" max="600" value="${normalizeRequestTimeout(s.requestTimeout)}">
                     <label for="bb-vn-cfg-json-mode">Формат VN-ответа</label>
@@ -300,10 +303,12 @@ export function setupExtensionSettings() {
                     <label for="bb-vn-cfg-extra-requests">Дополнительные запросы VN (0–5)</label>
                     <input id="bb-vn-cfg-extra-requests" type="number" class="text_pole" min="0" max="5" value="${normalizeAdditionalRequests(s.vnMaxAdditionalRequests)}">
                     <span class="bb-vn-settings-note">Общий лимит на повтор формата, резервную модель, исправление, дополнение и разнообразие вариантов.</span>
-                    <span id="bb-vn-generation-stage" class="bb-vn-settings-note" aria-live="polite"></span>
-                    <span id="bb-vn-generation-source" class="bb-vn-settings-note" aria-live="polite">Источник последнего результата: запросов ещё не было.</span>
+                    </div>
                     <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-debug" ${s.debugGeneration === true ? 'checked' : ''}><span>Подробная диагностика ответов</span></label>
                     <span class="bb-vn-settings-note">Включает фрагменты ответа модели в консоли браузера. Выключайте после диагностики и проверяйте текст перед отправкой отчёта.</span>
+                    </details>
+                    <span id="bb-vn-generation-stage" class="bb-vn-settings-note" aria-live="polite"></span>
+                    <span id="bb-vn-generation-source" class="bb-vn-settings-note" aria-live="polite">Источник последнего результата: запросов ещё не было.</span>
                 </div>
                 <label class="checkbox_label bb-vn-setting-pill bb-vn-setting-pill--single"><input type="checkbox" id="bb-vn-cfg-usemacro" ${s.useMacro ? 'checked' : ''}><span>Использовать макрос {{bb_vn}}</span></label>
 
@@ -401,7 +406,7 @@ export function setupExtensionSettings() {
     };
 
     const syncCustomApiVisualState = () => {
-        const useCustomApi = !!extension_settings[MODULE_NAME].useCustomApi || resolveVnGenerationSource(s) === 'custom';
+        const useCustomApi = resolveVnGenerationSource(s) === 'custom';
         const rawUrl = String(jQuery('#bb-vn-cfg-url').val() || '').trim();
         const rawKey = String(jQuery('#bb-vn-cfg-key').val() || '').trim();
         const selectedModel = String(extension_settings[MODULE_NAME].customApiModel || jQuery('#bb-vn-cfg-model').val() || '').trim();
@@ -549,19 +554,11 @@ export function setupExtensionSettings() {
     };
     window.addEventListener('bb-vn-generation-source', window.bbVnGenerationSourceHandler);
     const syncConnectionVisibility = () => {
-        jQuery('#bb-vn-custom-api-block').css('display', s.useCustomApi || resolveVnGenerationSource(s) === 'custom' ? 'flex' : 'none');
+        jQuery('#bb-vn-custom-api-block').css('display', resolveVnGenerationSource(s) === 'custom' ? 'flex' : 'none');
         syncCustomApiVisualState();
     };
-    const vnConnections = mountVnConnectionControls(document.getElementById('bb-vn-connection-controls'), s, () => {
+    mountVnConnectionControls(document.getElementById('bb-vn-connection-controls'), s, () => {
         invalidateVnOptionsGeneration();
-        saveSettingsDebounced();
-        syncConnectionVisibility();
-    });
-    jQuery('#bb-vn-cfg-usecustom').on('change', function() { 
-        const isChecked = jQuery(this).is(':checked'); extension_settings[MODULE_NAME].useCustomApi = isChecked;
-        vnConnections.sync();
-        if (!isChecked) lastVerifiedCustomApiFingerprint = '';
-        clearCustomApiRuntimeState();
         saveSettingsDebounced();
         syncConnectionVisibility();
     });
@@ -630,8 +627,6 @@ export function setupExtensionSettings() {
             if (data?.data) {
                 const modelIds = data.data.map(m => m?.id).filter(Boolean);
                 applyModelOptions(modelIds, extension_settings[MODULE_NAME].customApiModel || '');
-                extension_settings[MODULE_NAME].useCustomApi = true;
-                jQuery('#bb-vn-cfg-usecustom').prop('checked', true);
                 lastVerifiedCustomApiFingerprint = buildCustomApiFingerprint(rawUrl, rawKey);
                 clearCustomApiRuntimeState();
                 const activeModel = String(extension_settings[MODULE_NAME].customApiModel || jQuery('#bb-vn-cfg-model').val() || '').trim();

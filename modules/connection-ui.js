@@ -4,7 +4,7 @@ import { createTextOption } from './utils.js';
 export function mountVnConnectionControls(root, settings, onChange) {
     if (!root) return { sync() {} };
     const sourceLabel = document.createElement('label');
-    sourceLabel.textContent = 'Источник вариантов VN';
+    sourceLabel.textContent = 'Подключение для генерации';
     sourceLabel.htmlFor = 'bb-vn-cfg-source';
     const source = document.createElement('select');
     source.id = 'bb-vn-cfg-source';
@@ -12,7 +12,7 @@ export function mountVnConnectionControls(root, settings, onChange) {
     for (const [value, label] of [
         ['main', 'Текущее подключение SillyTavern'],
         ['profile', 'Профиль Connection Manager'],
-        ['custom', 'Custom API'],
+        ['custom', 'Своё API'],
     ]) source.append(createTextOption(label, value));
     const profileBlock = document.createElement('div');
     profileBlock.className = 'bb-vn-settings-stack';
