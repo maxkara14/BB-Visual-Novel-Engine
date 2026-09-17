@@ -74,7 +74,7 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
         window: { dispatchEvent: event => events.push(event), setInterval: () => 1, renderVNOptionsFromData: (data, open) => {
             rendered.push({ data, open }); loading = false;
         } },
-        fetch: (_url, init) => request('custom', init.signal),
+        fetch: (_url, init) => { const pending = request('custom', init.signal); calls.at(-1).body = JSON.parse(init.body); return pending; },
     });
     const mocks = new Map([
         ['../../../shared.js', { ConnectionManagerRequestService: {
@@ -82,15 +82,16 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
                 if (profileState.unavailable) throw new Error('Service disabled');
                 return profileState.profiles;
             },
-            sendRequest(profileId, prompt, maxTokens, options) {
+            validateProfile() { return { selected: profileState.backend || 'openai' }; },
+            sendRequest(profileId, prompt, maxTokens, options, overridePayload) {
                 const pending = request('profile', options.signal);
-                Object.assign(calls.at(-1), { profileId, prompt, maxTokens, options });
+                Object.assign(calls.at(-1), { profileId, prompt, maxTokens, options, overridePayload });
                 return pending;
             },
         } }],
         ['../../../../../script.js', {
             chat_metadata: {}, saveChatDebounced: () => { saves++; },
-            generateQuietPrompt: () => request('main'),
+            generateQuietPrompt: args => { const pending = request('main'); calls.at(-1).args = args; return pending; },
         }],
         ['../../../../extensions.js', { extension_settings: settings }],
         ['./social.js', {
@@ -745,4 +746,79 @@ test('scene change while the profile service is loading prevents the request', a
     assert.equal(h.calls.length, 0);
     assert.equal(h.saves, 0);
     assert.deepEqual(h.errors, []);
+});
+
+for (const mode of ['auto', 'schema', 'json', 'prompt']) {
+    test(`custom output mode ${mode} reaches the provider`, async () => {
+        const h = await harness({ custom: true });
+        h.settings['BB-Visual-Novel'].vnJsonMode = mode;
+        const run = h.api.bbVnGenerateOptionsFlow();
+        const format = h.calls[0].body.response_format;
+        assert.equal(format?.type, {auto:'json_schema',schema:'json_schema',json:'json_object'}[mode]);
+        if (format?.json_schema) assert.equal(format.json_schema.schema.properties.options.minItems, 3);
+        h.respond(0, JSON.stringify({options}));
+        await run;
+        assert.equal(h.saves, 1);
+    });
+}
+test('Auto downgrades only confirmed format failures', async () => {
+    const h = await harness({ custom: true });
+    const run = h.api.bbVnGenerateOptionsFlow();
+    for (let i = 0; i < 2; i++) {
+        h.calls[i].resolve({ok:false,status:400,json:async()=>({error:{param:'response_format',code:'unsupported_value'}})});
+        await h.waitForCalls(i + 2);
+    }
+    assert.equal(h.calls[1].body.response_format.type, 'json_object');
+    assert.equal(h.calls[2].body.response_format, undefined);
+    h.respond(2); await run;
+    assert.equal(h.saves, 1);
+    assert.equal(h.events.filter(e=>e.type==='bb-vn-generation-stage').at(-1).detail.requestNumber, 3);
+});
+for (const status of [400,401,429,500]) {
+    test(`unconfirmed error ${status} does not downgrade`, async () => {
+        const h = await harness({custom:true});
+        const run = h.api.bbVnGenerateOptionsFlow();
+        h.calls[0].resolve({ok:false,status,json:async()=>({error:{message:'Other failure'}})});
+        await run; assert.equal(h.calls.length,1); assert.equal(h.saves,0);
+    });
+}
+for (const content of ['{}','[]','```json\n{}\n```','{"options":[]}','null']) {
+    test(`empty payload ${content} does not trigger repair`, async()=>{
+        const h=await harness();const run=h.api.bbVnGenerateOptionsFlow();h.respond(0,content);
+        await run;assert.equal(h.calls.length,1);assert.equal(h.saves,0);
+    });
+}
+test('zero extra budget prevents repair and format retries',async()=>{
+    for(const custom of [false,true]) {
+        const h=await harness({custom});h.settings['BB-Visual-Novel'].vnMaxAdditionalRequests=0;
+        const run=h.api.bbVnGenerateOptionsFlow();
+        if(custom)h.calls[0].resolve({ok:false,status:422,json:async()=>({error:{message:'json_schema is not supported'}})});
+        else h.respond(0,'broken json');
+        await run;assert.equal(h.calls.length,1);assert.equal(h.saves,0);
+    }
+});
+test('validator accepts wrappers and markdown, rejects bad types and duplicates',async()=>{
+    const h=await harness();const api=await h.loadApi('./structured-output.js');
+    for(const content of [payload,JSON.stringify({options}),'```json\n'+payload+'\n```'])assert.equal(api.parseVnOptions(content).options.length,3);
+    const mixed=[null,{}, {intent:12,message:'text'}, {...options[0],targets:[3]},options[0],options[0],{...options[1],message:options[0].message}, options[2]];
+    assert.equal(api.parseVnOptions(JSON.stringify(mixed)).options.length,2);
+    assert.equal(api.parseVnOptions('[null,{}]').ok,false);
+});
+test('main Auto omits schema while explicit schema preserves invalid text',async()=>{
+    for(const mode of ['auto','schema']) {
+        const h=await harness();h.settings['BB-Visual-Novel'].vnJsonMode=mode;
+        const run=h.api.bbVnGenerateOptionsFlow();
+        assert.equal(h.calls[0].args.jsonSchema?.returnInvalid,mode==='schema'?true:undefined);
+        h.respond(0);await run;assert.equal(h.saves,1);
+    }
+});
+test('profile schema uses Tavern override payload without switching connection',async()=>{
+    const h=await harness();Object.assign(h.settings['BB-Visual-Novel'],{vnGenerationSource:'profile',vnConnectionProfileId:'profile-a',vnJsonMode:'schema'});
+    const run=h.api.bbVnGenerateOptionsFlow();await h.waitForCalls(1);
+    assert.equal(h.calls[0].overridePayload.json_schema.strict,true);
+    h.respond(0);await run;assert.equal(h.saves,1);
+});
+test('explicit JSON mode refuses unsupported main route before transport',async()=>{
+    const h=await harness();h.settings['BB-Visual-Novel'].vnJsonMode='json';
+    await h.api.bbVnGenerateOptionsFlow();assert.equal(h.calls.length,0);assert.equal(h.saves,0);assert.equal(h.errors.length,1);
 });

@@ -6,7 +6,6 @@ import {
     normalizeOptionData, 
     dedupeOptions, 
     escapeHtml,
-    parseModelJson,
     normalizeTraitResponse,
     isLikelyModelRefusalText,
     getToneClass,
@@ -24,6 +23,7 @@ import {
 import { injectCombinedSocialPrompt, getCurrentPersonaScopeKey } from './social.js';
 import { VnRequestError, normalizeRequestTimeout, httpRequestError, normalizeRequestError, readCustomApiContent, withRequestDeadline, getCustomApiIdentity } from './requests.js';
 import { generateWithProfile, resolveVnGenerationSource } from './connections.js';
+import { normalizeJsonMode, normalizeAdditionalRequests, initialJsonMode, customResponseFormat, isUnsupportedOutputFormat, isEmptyOptionsInput, parseVnOptions } from './structured-output.js';
 import {
     resetVnOptionsContainer,
     setVnGenerateButtonIdle,
@@ -77,11 +77,12 @@ function getOptionsResponseLength(lengthPreset = '') {
     return OPTIONS_RESPONSE_LENGTH_TOKENS[normalizeVnReplyLength(lengthPreset)] || OPTIONS_RESPONSE_LENGTH_TOKENS.medium;
 }
 
-function getVnOptionsJsonSchema() {
+function getVnOptionsJsonSchema(count = 3) {
     return {
         name: 'bb_vn_options',
         description: 'Three distinct visual novel action options.',
         strict: true,
+        returnInvalid: true,
         value: {
             type: 'object',
             additionalProperties: false,
@@ -89,8 +90,8 @@ function getVnOptionsJsonSchema() {
             properties: {
                 options: {
                     type: 'array',
-                    minItems: 3,
-                    maxItems: 3,
+                    minItems: count,
+                    maxItems: count,
                     items: {
                         type: 'object',
                         additionalProperties: false,
@@ -200,6 +201,7 @@ export function invalidateVnOptionsGeneration() {
     activeVnOptionsOperation = null;
     createVnOptionsGenerationToken();
     operation.controller?.abort();
+    reportOptionsStage('Отменено', operation.requestsMade || 0);
     restoreVNOptions(false);
 }
 
@@ -312,20 +314,57 @@ export function cancelVnGeneration() {
 
 export async function generateFastPrompt(promptText, options = {}) {
     const token = options.vnOptionsToken;
+    if (!token) return generateFastPromptOnce(promptText, options);
+    ensureActiveVnOptionsGeneration(token);
+    const operation = activeVnOptionsOperation;
+    const source = resolveVnGenerationSource(operation.settings);
+    if (!operation.jsonMode) operation.jsonMode = initialJsonMode(operation.settings, source);
+    for (;;) {
+        ensureActiveVnOptionsGeneration(token);
+        if (!hasOptionsRequestBudget(token)) throw new VnRequestError('request_budget');
+        operation.requestsMade++;
+        reportOptionsStage(options.stage || 'Генерация вариантов', operation.requestsMade);
+        try {
+            return await generateFastPromptOnce(promptText, { ...options, jsonMode: operation.jsonMode });
+        } catch (error) {
+            ensureActiveVnOptionsGeneration(token);
+            if (normalizeJsonMode(operation.settings.vnJsonMode) !== 'auto'
+                || source !== 'custom' || error.code !== 'unsupported_format' || operation.jsonMode === 'prompt') throw error;
+            operation.jsonMode = operation.jsonMode === 'schema' ? 'json' : 'prompt';
+        }
+    }
+}
+
+function hasOptionsRequestBudget(token) {
+    ensureActiveVnOptionsGeneration(token);
+    return activeVnOptionsOperation.requestsMade < 1 + normalizeAdditionalRequests(activeVnOptionsOperation.settings.vnMaxAdditionalRequests);
+}
+
+function reportOptionsStage(stage, requestNumber) {
+    const label = document.querySelector('#bb-vn-btn-generate.loading .bb-vn-main-btn__label');
+    if (label) label.textContent = `${stage} · ${requestNumber}`;
+    window.dispatchEvent(new CustomEvent('bb-vn-generation-stage', { detail: { stage, requestNumber } }));
+}
+
+async function generateFastPromptOnce(promptText, options = {}) {
+    const token = options.vnOptionsToken;
     if (token) ensureActiveVnOptionsGeneration(token);
     const responseFormat = options.responseFormat === 'text' ? 'text' : 'json';
     const includeMeta = options.includeMeta === true;
     const responseLength = Number.isFinite(options.responseLength) && options.responseLength > 0
         ? Math.round(options.responseLength)
         : null;
-    const jsonSchema = options.jsonSchema || null;
+    const jsonSchema = options.jsonMode === 'prompt' || options.jsonMode === 'json' ? null : (options.jsonSchema || null);
     const s = { ...(token ? activeVnOptionsOperation.settings : extension_settings[MODULE_NAME]) };
     const signal = token ? activeVnOptionsOperation.controller.signal : options.signal;
     if (signal?.aborted) throw new VnRequestError('cancelled');
     const source = token ? resolveVnGenerationSource(s) : (s.useCustomApi ? 'custom' : 'main');
+    if (token && options.jsonMode === 'json' && source !== 'custom') throw new VnRequestError('json_mode_custom_only');
+    if (token && options.jsonMode === 'schema' && source === 'main'
+        && SillyTavern.getContext().mainApi && SillyTavern.getContext().mainApi !== 'openai') throw new VnRequestError('unsupported_format');
     if (source === 'profile') {
         const result = await generateWithProfile(promptText, s, {
-            signal, responseLength, assertCurrent: () => ensureActiveVnOptionsGeneration(token),
+            signal, responseLength, jsonSchema, assertCurrent: () => ensureActiveVnOptionsGeneration(token),
         });
         ensureActiveVnOptionsGeneration(token);
         reportGenerationSource(`профиль ${result.profileName}${result.model ? ` · ${result.model}` : ''}`);
@@ -366,10 +405,17 @@ export async function generateFastPrompt(promptText, options = {}) {
                         ],
                         temperature: 0.7,
                         max_tokens: Math.max(4000, responseLength || 0),
+                        ...(token && customResponseFormat(options.jsonMode, jsonSchema)
+                            ? { response_format: customResponseFormat(options.jsonMode, jsonSchema) } : {}),
                         stream: false
                     })
                 });
-                if (!response.ok) throw httpRequestError(response.status);
+                if (!response.ok) {
+                    let errorBody;
+                    try { errorBody = await response.json(); } catch { /* Preserve HTTP status without exposing the body. */ }
+                    if (token && isUnsupportedOutputFormat(response.status, errorBody)) throw new VnRequestError('unsupported_format');
+                    throw httpRequestError(response.status);
+                }
                 try { return await response.json(); }
                 catch { throw new VnRequestError('invalid_response'); }
             }, { signal: controller.signal, timeoutMs: normalizeRequestTimeout(s.requestTimeout) * 1000 });
@@ -401,7 +447,7 @@ export async function generateFastPrompt(promptText, options = {}) {
             if (signal?.aborted || controller.signal.aborted) throw new VnRequestError('cancelled');
             const error = normalizeRequestError(e);
             if (error.code === 'cancelled') throw error;
-            const canFallback = s.allowMainFallback === true && ['network', 'provider', 'timeout'].includes(error.code);
+            const canFallback = s.allowMainFallback === true && !(token && normalizeJsonMode(s.vnJsonMode) === 'json') && ['network', 'provider', 'timeout'].includes(error.code);
             emitCustomApiHealth({
                 state: 'error',
                 connectionId,
@@ -409,8 +455,14 @@ export async function generateFastPrompt(promptText, options = {}) {
                 message: error.message + (canFallback ? ' Используется резервная основная модель.' : ''),
             });
             if (!canFallback) throw error;
+            if (token) {
+                if (!hasOptionsRequestBudget(token)) throw new VnRequestError('request_budget');
+                activeVnOptionsOperation.requestsMade++;
+                reportOptionsStage('Резервная основная модель', activeVnOptionsOperation.requestsMade);
+            }
             maybeNotifyCustomApiFallback();
-            const fallbackContent = await runMainGen(promptText, { responseLength, jsonSchema, vnOptionsToken: token, signal });
+            const fallbackSchema = token && normalizeJsonMode(s.vnJsonMode) === 'auto' ? null : jsonSchema;
+            const fallbackContent = await runMainGen(promptText, { responseLength, jsonSchema: fallbackSchema, vnOptionsToken: token, signal });
             reportGenerationSource('основная модель (резервная после сбоя Custom API)');
             if (includeMeta) {
                 return {
@@ -445,23 +497,7 @@ export async function generateFastPrompt(promptText, options = {}) {
 }
 
 function extractOptionsFromGeneration(rawText = '') {
-    const parsed = parseModelJson(rawText, { prefer: 'array' });
-    if (parsed.ok && Array.isArray(parsed.parsed)) {
-        return {
-            ok: true,
-            options: parsed.parsed,
-            repaired: parsed.repaired,
-            source: parsed.source,
-        };
-    }
-
-    return {
-        ok: false,
-        options: null,
-        repaired: false,
-        source: '',
-        errors: parsed.errors ||[],
-    };
+    return parseVnOptions(rawText);
 }
 
 function logOptionsJsonFailure(rawText = '', errors = [], stage = 'initial') {
@@ -473,9 +509,10 @@ function logOptionsJsonFailure(rawText = '', errors = [], stage = 'initial') {
 }
 
 async function repairOptionsJson(rawText = '', vnOptionsToken) {
+    if (isEmptyOptionsInput(rawText)) throw new VnRequestError('empty_options');
     const repairPrompt = `You repair malformed JSON arrays for an internal roleplay tool.
 
-Return ONLY a valid JSON array with exactly 3 objects.
+Return ONLY a valid JSON object containing an "options" array with exactly 3 objects.
 Do not add markdown fences, comments, or explanations.
 Preserve the original Russian wording as much as possible.
 Every "message" value must be a valid JSON string. Escape paragraph breaks as \\n\\n.
@@ -485,6 +522,7 @@ BROKEN INPUT:
 ${String(rawText || '').trim()}`;
 
     const generationResult = await generateFastPrompt(repairPrompt, {
+        stage: 'Исправление JSON',
         vnOptionsToken,
         responseFormat: 'json',
         includeMeta: true,
@@ -522,6 +560,7 @@ async function fillMissingOptions(basePrompt = '', existingOptions =[], vnOption
     if (distinctOptions.length >= 3) return distinctOptions.slice(0, 3);
 
     for (let attempt = 0; attempt < 2 && distinctOptions.length < 3; attempt++) {
+        if (!hasOptionsRequestBudget(vnOptionsToken)) break;
         const missingCount = 3 - distinctOptions.length;
         const existingSummary = distinctOptions.length > 0
             ? distinctOptions.map((option, index) => {
@@ -537,17 +576,18 @@ async function fillMissingOptions(basePrompt = '', existingOptions =[], vnOption
 You already produced ${distinctOptions.length} usable options.
 Generate EXACTLY ${missingCount} additional options that are clearly different from the existing ones below.
 Do not repeat or lightly paraphrase them.
-Return ONLY a valid JSON array with the same schema.
+Return ONLY a valid JSON object containing an "options" array with the same schema.
 
 [EXISTING OPTIONS]
 ${existingSummary}`;
 
         const recoveryResult = await generateFastPrompt(recoveryPrompt, {
+            stage: 'Дополнение вариантов',
             vnOptionsToken,
             responseFormat: 'json',
             includeMeta: true,
             responseLength: JSON_REPAIR_RESPONSE_LENGTH_TOKENS,
-            jsonSchema: getVnOptionsJsonSchema(),
+            jsonSchema: getVnOptionsJsonSchema(missingCount),
         });
         const recoveryText = typeof recoveryResult === 'string'
             ? recoveryResult
@@ -557,7 +597,7 @@ ${existingSummary}`;
             break;
         }
 
-        distinctOptions = dedupeOptions([...distinctOptions, ...parsedRecovery.options]);
+        distinctOptions = parseVnOptions(JSON.stringify([...distinctOptions, ...parsedRecovery.options])).options;
     }
 
     return distinctOptions.slice(0, 3);
@@ -568,6 +608,7 @@ async function diversifyOptionTones(basePrompt = '', existingOptions = [], vnOpt
     if (!hasWeakToneDiversity(normalizedOptions)) {
         return normalizedOptions.slice(0, 3);
     }
+    if (!hasOptionsRequestBudget(vnOptionsToken)) return normalizedOptions;
 
     const diversifyPrompt = `${basePrompt}
 
@@ -580,12 +621,13 @@ Hard rules:
 2. Do NOT reuse the same emotional family twice. Avoid pairs like two soft tones, two cold tones, or two aggressive tones together.
 3. The "forecast" must match the tone and the action.
 4. Keep the intents clearly distinct and proactive.
-5. Return ONLY a valid JSON array with the same schema.
+5. Return ONLY a valid JSON object containing an "options" array with the same schema.
 
 [REJECTED SET]
 ${summarizeOptionsForPrompt(normalizedOptions)}`;
 
     const diversifiedResult = await generateFastPrompt(diversifyPrompt, {
+        stage: 'Разнообразие тонов',
         vnOptionsToken,
         responseFormat: 'json',
         includeMeta: true,
@@ -1204,6 +1246,8 @@ export async function bbVnGenerateOptionsFlow(request = []) {
             swipeId: message.swipe_id ?? 0,
             messageText: String(message.mes || ''),
             settings: { ...extension_settings[MODULE_NAME] },
+            requestsMade: 0,
+            jsonMode: '',
             controller: new AbortController(),
         };
         
@@ -1218,7 +1262,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
 
         prompt = context.substituteParams(prompt);
         prompt += `\n\n[ACTIVE LENGTH DIRECTIVE]\n${buildOptionLengthDirective(replyLength)}`;
-        prompt += '\n\n[STRUCTURED OUTPUT COMPATIBILITY]\nPreferred output is the JSON array from the template. If the runtime provides a JSON schema wrapper, return {"options":[...]} with exactly 3 option objects and no extra fields.';
+        prompt += '\n\n[STRUCTURED OUTPUT COMPATIBILITY]\nReturn {"options":[...]} with exactly 3 option objects and no extra fields.';
 
         if (useEmotionalChoiceFraming) {
             prompt += '\n\n[TONE DIVERSITY RULE]\nAll 3 options MUST use clearly different emotional colors. Do not reuse the same tone family twice, even with different wording.';
@@ -1289,6 +1333,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
         ensureActiveVnOptionsGeneration(requestToken);
 
         let recoveredPayload = extractOptionsFromGeneration(result);
+        if (isEmptyOptionsInput(result)) throw new VnRequestError('empty_options');
         let recoveredOptions = recoveredPayload.options;
         if (!recoveredPayload.ok) {
             console.warn('[BB VN] Initial options JSON parse failed. Attempting repair.');
@@ -1318,84 +1363,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
             return;
         }
 
-        if (provider === 'custom-api' && finishReason === 'length') {
-            throw new Error('Кастомный API обрезал ответ по лимиту токенов (finish_reason=length). Уменьшите объём запроса, переключите длину на более короткую или сделайте реролл.');
-        }
-
-        ensureActiveVnOptionsGeneration(requestToken);
-
-        const extractTopLevelJsonArray = (rawText = '') => {
-            const source = String(rawText || '');
-            let start = -1;
-            let depth = 0;
-            let inString = false;
-            let escapeNext = false;
-
-            for (let i = 0; i < source.length; i++) {
-                const ch = source[i];
-                if (escapeNext) { escapeNext = false; continue; }
-                if (ch === '\\') { escapeNext = true; continue; }
-                if (ch === '"') { inString = !inString; continue; }
-                if (inString) continue;
-
-                if (ch === '[') {
-                    if (start === -1) start = i;
-                    depth++;
-                    continue;
-                }
-
-                if (ch === ']') {
-                    if (depth > 0) depth--;
-                    if (start !== -1 && depth === 0) {
-                        return source.substring(start, i + 1);
-                    }
-                }
-            }
-            return '';
-        };
-
-        const cleanupMarkdownFences = (rawText = '') => String(rawText || '')
-            .replace(/```json/gi, '')
-            .replace(/```/g, '')
-            .trim();
-
-        const repairJsonArrayCandidate = (rawText = '') => String(rawText || '')
-            .replace(/,\s*([\]}])/g, '$1')
-            .trim();
-
-        const cleanedResult = cleanupMarkdownFences(result);
-        const extractedArray = extractTopLevelJsonArray(cleanedResult);
-        if (!extractedArray) {
-            throw new Error('Модель вернула поврежденный JSON, сделайте реролл.');
-        }
-
-        let parsedOptions;
-        try {
-            parsedOptions = JSON.parse(extractedArray);
-        } catch (directParseError) {
-            const repairedArray = repairJsonArrayCandidate(extractedArray);
-            try {
-                parsedOptions = JSON.parse(repairedArray);
-            } catch (repairError) {
-                console.warn('[BB VN] JSON parse failed after safe repair.');
-                throw new Error('Модель вернула поврежденный JSON, сделайте реролл.');
-            }
-        }
-
-        if (parsedOptions && parsedOptions.length > 0) {
-            const { rawCount, finalOptions } = await finalizeOptionsSet(parsedOptions);
-            ensureActiveVnOptionsGeneration(requestToken);
-            const parsedError = buildOptionsCountError(rawCount, finalOptions.length);
-            if (parsedError) throw new Error(parsedError);
-            maybeNotifyPartialOptions(finalOptions.length);
-            
-            persistOptionsForCurrentSwipe(requestToken, finalOptions);
-
-            if (typeof window['renderVNOptionsFromData'] === 'function') {
-                window['renderVNOptionsFromData'](finalOptions, true);
-            }
-            completed = true;
-        } else { throw new Error('Ответ пуст'); }
+        throw new Error('Модель вернула некорректные варианты. Сделайте реролл.');
 
     } catch (e) {
         if (!isActiveVnOptionsGenerationToken(requestToken)) return;
@@ -1406,6 +1374,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
         }
     } finally {
         if (!isActiveVnOptionsGenerationToken(requestToken)) return;
+        reportOptionsStage(completed ? 'Готово' : 'Завершено без новых вариантов', activeVnOptionsOperation?.requestsMade || 0);
         activeVnOptionsOperation = null;
 
         if (!completed && btn.hasClass('loading')) {

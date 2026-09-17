@@ -9,6 +9,7 @@ import { normalizeRequestTimeout, normalizeRequestError, getCustomApiIdentity } 
 import { escapeHtml, createTextOption } from './utils.js';
 import { resolveVnGenerationSource } from './connections.js';
 import { mountVnConnectionControls } from './connection-ui.js';
+import { normalizeJsonMode, normalizeAdditionalRequests } from './structured-output.js';
 
 const IMPACT_SETTING_FIELDS = [
     { key: 'unforgivable', token: 'unforgivable', title: 'Критический минус', hint: 'Тяжёлый удар по доверию или влечению' },
@@ -290,6 +291,16 @@ export function setupExtensionSettings() {
                     </div>
                     <label for="bb-vn-cfg-timeout">Тайм-аут одного запроса (секунды)</label>
                     <input type="number" id="bb-vn-cfg-timeout" class="text_pole" min="15" max="600" value="${normalizeRequestTimeout(s.requestTimeout)}">
+                    <label for="bb-vn-cfg-json-mode">Формат VN-ответа</label>
+                    <select id="bb-vn-cfg-json-mode" class="text_pole">
+                        <option value="auto">Auto</option><option value="schema">JSON Schema</option>
+                        <option value="json">JSON mode (Custom API)</option><option value="prompt">Только инструкции</option>
+                    </select>
+                    <span class="bb-vn-settings-note">Auto: основное подключение и профиль — инструкции; Custom API — схема с переходом к JSON mode и инструкциям только при подтверждённой несовместимости.</span>
+                    <label for="bb-vn-cfg-extra-requests">Дополнительные запросы VN (0–5)</label>
+                    <input id="bb-vn-cfg-extra-requests" type="number" class="text_pole" min="0" max="5" value="${normalizeAdditionalRequests(s.vnMaxAdditionalRequests)}">
+                    <span class="bb-vn-settings-note">Общий лимит на повтор формата, резервную модель, исправление, дополнение и разнообразие вариантов.</span>
+                    <span id="bb-vn-generation-stage" class="bb-vn-settings-note" aria-live="polite"></span>
                     <span id="bb-vn-generation-source" class="bb-vn-settings-note" aria-live="polite">Источник последнего результата: запросов ещё не было.</span>
                     <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-debug" ${s.debugGeneration === true ? 'checked' : ''}><span>Подробная диагностика ответов</span></label>
                     <span class="bb-vn-settings-note">Включает фрагменты ответа модели в консоли браузера. Выключайте после диагностики и проверяйте текст перед отправкой отчёта.</span>
@@ -515,6 +526,23 @@ export function setupExtensionSettings() {
         extension_settings[MODULE_NAME].debugGeneration = jQuery(this).is(':checked');
         saveSettingsDebounced();
     });
+    jQuery('#bb-vn-cfg-json-mode').val(normalizeJsonMode(s.vnJsonMode)).on('change', function () {
+        extension_settings[MODULE_NAME].vnJsonMode = normalizeJsonMode(jQuery(this).val());
+        invalidateVnOptionsGeneration();
+        saveSettingsDebounced();
+    });
+    jQuery('#bb-vn-cfg-extra-requests').on('change', function () {
+        const value = normalizeAdditionalRequests(jQuery(this).val());
+        jQuery(this).val(value);
+        extension_settings[MODULE_NAME].vnMaxAdditionalRequests = value;
+        invalidateVnOptionsGeneration();
+        saveSettingsDebounced();
+    });
+    if (window.bbVnGenerationStageHandler) window.removeEventListener('bb-vn-generation-stage', window.bbVnGenerationStageHandler);
+    window.bbVnGenerationStageHandler = event => {
+        jQuery('#bb-vn-generation-stage').text(`${event.detail.stage} · запросов: ${event.detail.requestNumber}`);
+    };
+    window.addEventListener('bb-vn-generation-stage', window.bbVnGenerationStageHandler);
     if (window.bbVnGenerationSourceHandler) window.removeEventListener('bb-vn-generation-source', window.bbVnGenerationSourceHandler);
     window.bbVnGenerationSourceHandler = event => {
         jQuery('#bb-vn-generation-source').text(`Источник последнего результата: ${String(event.detail?.source || '')}`);

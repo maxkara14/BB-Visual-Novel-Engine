@@ -20,6 +20,8 @@ export const DEFAULT_SETTINGS = {
     debugGeneration: false,
     vnGenerationSource: '',
     vnConnectionProfileId: '',
+    vnJsonMode: 'auto',
+    vnMaxAdditionalRequests: 3,
     useMacro: false,
     emotionalChoiceFraming: true,
     disableRelationshipTracker: false,
@@ -126,16 +128,16 @@ CRITICAL RULES FOR EMOTIONAL CHOICE FRAMING:
 10. "intent": Must be a natural Russian phrase (2-5 words), compact and button-friendly. Prefer roughly 2-4 words and avoid stretching beyond ~42 characters. Never use placeholders, ALL_CAPS tokens, snake_case, or English-only labels.
 
 CRITICAL JSON AND FORMATTING RULES:
-1. Return STRICTLY a valid JSON array. DO NOT output any conversational text outside the JSON.
+1. Return STRICTLY a valid JSON object containing an "options" array. DO NOT output any conversational text outside the JSON.
 2. INSIDE the "message" field, you MUST use standard roleplay formatting: asterisks for *actions/thoughts* and quotes for dialogue.
 3. If you need literal double quotes inside "message", ALWAYS escape them as \\".
 4. Every "message" value MUST be a valid JSON-escaped string literal. Never insert raw line breaks inside the string; use only escaped sequences like \\n or \\n\\n.
-5. NEVER include comments (// or /* */), markdown fences, or any extra text before/after the array.
+5. NEVER include comments (// or /* */), markdown fences, or any extra text before/after the object.
 6. To create paragraphs, use escaped newlines (\\n\\n) inside the "message" string. DO NOT use actual line breaks in the string, or it will break the JSON.
 7. Each option must be clearly different in intent from the others. Never output near-duplicates with only wording changes.
 
-Use this SHORT JSON SHAPE as a template. The placeholders below are instructions, not literal values. Return exactly 3 objects with this structure:
-[
+Use this SHORT JSON SHAPE as a template. The placeholders below are instructions, not literal values. Return exactly 3 options in this wrapper:
+{"options": [
   {
     "intent": "SHORT_ACTION_LABEL",
     "tone": "SHORT_RUSSIAN_TONE",
@@ -144,7 +146,7 @@ Use this SHORT JSON SHAPE as a template. The placeholders below are instructions
     "risk": "OPTIONAL_RISK_LABEL",
     "message": "LONG_RUSSIAN_ROLEPLAY_REPLY_WITH_ESCAPED_QUOTES_AND_\\n\\n_PARAGRAPHS"
   }
-]
+]}
 
 [STRUCTURED STORY CONTEXT]:
 <context>
