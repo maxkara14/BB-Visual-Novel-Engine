@@ -1,3 +1,4 @@
+import { buildOutputLanguageDirective } from './language.js';
 /* global SillyTavern */
 import { setExtensionPrompt, chat_metadata, saveChatDebounced, extension_prompt_roles, extension_prompt_types, callPopup } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
@@ -2139,7 +2140,7 @@ function filterStaleSceneUpdates(activeUpdates = [], msg = null, idx = -1, chat 
 
 export function getCombinedSocial() {
     const { scopeState, aliasSet } = bindActivePersonaState();
-    let combinedStr = SOCIAL_PROMPT;
+    let combinedStr = SOCIAL_PROMPT + "\n\n" + buildOutputLanguageDirective();
     const characters = getPromptRelevantCharacters(scopeState, aliasSet);
     
     if (characters.length > 0) {

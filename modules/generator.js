@@ -1,3 +1,4 @@
+import { buildOutputLanguageDirective } from './language.js';
 /* global SillyTavern */
 import { chat_metadata, saveChatDebounced, generateQuietPrompt } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
@@ -64,12 +65,12 @@ function getActiveVnReplyLength() {
 function buildOptionLengthDirective(lengthPreset = '') {
     switch (normalizeVnReplyLength(lengthPreset)) {
         case 'short':
-            return 'Length preset: SHORT. Each "message" should still feel like a complete mini-scene: usually 1-2 compact paragraphs, about 450-900 Russian characters total. Include a quick scene setup, one clear action or short dialogue beat, and a neat stopping point. Keep it concise, but do not reduce it to a one-line reaction.';
+            return 'Length preset: SHORT. Each "message" should still feel like a complete mini-scene: usually 1-2 compact paragraphs, about 450-900 characters total. Include a quick scene setup, one clear action or short dialogue beat, and a neat stopping point. Keep it concise, but do not reduce it to a one-line reaction.';
         case 'long':
-            return 'Length preset: LONG. Each "message" must read like a substantial VN scene fragment, not just an expanded reaction: usually 4-8 paragraphs, about 1800-3200 Russian characters total. Include multiple connected beats inside one reply: scene movement, physical action, dialogue exchange, emotional shift, and a clear end state or strong hook. Build an actual scene with actions, dialogue, and progression.';
+            return 'Length preset: LONG. Each "message" must read like a substantial VN scene fragment, not just an expanded reaction: usually 4-8 paragraphs, about 1800-3200 characters total. Include multiple connected beats inside one reply: scene movement, physical action, dialogue exchange, emotional shift, and a clear end state or strong hook. Build an actual scene with actions, dialogue, and progression.';
         case 'medium':
         default:
-            return 'Length preset: MEDIUM. Each "message" should feel like one developed scene beat: usually 2-4 paragraphs, about 900-1600 Russian characters total. Balance action, dialogue, internal thought, and a noticeable consequence while keeping the pace active.';
+            return 'Length preset: MEDIUM. Each "message" should feel like one developed scene beat: usually 2-4 paragraphs, about 900-1600 characters total. Balance action, dialogue, internal thought, and a noticeable consequence while keeping the pace active.';
     }
 }
 
@@ -233,8 +234,8 @@ function hasWeakToneDiversity(options = []) {
 function summarizeOptionsForPrompt(options = []) {
     return options.map((option, index) => {
         const normalized = normalizeOptionData(option);
-        const tone = String(normalized.tone || '').trim() || 'без тона';
-        const intent = String(normalized.intent || '').trim() || `Вариант ${index + 1}`;
+        const tone = String(normalized.tone || '').trim() || 'unspecified tone';
+        const intent = String(normalized.intent || '').trim() || `Option ${index + 1}`;
         const forecast = String(normalized.forecast || '').trim();
         const messagePreview = String(normalized.message || '').replace(/\s+/g, ' ').trim().slice(0, 140);
         return `${index + 1}. [tone=${tone}] [intent=${intent}]${forecast ? ` [forecast=${forecast}]` : ''}${messagePreview ? ` :: ${messagePreview}` : ''}`;
@@ -356,6 +357,7 @@ async function generateFastPromptOnce(promptText, options = {}) {
         : null;
     const jsonSchema = options.jsonMode === 'prompt' || options.jsonMode === 'json' ? null : (options.jsonSchema || null);
     const s = { ...(token ? activeVnOptionsOperation.settings : extension_settings[MODULE_NAME]) };
+    promptText = `${promptText}\n\n${buildOutputLanguageDirective(s)}`;
     const signal = token ? activeVnOptionsOperation.controller.signal : options.signal;
     if (signal?.aborted) throw new VnRequestError('cancelled');
     const source = resolveVnGenerationSource(s);
@@ -514,7 +516,7 @@ async function repairOptionsJson(rawText = '', vnOptionsToken) {
 
 Return ONLY a valid JSON object containing an "options" array with exactly 3 objects.
 Do not add markdown fences, comments, or explanations.
-Preserve the original Russian wording as much as possible.
+Preserve the original wording and language as much as possible.
 Every "message" value must be a valid JSON string. Escape paragraph breaks as \\n\\n.
 If a field is missing, use an empty string or[] instead of removing the object.
 
@@ -564,11 +566,11 @@ async function fillMissingOptions(basePrompt = '', existingOptions =[], vnOption
         const missingCount = 3 - distinctOptions.length;
         const existingSummary = distinctOptions.length > 0
             ? distinctOptions.map((option, index) => {
-                const intent = String(option?.intent || '').trim() || `Вариант ${index + 1}`;
+                const intent = String(option?.intent || '').trim() || `Option ${index + 1}`;
                 const message = String(option?.message || '').trim().replace(/\s+/g, ' ').slice(0, 180);
                 return `${index + 1}. ${intent}${message ? ` :: ${message}` : ''}`;
             }).join('\n')
-            : 'Нет сохранённых вариантов.';
+            : 'No saved options.';
 
         const recoveryPrompt = `${basePrompt}
 
@@ -706,7 +708,7 @@ function collectCharacterDescriptionPromptContext() {
     try {
         const context = SillyTavern.getContext?.();
         const chat = Array.isArray(context?.chat) ? context.chat : [];
-        const userName = String(context?.substituteParams?.('{{user}}') || 'пользователь').trim() || 'пользователь';
+        const userName = String(context?.substituteParams?.('{{user}}') || 'user').trim() || 'user';
         const personaText = clipPromptBlock(context?.substituteParams?.('{{persona}}') || '', 3200);
 
         let remainingChars = 5600;
@@ -719,7 +721,7 @@ function collectCharacterDescriptionPromptContext() {
 
             const speaker = message?.is_user
                 ? userName
-                : String(message?.name || 'Сцена').trim() || 'Сцена';
+                : String(message?.name || 'Scene').trim() || 'Scene';
             const line = `${speaker}: ${rawText}`;
             if (line.length > remainingChars && recentLines.length > 0) break;
             recentLines.unshift(line.slice(0, remainingChars));
@@ -735,7 +737,7 @@ function collectCharacterDescriptionPromptContext() {
     } catch (error) {
         void error;
         return {
-            userName: 'пользователь',
+            userName: 'user',
             personaText: '',
             recentChat: '',
         };
@@ -819,17 +821,17 @@ async function collectCharacterDescriptionSourceContext({ charName = '', userNam
             : [];
 
         const cardLines = [
-            result.matchedCharacterName ? `Совпавшая карточка: ${result.matchedCharacterName}` : '',
-            cardFields.version ? `Версия карточки: ${clipPromptBlock(cardFields.version, 120, { singleLine: true })}` : '',
-            cardFields.description ? `Описание карточки: ${clipPromptBlock(cardFields.description, 1500)}` : '',
-            cardFields.personality ? `Характер из карточки: ${clipPromptBlock(cardFields.personality, 1000)}` : '',
-            cardFields.scenario ? `Сценарий / сеттинг: ${clipPromptBlock(cardFields.scenario, 1000)}` : '',
+            result.matchedCharacterName ? `Matched character card: ${result.matchedCharacterName}` : '',
+            cardFields.version ? `Card version: ${clipPromptBlock(cardFields.version, 120, { singleLine: true })}` : '',
+            cardFields.description ? `Card description: ${clipPromptBlock(cardFields.description, 1500)}` : '',
+            cardFields.personality ? `Card personality: ${clipPromptBlock(cardFields.personality, 1000)}` : '',
+            cardFields.scenario ? `Scenario / setting: ${clipPromptBlock(cardFields.scenario, 1000)}` : '',
             cardFields.creatorNotes ? `Creator notes: ${clipPromptBlock(cardFields.creatorNotes, 1200)}` : '',
-            cardFields.charDepthPrompt ? `Глубинный prompt карточки: ${clipPromptBlock(cardFields.charDepthPrompt, 900)}` : '',
-            cardFields.system ? `Системный prompt карточки: ${clipPromptBlock(cardFields.system, 900)}` : '',
-            cardFields.firstMessage ? `Первое сообщение: ${clipPromptBlock(cardFields.firstMessage, 700)}` : '',
-            cardFields.mesExamples ? `Примеры речи: ${clipPromptBlock(cardFields.mesExamples, 1200)}` : '',
-            alternateGreetings.length > 0 ? `Альтернативные приветствия: ${alternateGreetings.join(' | ')}` : '',
+            cardFields.charDepthPrompt ? `Card depth prompt: ${clipPromptBlock(cardFields.charDepthPrompt, 900)}` : '',
+            cardFields.system ? `Card system prompt: ${clipPromptBlock(cardFields.system, 900)}` : '',
+            cardFields.firstMessage ? `First message: ${clipPromptBlock(cardFields.firstMessage, 700)}` : '',
+            cardFields.mesExamples ? `Speech examples: ${clipPromptBlock(cardFields.mesExamples, 1200)}` : '',
+            alternateGreetings.length > 0 ? `Alternate greetings: ${alternateGreetings.join(' | ')}` : '',
         ].filter(Boolean);
 
         result.cardContext = cardLines.join('\n');
@@ -845,8 +847,8 @@ async function collectCharacterDescriptionSourceContext({ charName = '', userNam
                     if (!rawText) return '';
 
                     const speaker = message?.is_user
-                        ? (String(userName || '').trim() || 'пользователь')
-                        : String(message?.name || 'Сцена').trim() || 'Сцена';
+                        ? (String(userName || '').trim() || 'user')
+                        : String(message?.name || 'Scene').trim() || 'Scene';
                     return `${speaker}: ${rawText}`;
                 })
                 .filter(Boolean)
@@ -879,10 +881,10 @@ async function collectCharacterDescriptionSourceContext({ charName = '', userNam
 }
 
 async function generateStructuredCharacterDescription({ charName = '', stats = {}, currentDescription = '', signal } = {}) {
-    const safeCharName = String(charName || '').trim() || 'персонаж';
+    const safeCharName = String(charName || '').trim() || 'character';
     const affinity = parseInt(stats?.affinity, 10) || 0;
     const romance = parseInt(stats?.romance, 10) || 0;
-    const status = String(stats?.status || '').trim() || 'нейтральный фактор';
+    const status = String(stats?.status || '').trim() || 'neutral connection';
     const memories = stats?.memories && typeof stats.memories === 'object' ? stats.memories : {};
     const coreTraits = Array.isArray(stats?.core_traits)
         ? stats.core_traits
@@ -912,58 +914,58 @@ async function generateStructuredCharacterDescription({ charName = '', stats = {
         personaText,
     });
 
-    const prompt = `Собери цельный профиль персонажа для prompt-инжекта в ролевом чате.
+    const prompt = `Build a complete character profile for injection into a roleplay prompt.
 
-Нужно вернуть не художественный абзац, а компактное досье: достаточно подробное, чтобы модель уверенно держала внешность, прошлое, голос, роль и внутреннюю логику персонажа в будущих сценах.
-Опирайся на историю чата, персону пользователя, динамику отношений, карточку персонажа, creator notes, примеры речи и релевантный world info / lorebook.
+Return a compact dossier, not a literary paragraph: detailed enough to preserve appearance, background, voice, role, and internal logic in future scenes.
+Use the chat history, user persona, relationship dynamics, character card, creator notes, speech examples, and relevant world info / lorebook.
 
-[ФОРМАТ ОТВЕТА]
-Верни только готовый профиль на русском языке, без markdown, без пояснений и без вступления.
-Сделай ровно 10 строк в формате:
-Имя: ...
-Возраст / этап жизни: ...
-Роль и положение: ...
-Внешность: ...
-Одежда и узнаваемые детали: ...
-Характер и внутренняя опора: ...
-Манера речи и поведения: ...
-Прошлое и личный контекст: ...
-Отношение к ${userName}: ...
-Сценический гайд: ...
+[OUTPUT FORMAT]
+Return only the finished profile in the requested output language, without markdown, explanations, or an introduction.
+Write exactly 10 lines with the following fields. Translate the field labels into the requested output language:
+Name: ...
+Age / life stage: ...
+Role and position: ...
+Appearance: ...
+Clothing and distinctive details: ...
+Personality and inner foundation: ...
+Speech and behavior: ...
+Background and personal context: ...
+Attitude toward ${userName}: ...
+Scene guide: ...
 
-[ПРАВИЛА]
-1. Профиль должен быть законченным. Не пиши "не указано", "данных мало", "может быть", "возможно", "неясно" и другие заглушки.
-2. Если в источниках есть пробелы, аккуратно дострой образ до конца на основе уже известных фактов, тона сцены, world info, карточки и поведения персонажа.
-3. Домысливание разрешено только там, где оно не ломает явный канон. Явные факты из карточки, creator notes, world info и чата важнее домысливания.
-4. Если можно трактовать образ по-разному, выбери одну наиболее правдоподобную и согласованную версию, а не оставляй несколько вариантов.
-5. Внешность должна быть конкретной: телосложение, лицо, волосы, глаза, голос, заметные привычки, шрамы, запах или манера двигаться, если это уместно.
-6. Прошлое должно давать игровые крючки: происхождение, социальное положение, связи, тайны, травмы, цели, страхи или долг.
-7. Сценический гайд должен объяснять, как писать персонажа: что подчёркивать в реакциях, чего избегать, какие темы цепляют сильнее всего.
-8. Если текущее описание уже содержит полезные факты, сохрани их и расширь, а не игнорируй.
-9. Не превращай профиль в анкету с пустыми пунктами. Каждая строка должна быть плотной и пригодной для prompt-инжекта.
-10. Держи ответ компактным и насыщенным, обычно в пределах 1400-2800 символов.
+[RULES]
+1. Complete the profile. Do not use placeholders such as "not specified", "insufficient data", "maybe", "possibly", or "unclear".
+2. Fill gaps carefully using established facts, scene tone, world info, the card, and observed behavior.
+3. Invent details only where they do not contradict explicit canon. Facts from the card, creator notes, world info, and chat take priority over inference.
+4. If several interpretations are possible, choose one plausible, consistent version instead of listing alternatives.
+5. Make appearance concrete: build, face, hair, eyes, voice, habits, scars, scent, or movement where appropriate.
+6. Give the background story hooks: origins, social position, connections, secrets, trauma, goals, fears, or obligations.
+7. Explain how to portray the character in the scene guide: reactions to emphasize, behavior to avoid, and sensitive topics.
+8. Preserve and expand useful facts from the current description.
+9. Every line must be substantial and ready for prompt injection, with no empty questionnaire fields.
+10. Keep the profile compact and dense, usually 1400-2800 characters.
 
-[ДАННЫЕ О ПЕРСОНАЖЕ]
-Имя: ${safeCharName}
-Статус связи: ${status}
-Доверие: ${affinity > 0 ? '+' : ''}${affinity}
-Романтическая линия: ${romance > 0 ? '+' : ''}${romance}
-Черты: ${coreTraits.length > 0 ? coreTraits.join('; ') : 'нет явных данных'}
-Значимые события: ${notableMemories.length > 0 ? notableMemories.join(' | ') : 'нет явных данных'}
-Последние сдвиги: ${historySummary.length > 0 ? historySummary.join(' | ') : 'нет данных'}
-Текущее описание: ${currentProfile || 'пусто'}
+[CHARACTER DATA]
+Name: ${safeCharName}
+Relationship status: ${status}
+Trust: ${affinity > 0 ? '+' : ''}${affinity}
+Romance: ${romance > 0 ? '+' : ''}${romance}
+Traits: ${coreTraits.length > 0 ? coreTraits.join('; ') : 'No established facts'}
+Notable events: ${notableMemories.length > 0 ? notableMemories.join(' | ') : 'No established facts'}
+Recent shifts: ${historySummary.length > 0 ? historySummary.join(' | ') : 'No data'}
+Current description: ${currentProfile || 'Empty'}
 
-[КАРТОЧКА / ДОПОЛНИТЕЛЬНЫЕ ИСТОЧНИКИ]
-${sourceContext.cardContext || 'Совпавшая карточка в текущем чате не найдена или дополнительных полей нет.'}
+[CHARACTER CARD / ADDITIONAL SOURCES]
+${sourceContext.cardContext || 'No matching card or additional fields in this chat.'}
 
-[АКТИВНЫЙ WORLD INFO / LOREBOOK]
-${sourceContext.worldInfoText || 'Нет активированных записей world info для этого среза контекста.'}
+[ACTIVE WORLD INFO / LOREBOOK]
+${sourceContext.worldInfoText || 'No world info entries activated for this context.'}
 
-[ПЕРСОНА ПОЛЬЗОВАТЕЛЯ]
-${personaText || 'не указана'}
+[USER PERSONA]
+${personaText || 'Not provided'}
 
-[НЕДАВНИЙ ФРАГМЕНТ ЧАТА]
-${recentChat || 'нет доступных сообщений'}`;
+[RECENT CHAT]
+${recentChat || 'No available messages'}`;
 
     const generated = await generateFastPrompt(prompt, { responseFormat: 'text', signal });
     const result = sanitizeStructuredCharacterDescriptionResult(generated);
@@ -975,58 +977,6 @@ ${recentChat || 'нет доступных сообщений'}`;
 
 export async function generateCharacterDescription({ charName = '', stats = {}, currentDescription = '', signal } = {}) {
     return await generateStructuredCharacterDescription({ charName, stats, currentDescription, signal });
-    const safeCharName = String(charName || '').trim() || 'персонаж';
-    const affinity = parseInt(stats?.affinity, 10) || 0;
-    const romance = parseInt(stats?.romance, 10) || 0;
-    const status = String(stats?.status || '').trim() || 'нейтральный фактор';
-    const memories = stats?.memories && typeof stats.memories === 'object' ? stats.memories : {};
-    const coreTraits = Array.isArray(stats?.core_traits)
-        ? stats.core_traits
-            .map(item => String(item?.trait || '').trim())
-            .filter(Boolean)
-            .slice(0, 4)
-        : [];
-    const notableMemories = [
-        ...(Array.isArray(memories.deep) ? memories.deep.slice(-3) : []),
-        ...(Array.isArray(memories.soft) ? memories.soft.slice(-2) : []),
-    ]
-        .map(memory => String(memory?.text || '').trim())
-        .filter(Boolean)
-        .slice(0, 4);
-    const trendText = Array.isArray(stats?.history) && stats.history.length > 1
-        ? 'история отношений уже накопилась и менялась по ходу сюжета'
-        : 'история отношений пока короткая';
-    const currentProfile = String(currentDescription || '').trim();
-
-    const prompt = `Собери краткое описание персонажа для ролевого prompt-инжекта.
-
-Нужно описать, как ${safeCharName} воспринимает пользователя и какие черты особенно важны в текущем сюжете.
-
-[ДАННЫЕ]
-Имя: ${safeCharName}
-Статус связи: ${status}
-Доверие: ${affinity > 0 ? '+' : ''}${affinity}
-Романтическая линия: ${romance > 0 ? '+' : ''}${romance}
-Динамика: ${trendText}
-Черты: ${coreTraits.length > 0 ? coreTraits.join('; ') : 'нет явных данных'}
-Значимые события: ${notableMemories.length > 0 ? notableMemories.join(' | ') : 'нет явных данных'}
-Текущее описание: ${currentProfile || 'пусто'}
-
-[ПРАВИЛА]
-1. Верни только итоговый текст без заголовков, markdown и комментариев.
-2. Пиши по-русски.
-3. Сделай 2-4 предложения, примерно 220-450 символов.
-4. Описывай характер, отношение к пользователю, заметные поведенческие акценты и эмоциональный тон.
-5. Не пиши от первого лица.
-6. Не выдумывай новые факты вне этих данных, но можно аккуратно обобщать их в цельный профиль.
-7. Текст должен подходить для прямой вставки в prompt о персонаже.`;
-
-    const generated = await generateFastPrompt(prompt, { responseFormat: 'text' });
-    const result = sanitizeCharacterDescriptionResult(generated);
-    if (!isValidCharacterDescriptionResult(result)) {
-        throw new Error('INVALID_CHARACTER_DESCRIPTION_RESULT');
-    }
-    return result;
 }
 
 export async function crystallizeTraitFromMemories({ charName = '', userName = '', memories =[], isPositive = true, signal } = {}) {
@@ -1040,45 +990,45 @@ export async function crystallizeTraitFromMemories({ charName = '', userName = '
         .filter(Boolean)
         .join('\n');
 
-    const polarity = isPositive ? 'ПОЛОЖИТЕЛЬНУЮ' : 'НЕГАТИВНУЮ';
-    const baseInstruction = `Вот 5 незабываемых событий, произошедших между ${charName} и ${userName}:
+    const polarity = isPositive ? 'POSITIVE' : 'NEGATIVE';
+    const baseInstruction = `These five unforgettable events occurred between ${charName} and ${userName}:
 ${memoriesBlock}
 
-Проанализируй их и создай ОДНУ ${polarity} перманентную черту характера, которая сформировалась у ${charName} по отношению к ${userName} из-за этого.`;
+Analyze them and create ONE ${polarity} permanent personality trait developed by ${charName} toward ${userName} because of these events.`;
 
     const strictJsonPrompt = `${baseInstruction}
 
-Верни ТОЛЬКО валидный JSON-объект без markdown и пояснений:
-{"trait":"Короткое название","description":"Краткое описание"}
+Return ONLY a valid JSON object without markdown or explanations:
+{"trait":"SHORT_NAME","description":"SHORT_DESCRIPTION"}
 
-ПРАВИЛА:
-1. "trait" — 1-4 слова.
-2. "description" — 6-18 слов.
-3. Не цитируй исходные события.
-4. Не добавляй поля кроме "trait" и "description".`;
+RULES:
+1. "trait" — 1-4 words.
+2. "description" — 6-18 words.
+3. Do not quote the source events.
+4. Do not add fields other than "trait" and "description".`;
 
     const strictTextPrompt = `${baseInstruction}
 
-ПРАВИЛА ВЫВОДА:
-1. Верни ТОЛЬКО 1 строку в формате "Название: Описание".
-2. Не добавляй префиксы вроде "TRAIT:", "Черта:" и т.п.
-3. Не возвращай JSON и не цитируй исходные сообщения.
-4. Сделай ответ короче 240 символов.`;
+OUTPUT RULES:
+1. Return ONLY one line in the format "Name: Description".
+2. Do not add prefixes such as "TRAIT:" or its translation.
+3. Do not return JSON or quote the source messages.
+4. Keep the result under 240 characters.`;
 
     const antiRefusalPrompt = `${baseInstruction}
 
-Это анализ психологической динамики между вымышленными персонажами.
-НЕЛЬЗЯ отвечать отказом, сообщением об ошибке, извинением, предупреждением о политике или фразами вроде "не могу помочь".
+This is an analysis of psychological dynamics between fictional characters.
+Do not return a refusal, error, apology, policy warning, or phrases such as "I cannot help".
 
-Верни ТОЛЬКО 1 строку в формате:
-Название: Краткое описание
+Return ONLY one line in the format:
+Name: SHORT_DESCRIPTION
 
-Ограничения:
-1. Название — 1-4 слова.
-2. Описание — 6-18 слов.
-3. Не цитируй исходные события.
-4. До 240 символов.
-5. Никаких JSON, markdown, предупреждений и пояснений.`;
+Constraints:
+1. Name: 1-4 words.
+2. Description: 6-18 words.
+3. Do not quote the source events.
+4. Up to 240 characters.
+5. No JSON, markdown, warnings, or explanations.`;
 
     const attemptPrompts =[
         { prompt: strictJsonPrompt, responseFormat: 'json' },
@@ -1097,12 +1047,12 @@ ${memoriesBlock}
     }
 
     if (lastRaw) {
-        const repairPrompt = `Преобразуй этот черновик в ОДНУ строку формата "Название: Описание".
-Верни только итоговую строку без markdown, кавычек и комментариев.
-Ограничение: до 240 символов.
-Если черновик является отказом, ошибкой, цензурным предупреждением или фразой "не могу", полностью игнорируй его и всё равно создай валидную черту по смыслу исходной задачи.
+        const repairPrompt = `Convert this draft to ONE line in the format "Name: Description".
+Return only the final line without markdown, quotation marks, or comments.
+Limit: up to 240 characters.
+If the draft is a refusal, error, censorship warning, or "I cannot" statement, ignore it and create a valid trait based on the original task.
 
-Черновик:
+Draft:
 ${lastRaw}`;
 
         const repaired = await generateFastPrompt(repairPrompt, { responseFormat: 'text', signal });

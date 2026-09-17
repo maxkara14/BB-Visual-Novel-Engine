@@ -111,13 +111,8 @@ export function sanitizeIntentLabel(intent = "", tone = "", risk = "") {
         .replace(/\s+/g, ' ')
         .trim();
 
-    const hasCyrillic = /[а-яё]/i.test(cleaned);
-    const latinChars = (cleaned.match(/[a-z]/gi) || []).length;
-    const cyrillicChars = (cleaned.match(/[а-яё]/gi) || []).length;
-    const looksLikeToken = /^[A-Z0-9_]+$/.test(raw) || /^[a-z0-9_]+$/.test(raw);
-    const tooLatinHeavy = latinChars > 0 && cyrillicChars === 0;
-
-    if (!cleaned || looksLikeToken || tooLatinHeavy || !hasCyrillic) {
+    const looksLikeToken = /^[A-Z0-9_]+$/.test(raw) || raw.includes('_');
+    if (!cleaned || looksLikeToken || !/\p{L}/u.test(cleaned)) {
         return buildIntentFallback(tone, risk);
     }
 
@@ -618,11 +613,11 @@ export function coerceUserFacingStatus(candidateStatus = "", affinity = 0, previ
 
 export function getToneClass(tone = "") {
     const value = String(tone).toLowerCase();
-    if (value.includes('неж') || value.includes('тепл') || value.includes('ласк')) return 'tone-gentle';
-    if (value.includes('холод') || value.includes('лед')) return 'tone-cold';
-    if (value.includes('сарка') || value.includes('ирон')) return 'tone-sarcastic';
-    if (value.includes('дерз') || value.includes('смел') || value.includes('напор')) return 'tone-bold';
-    if (value.includes('опас') || value.includes('темн') || value.includes('агресс')) return 'tone-danger';
+    if (/gentl|warm|affection|tender|soft/.test(value) || value.includes('неж') || value.includes('тепл') || value.includes('ласк')) return 'tone-gentle';
+    if (/cold|icy|distant|detached/.test(value) || value.includes('холод') || value.includes('лед')) return 'tone-cold';
+    if (/sarcas|ironi/.test(value) || value.includes('сарка') || value.includes('ирон')) return 'tone-sarcastic';
+    if (/bold|brave|assertive|confident/.test(value) || value.includes('дерз') || value.includes('смел') || value.includes('напор')) return 'tone-bold';
+    if (/danger|dark|aggress|harsh/.test(value) || value.includes('опас') || value.includes('темн') || value.includes('агресс')) return 'tone-danger';
     if (value.includes('низк') || value.includes('low')) return 'tone-gentle';
     if (value.includes('сред') || value.includes('med') || value.includes('medium')) return 'tone-bold';
     if (value.includes('выс') || value.includes('high')) return 'tone-danger';

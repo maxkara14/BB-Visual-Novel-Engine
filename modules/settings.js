@@ -8,6 +8,7 @@ import { restoreVNOptions, clearSavedVNOptions, invalidateVnOptionsGeneration } 
 import { normalizeRequestTimeout, normalizeRequestError, getCustomApiIdentity } from './requests.js';
 import { escapeHtml, createTextOption } from './utils.js';
 import { resolveVnGenerationSource } from './connections.js';
+import { normalizeOutputLanguage } from './language.js';
 import { mountVnConnectionControls } from './connection-ui.js';
 import { normalizeJsonMode, normalizeAdditionalRequests } from './structured-output.js';
 
@@ -263,6 +264,9 @@ export function setupExtensionSettings() {
                         <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-disable-tracker" ${s.disableRelationshipTracker ? 'checked' : ''}><span>Отключить трекер отношений</span></label>
                     </div>
                     <div class="bb-vn-settings-panel">
+                        <label for="bb-vn-cfg-output-language">Язык новых ответов</label>
+                        <select id="bb-vn-cfg-output-language" class="text_pole"><option value="chat">Как в чате</option><option value="ru">Русский</option><option value="en">English</option></select>
+                        <span class="bb-vn-settings-note">Для новых вариантов, профилей, черт и записей об отношениях. Сохранённые данные не переводятся.</span>
                         <label for="bb-vn-cfg-reply-length" class="bb-vn-settings-panel-label">Длина VN-ответа</label>
                         <select id="bb-vn-cfg-reply-length" class="text_pole">
                             <option value="short" ${selectedReplyLength === 'short' ? 'selected' : ''}>Короткий - быстрый темп</option>
@@ -530,6 +534,12 @@ export function setupExtensionSettings() {
     jQuery('#bb-vn-cfg-debug').on('change', function() {
         extension_settings[MODULE_NAME].debugGeneration = jQuery(this).is(':checked');
         saveSettingsDebounced();
+    });
+    jQuery('#bb-vn-cfg-output-language').val(normalizeOutputLanguage(s.outputLanguage)).on('change', function () {
+        extension_settings[MODULE_NAME].outputLanguage = normalizeOutputLanguage(jQuery(this).val());
+        invalidateVnOptionsGeneration();
+        saveSettingsDebounced();
+        injectCombinedSocialPrompt();
     });
     jQuery('#bb-vn-cfg-json-mode').val(normalizeJsonMode(s.vnJsonMode)).on('change', function () {
         extension_settings[MODULE_NAME].vnJsonMode = normalizeJsonMode(jQuery(this).val());

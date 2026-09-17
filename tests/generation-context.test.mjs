@@ -869,3 +869,76 @@ test('technical controls are collapsed and no separate utility connection is sho
     assert.ok(advanced[1].includes('id="bb-vn-cfg-extra-requests"'));
     assert.ok(!source.includes('bb-vn-cfg-usecustom'));
 });
+
+test('English options keep their labels and messages instead of Russian fallbacks', async () => {
+    const h = await harness(); h.settings['BB-Visual-Novel'].outputLanguage = 'en';
+    const run = h.api.bbVnGenerateOptionsFlow();
+    assert.match(h.calls[0].args.quietPrompt, /Write newly generated human-readable text in English/);
+    assert.doesNotMatch(h.calls[0].args.quietPrompt, /Write in Russian|SHORT_RUSSIAN|natural Russian/);
+    const english = ['Open the door','Ask a question','Wait'].map((intent,i)=>({...options[i],intent,message:`*I take action ${i}.*`,tone:['gently','boldly','coldly'][i]}));
+    h.respond(0, JSON.stringify(english)); await run;
+    assert.equal(h.saves, 1);
+    assert.equal(h.rendered[0].data[0].intent, 'Open the door');
+    assert.equal(h.rendered[0].data[2].intent, 'Wait');
+    assert.equal(h.rendered[0].data[0].message, english[0].message);
+});
+test('output language is independent of UI settings and preserves stored story data', async () => {
+    const h = await harness(); const language = await h.loadApi('./language.js');
+    const chat = [{mes:'Я жду у двери.',extra:{memories:['Верный друг'],name:'Алекс'}}];
+    const before = JSON.stringify(chat);
+    for(const [uiLanguage,outputLanguage,name] of [['ru','en','English'],['en','ru','Russian']]) {
+        assert.match(language.buildOutputLanguageDirective({uiLanguage,outputLanguage},chat),new RegExp('text in '+name));
+    }
+    const auto = language.buildOutputLanguageDirective({outputLanguage:'chat'},chat);
+    assert.match(auto,/language of the latest narrative/);
+    assert.ok(auto.includes(chat[0].mes));
+    assert.equal(JSON.stringify(chat),before);
+});
+test('Russian and English tone families match without rewriting stored tone text', async () => {
+    const h = await harness();
+    for(const [ru,en] of [['нежно','gently'],['холодно','coldly'],['иронично','ironically'],['дерзко','boldly'],['опасно','dangerously']]) {
+        assert.equal(h.utils.getToneClass(ru),h.utils.getToneClass(en));
+        assert.equal(h.utils.normalizeOptionData({...options[0],tone:ru}).tone,ru);
+        assert.equal(h.utils.normalizeOptionData({...options[0],tone:en}).tone,en);
+    }
+    assert.equal(h.utils.sanitizeIntentLabel('Ask a question'),'Ask a question');
+    assert.equal(h.utils.sanitizeIntentLabel('Подождать'),'Подождать');
+    assert.notEqual(h.utils.sanitizeIntentLabel('ACTION_LABEL'),'ACTION LABEL');
+});
+test('English character profile prompt preserves source facts and uses selected language', async () => {
+    const h = await harness(); h.settings['BB-Visual-Novel'].outputLanguage='en';
+    const run = h.api.generateCharacterDescription({charName:'Alex',currentDescription:'Верный друг',stats:{}});
+    await h.waitForCalls(1);
+    const prompt=h.calls[0].args.quietPrompt;
+    assert.match(prompt,/Build a complete character profile/);
+    assert.match(prompt,/Верный друг/);
+    assert.match(prompt,/Translate the field labels/);
+    assert.match(prompt,/text in English/);
+    h.respond(0,'Name: Alex\n'+ 'Background: A loyal friend who has lived here for years. '.repeat(5));
+    assert.match(await run,/Name: Alex/);
+});
+test('trait retry and repair instructions are English and carry output language', async () => {
+    const h=await harness();h.settings['BB-Visual-Novel'].outputLanguage='ru';
+    const run=h.api.crystallizeTraitFromMemories({charName:'Alex',userName:'Player',memories:Array.from({length:5},()=>({text:'An important shared event'}))});
+    for(let i=0;i<3;i++) {
+        await h.waitForCalls(i+1);
+        const prompt=h.calls[i].args.quietPrompt;
+        assert.match(prompt,/text in Russian/);
+        assert.doesNotMatch(prompt,/[А-Яа-яЁё]/);
+        h.respond(i,'invalid');
+    }
+    await h.waitForCalls(4);
+    assert.match(h.calls[3].args.quietPrompt,/Convert this draft to ONE line/);
+    assert.match(h.calls[3].args.quietPrompt,/text in Russian/);
+    h.respond(3,'Верность: Всегда поддерживает друга в трудные моменты.');
+    assert.match(await run,/^Верность:/);
+});
+test('VN repair keeps the language captured at operation start', async () => {
+    const h=await harness();h.settings['BB-Visual-Novel'].outputLanguage='en';
+    const run=h.api.bbVnGenerateOptionsFlow();h.respond(0,'broken');
+    h.settings['BB-Visual-Novel'].outputLanguage='ru';
+    await h.waitForCalls(2);
+    assert.match(h.calls[1].args.quietPrompt,/text in English/);
+    assert.doesNotMatch(h.calls[1].args.quietPrompt,/original Russian/);
+    h.respond(1);await run;assert.equal(h.saves,1);
+});
