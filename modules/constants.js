@@ -18,6 +18,8 @@ export const DEFAULT_SETTINGS = {
     requestTimeout: 120,
     allowMainFallback: false,
     debugGeneration: false,
+    vnGenerationSource: '',
+    vnConnectionProfileId: '',
     useMacro: false,
     emotionalChoiceFraming: true,
     disableRelationshipTracker: false,

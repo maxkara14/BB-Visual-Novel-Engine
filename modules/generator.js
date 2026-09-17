@@ -23,6 +23,7 @@ import {
 } from './state.js';
 import { injectCombinedSocialPrompt, getCurrentPersonaScopeKey } from './social.js';
 import { VnRequestError, normalizeRequestTimeout, httpRequestError, normalizeRequestError, readCustomApiContent, withRequestDeadline, getCustomApiIdentity } from './requests.js';
+import { generateWithProfile, resolveVnGenerationSource } from './connections.js';
 import {
     resetVnOptionsContainer,
     setVnGenerateButtonIdle,
@@ -318,10 +319,22 @@ export async function generateFastPrompt(promptText, options = {}) {
         ? Math.round(options.responseLength)
         : null;
     const jsonSchema = options.jsonSchema || null;
-    const s = { ...extension_settings[MODULE_NAME] };
+    const s = { ...(token ? activeVnOptionsOperation.settings : extension_settings[MODULE_NAME]) };
     const signal = token ? activeVnOptionsOperation.controller.signal : options.signal;
     if (signal?.aborted) throw new VnRequestError('cancelled');
-    if (s.useCustomApi) {
+    const source = token ? resolveVnGenerationSource(s) : (s.useCustomApi ? 'custom' : 'main');
+    if (source === 'profile') {
+        const result = await generateWithProfile(promptText, s, {
+            signal, responseLength, assertCurrent: () => ensureActiveVnOptionsGeneration(token),
+        });
+        ensureActiveVnOptionsGeneration(token);
+        reportGenerationSource(`профиль ${result.profileName}${result.model ? ` · ${result.model}` : ''}`);
+        return includeMeta ? {
+            content: result.content,
+            meta: { provider: 'connection-profile', finishReason: '', usage: null },
+        } : result.content;
+    }
+    if (source === 'custom') {
         if (!s.customApiUrl || !s.customApiModel) throw new VnRequestError('configuration');
         const controller = new AbortController();
         const connectionId = getCustomApiIdentity(s.customApiUrl, s.customApiKey);
@@ -1190,6 +1203,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
             message,
             swipeId: message.swipe_id ?? 0,
             messageText: String(message.mes || ''),
+            settings: { ...extension_settings[MODULE_NAME] },
             controller: new AbortController(),
         };
         

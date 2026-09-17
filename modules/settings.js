@@ -4,9 +4,11 @@ import { extension_settings } from '../../../../extensions.js';
 import { MODULE_NAME, normalizeImpactSettings, normalizeImpactValue, normalizeVnReplyLength, resolveImpactScaleSettings } from './constants.js';
 import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog, bindActivePersonaState, getCurrentPersonaScopeKey, mergeCharacterRecords, resolveCharacterIdentity, exportActivePersonaSnapshot, importActivePersonaSnapshot, clearActivePersonaSnapshot, markSnapshotReplayMessage, getLatestAssistantMessageEntry } from './social.js';
 import { notifySuccess, notifyInfo, notifyError, showHudToast } from './toasts.js';
-import { restoreVNOptions, clearSavedVNOptions } from './generator.js';
+import { restoreVNOptions, clearSavedVNOptions, invalidateVnOptionsGeneration } from './generator.js';
 import { normalizeRequestTimeout, normalizeRequestError, getCustomApiIdentity } from './requests.js';
 import { escapeHtml, createTextOption } from './utils.js';
+import { resolveVnGenerationSource } from './connections.js';
+import { mountVnConnectionControls } from './connection-ui.js';
 
 const IMPACT_SETTING_FIELDS = [
     { key: 'unforgivable', token: 'unforgivable', title: 'Критический минус', hint: 'Тяжёлый удар по доверию или влечению' },
@@ -270,9 +272,11 @@ export function setupExtensionSettings() {
                     </div>
                 </div>
                 <div class="bb-vn-settings-card bb-vn-settings-card--accent">
-                    <span class="bb-vn-settings-section-title">⚡ Custom API</span>
-                    <label class="checkbox_label bb-vn-setting-pill bb-vn-setting-pill--single"><input type="checkbox" id="bb-vn-cfg-usecustom" ${s.useCustomApi ? 'checked' : ''}><span>Использовать свой API-ключ</span></label>
-                    <div id="bb-vn-custom-api-block" class="bb-vn-settings-stack" style="display: ${s.useCustomApi ? 'flex' : 'none'};">
+                    <span class="bb-vn-settings-section-title">⚡ Подключения</span>
+                    <div id="bb-vn-connection-controls" class="bb-vn-settings-stack"></div>
+                    <span class="bb-vn-settings-note">Источник VN используется для вариантов и их исправлений. Для описаний персонажей и черт можно использовать Custom API ниже, иначе — основную модель.</span>
+                    <label class="checkbox_label bb-vn-setting-pill bb-vn-setting-pill--single"><input type="checkbox" id="bb-vn-cfg-usecustom" ${s.useCustomApi ? 'checked' : ''}><span>Custom API для описаний персонажей и черт</span></label>
+                    <div id="bb-vn-custom-api-block" class="bb-vn-settings-stack" style="display: ${s.useCustomApi || resolveVnGenerationSource(s) === 'custom' ? 'flex' : 'none'};">
                         <input type="text" id="bb-vn-cfg-url" class="text_pole" placeholder="URL">
                         <input type="password" id="bb-vn-cfg-key" class="text_pole" placeholder="API Ключ">
                         <div id="bb-vn-custom-api-status" class="bb-custom-api-status is-idle">
@@ -386,7 +390,7 @@ export function setupExtensionSettings() {
     };
 
     const syncCustomApiVisualState = () => {
-        const useCustomApi = !!extension_settings[MODULE_NAME].useCustomApi;
+        const useCustomApi = !!extension_settings[MODULE_NAME].useCustomApi || resolveVnGenerationSource(s) === 'custom';
         const rawUrl = String(jQuery('#bb-vn-cfg-url').val() || '').trim();
         const rawKey = String(jQuery('#bb-vn-cfg-key').val() || '').trim();
         const selectedModel = String(extension_settings[MODULE_NAME].customApiModel || jQuery('#bb-vn-cfg-model').val() || '').trim();
@@ -516,19 +520,22 @@ export function setupExtensionSettings() {
         jQuery('#bb-vn-generation-source').text(`Источник последнего результата: ${String(event.detail?.source || '')}`);
     };
     window.addEventListener('bb-vn-generation-source', window.bbVnGenerationSourceHandler);
+    const syncConnectionVisibility = () => {
+        jQuery('#bb-vn-custom-api-block').css('display', s.useCustomApi || resolveVnGenerationSource(s) === 'custom' ? 'flex' : 'none');
+        syncCustomApiVisualState();
+    };
+    const vnConnections = mountVnConnectionControls(document.getElementById('bb-vn-connection-controls'), s, () => {
+        invalidateVnOptionsGeneration();
+        saveSettingsDebounced();
+        syncConnectionVisibility();
+    });
     jQuery('#bb-vn-cfg-usecustom').on('change', function() { 
         const isChecked = jQuery(this).is(':checked'); extension_settings[MODULE_NAME].useCustomApi = isChecked;
-        if (isChecked) {
-            jQuery('#bb-vn-custom-api-block').stop(true, true).css('display', 'none').slideDown(200, function() {
-                jQuery(this).css('display', 'flex');
-            });
-        } else {
-            jQuery('#bb-vn-custom-api-block').stop(true, true).slideUp(200);
-        }
+        vnConnections.sync();
         if (!isChecked) lastVerifiedCustomApiFingerprint = '';
         clearCustomApiRuntimeState();
         saveSettingsDebounced();
-        syncCustomApiVisualState();
+        syncConnectionVisibility();
     });
     jQuery('#bb-vn-cfg-url, #bb-vn-cfg-key').on('change input', () => {
         extension_settings[MODULE_NAME].customApiUrl = jQuery('#bb-vn-cfg-url').val();

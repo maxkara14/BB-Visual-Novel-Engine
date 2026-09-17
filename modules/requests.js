@@ -13,6 +13,8 @@ const ERROR_MESSAGES = {
     busy: 'Основная модель уже выполняет служебный запрос VNE. Дождитесь его завершения.',
     configuration: 'Укажите URL и модель для Custom API.',
     request_rejected: 'API отклонил параметры запроса. Проверьте адрес, модель и поддерживаемый формат.',
+    profiles_unavailable: 'Профили подключения недоступны. Проверьте, включён ли Connection Manager.',
+    profile_missing: 'Выбранный профиль недоступен. Обновите список и выберите существующий профиль.',
 };
 
 let lastConnectionSignature = '';

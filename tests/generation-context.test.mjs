@@ -25,6 +25,19 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
     let persona = 'persona-a';
     const ready = [];
     const handlers = new Map();
+    const profileState = { unavailable: false, profiles: [{ id: 'profile-a', name: 'Test Profile', model: 'profile-model' }] };
+    function createNode(tag) {
+        const listeners = new Map();
+        return {
+            tagName: tag, children: [], style: {}, isConnected: true,
+            set innerHTML(_value) { throw new Error('HTML parsing is forbidden in model options'); },
+            append(...children) { this.children.push(...children); },
+            replaceChildren(...children) { this.children = children; },
+            setAttribute(key, value) { this[key] = value; },
+            addEventListener(event, callback) { listeners.set(event, callback); },
+            emit(event) { return listeners.get(event)?.(); },
+        };
+    }
     const settings = { 'BB-Visual-Novel': {
         useCustomApi: custom, customApiUrl: 'https://example.invalid/v1', customApiModel: 'test',
         emotionalChoiceFraming: false,
@@ -56,9 +69,7 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
         SillyTavern: { getContext: () => context },
         jQuery: arg => typeof arg === 'function' ? ready.push(arg) : button,
         HTMLTextAreaElement: class {},
-        document: { querySelector: () => null, createElement: tag => ({
-            tagName: tag, set innerHTML(_value) { throw new Error('HTML parsing is forbidden in model options'); },
-        }) },
+        document: { querySelector: () => null, createElement: createNode },
         CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init.detail; } },
         window: { dispatchEvent: event => events.push(event), setInterval: () => 1, renderVNOptionsFromData: (data, open) => {
             rendered.push({ data, open }); loading = false;
@@ -66,6 +77,17 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
         fetch: (_url, init) => request('custom', init.signal),
     });
     const mocks = new Map([
+        ['../../../shared.js', { ConnectionManagerRequestService: {
+            getSupportedProfiles() {
+                if (profileState.unavailable) throw new Error('Service disabled');
+                return profileState.profiles;
+            },
+            sendRequest(profileId, prompt, maxTokens, options) {
+                const pending = request('profile', options.signal);
+                Object.assign(calls.at(-1), { profileId, prompt, maxTokens, options });
+                return pending;
+            },
+        } }],
         ['../../../../../script.js', {
             chat_metadata: {}, saveChatDebounced: () => { saves++; },
             generateQuietPrompt: () => request('main'),
@@ -101,7 +123,14 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
             }, { context: sandbox });
         } else {
             const source = await readFile(new URL(`modules/${specifier}`, root), 'utf8');
-            module = new SourceTextModule(source, { context: sandbox, identifier: specifier });
+            module = new SourceTextModule(source, {
+                context: sandbox, identifier: specifier,
+                importModuleDynamically: async name => {
+                    const imported = await load(name);
+                    if (imported.status !== 'evaluated') await imported.evaluate();
+                    return imported;
+                },
+            });
         }
         cache.set(specifier, module);
         await module.link(load);
@@ -116,7 +145,13 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
     }
     const state = cache.get('./state.js').namespace;
     return {
-        api: generator.namespace, state, context, calls, rendered, errors, settings, events, logs,
+        api: generator.namespace, state, context, calls, rendered, errors, settings, events, logs, profileState, createNode,
+        connections: cache.get('./connections.js').namespace,
+        async loadApi(name) {
+            const module = await load(name);
+            await module.evaluate();
+            return module.namespace;
+        },
         utils: cache.get('./utils.js').namespace,
         requests: cache.get('./requests.js').namespace,
         expire() { for (const callback of [...timers.values()]) callback(); },
@@ -520,4 +555,194 @@ test('custom API health events contain an opaque identity, never the key or endp
     assert.equal(JSON.stringify(h.events).includes('private-endpoint'), false);
     assert.equal(h.requests.getCustomApiIdentity('https://example.invalid/private-endpoint', 'test-secret-key'), event.detail.connectionId);
     assert.notEqual(h.requests.getCustomApiIdentity('https://example.invalid/private-endpoint', 'changed-key'), event.detail.connectionId);
+});
+
+function selectProfile(h) {
+    Object.assign(h.settings['BB-Visual-Novel'], { vnGenerationSource: 'profile', vnConnectionProfileId: 'profile-a' });
+}
+
+test('profile options use the selected ID, preset and instruct without changing the active connection', async () => {
+    const h = await harness();
+    selectProfile(h);
+    h.context.activeProfile = 'main-profile';
+    const run = h.api.bbVnGenerateOptionsFlow();
+    await h.waitForCalls(1);
+    const call = h.calls[0];
+    assert.equal(call.kind, 'profile');
+    assert.equal(call.profileId, 'profile-a');
+    assert.equal(call.options.stream, false);
+    assert.equal(call.options.includePreset, true);
+    assert.equal(call.options.includeInstruct, true);
+    assert.equal(call.options.extractData, true);
+    assert.equal(call.maxTokens, 5200);
+    assert.equal(call.prompt[1].role, 'user');
+    assert.match(call.prompt[1].content, /Initial scene/);
+    call.resolve({ content: payload, reasoning: '' });
+    await run;
+    assert.equal(h.context.activeProfile, 'main-profile');
+    assert.equal(h.stops, 0);
+    assert.equal(h.saves, 1);
+    assert.match(h.events.find(event => event.type === 'bb-vn-generation-source').detail.source, /Test Profile · profile-model/);
+});
+
+test('profile repair keeps the captured source even if settings are changed mid-request', async () => {
+    const h = await harness();
+    selectProfile(h);
+    const run = h.api.bbVnGenerateOptionsFlow();
+    await h.waitForCalls(1);
+    h.settings['BB-Visual-Novel'].vnGenerationSource = 'main';
+    h.settings['BB-Visual-Novel'].vnConnectionProfileId = 'profile-b';
+    h.respond(0, 'broken json');
+    await h.waitForCalls(2);
+    assert.equal(h.calls[1].kind, 'profile');
+    assert.equal(h.calls[1].profileId, 'profile-a');
+    h.respond(1);
+    await run;
+    assert.equal(h.saves, 1);
+});
+
+test('profile completion also uses the selected profile', async () => {
+    const h = await harness();
+    selectProfile(h);
+    const run = h.api.bbVnGenerateOptionsFlow();
+    await h.waitForCalls(1);
+    h.respond(0, JSON.stringify(options.slice(0, 1)));
+    await h.waitForCalls(2);
+    assert.equal(h.calls[1].profileId, 'profile-a');
+    h.respond(1, JSON.stringify(options.slice(1)));
+    await run;
+    assert.equal(h.saves, 1);
+});
+
+for (const unavailable of [false, true]) {
+    test(`${unavailable ? 'disabled service' : 'deleted profile'} fails without silently using the main model`, async () => {
+        const h = await harness();
+        selectProfile(h);
+        if (unavailable) h.profileState.unavailable = true;
+        else h.profileState.profiles = [];
+        await h.api.bbVnGenerateOptionsFlow();
+        assert.equal(h.calls.length, 0);
+        assert.equal(h.errors.length, 1);
+        assert.equal(h.loading, false);
+    });
+}
+
+test('profile cancellation aborts its request without stopping Tavern', async () => {
+    const h = await harness();
+    selectProfile(h);
+    const run = h.api.bbVnGenerateOptionsFlow();
+    await h.waitForCalls(1);
+    h.api.invalidateVnOptionsGeneration();
+    await run;
+    assert.equal(h.calls[0].signal.aborted, true);
+    assert.equal(h.stops, 0);
+    assert.equal(h.saves, 0);
+});
+
+test('profile timeout drops a late result and resets the options UI', async () => {
+    const h = await harness({ fakeClock: true });
+    selectProfile(h);
+    const run = h.api.bbVnGenerateOptionsFlow();
+    await h.waitForCalls(1);
+    h.expire();
+    await run;
+    h.respond(0);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.calls[0].signal.aborted, true);
+    assert.equal(h.loading, false);
+    assert.equal(h.saves, 0);
+    assert.match(h.errors[0], /Время ожидания/);
+});
+
+test('profile output containing only reasoning fails without repair', async () => {
+    const h = await harness();
+    selectProfile(h);
+    const run = h.api.bbVnGenerateOptionsFlow();
+    await h.waitForCalls(1);
+    h.calls[0].resolve({ content: '', reasoning: 'Private reasoning' });
+    await run;
+    assert.match(h.errors[0], /только рассуждения/);
+    assert.equal(h.calls.length, 1);
+    assert.equal(JSON.stringify(h.logs).includes('Private reasoning'), false);
+});
+
+test('legacy settings retain the custom source; explicit main overrides it for VN only', async () => {
+    const h = await harness({ custom: true });
+    assert.equal(h.connections.resolveVnGenerationSource(h.settings['BB-Visual-Novel']), 'custom');
+    h.settings['BB-Visual-Novel'].vnGenerationSource = 'main';
+    let run = h.api.bbVnGenerateOptionsFlow();
+    assert.equal(h.calls[0].kind, 'main');
+    h.respond(0);
+    await run;
+    run = h.api.generateFastPrompt('utility');
+    assert.equal(h.calls[1].kind, 'custom');
+    h.respond(1);
+    await run;
+});
+
+test('explicit custom source works for VN without enabling it for utility calls', async () => {
+    const h = await harness();
+    h.settings['BB-Visual-Novel'].vnGenerationSource = 'custom';
+    const run = h.api.bbVnGenerateOptionsFlow();
+    assert.equal(h.calls[0].kind, 'custom');
+    h.respond(0);
+    await run;
+    assert.equal(h.settings['BB-Visual-Novel'].useCustomApi, false);
+});
+
+test('profile UI safely renders names, preserves missing selection and saves changes', async () => {
+    const h = await harness();
+    const ui = await h.loadApi('./connection-ui.js');
+    selectProfile(h);
+    h.profileState.profiles[0].name = '<img onerror=alert(1)>';
+    const root = h.createNode('div');
+    let changes = 0;
+    ui.mountVnConnectionControls(root, h.settings['BB-Visual-Novel'], () => { changes++; });
+    await new Promise(resolve => setImmediate(resolve));
+    const source = root.children[1];
+    const block = root.children[2];
+    const profiles = block.children[1];
+    const refresh = block.children[2];
+    const note = block.children[3];
+    assert.equal(profiles.children[1].textContent, '<img onerror=alert(1)> · profile-model');
+    assert.equal(profiles.value, 'profile-a');
+    assert.equal(block.style.display, 'flex');
+    h.profileState.profiles = [{ id: 'profile-b', name: 'Replacement' }];
+    refresh.emit('click');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(profiles.value, 'profile-a');
+    assert.match(note.textContent, /недоступен/);
+    profiles.value = 'profile-b';
+    profiles.emit('change');
+    assert.equal(h.settings['BB-Visual-Novel'].vnConnectionProfileId, 'profile-b');
+    source.value = 'main';
+    source.emit('change');
+    assert.equal(h.settings['BB-Visual-Novel'].vnGenerationSource, 'main');
+    assert.equal(block.style.display, 'none');
+    assert.equal(changes, 2);
+});
+
+test('disabled Connection Manager is explained in the profile selector', async () => {
+    const h = await harness();
+    const ui = await h.loadApi('./connection-ui.js');
+    selectProfile(h);
+    h.profileState.unavailable = true;
+    const root = h.createNode('div');
+    ui.mountVnConnectionControls(root, h.settings['BB-Visual-Novel'], () => {});
+    await new Promise(resolve => setImmediate(resolve));
+    const block = root.children[2];
+    assert.equal(block.children[1].disabled, true);
+    assert.match(block.children[3].textContent, /Connection Manager/);
+    assert.equal(block.children[2].disabled, false);
+});
+
+test('scene change while the profile service is loading prevents the request', async () => {
+    const h = await harness();
+    selectProfile(h);
+    const run = h.api.bbVnGenerateOptionsFlow();
+    h.setPersona('persona-b');
+    await run;
+    assert.equal(h.calls.length, 0);
+    assert.equal(h.saves, 0);
+    assert.deepEqual(h.errors, []);
 });
