@@ -11,6 +11,31 @@ export function escapeHtml(unsafe) {
         .replace(/'/g, "&#039;");
 }
 
+export function createTextOption(label = '', value = '') {
+    const option = document.createElement('option');
+    option.textContent = String(label);
+    option.value = String(value);
+    return option;
+}
+
+export function buildJsonDiagnostic(rawText = '', errors = [], { includeText = false, secrets = [] } = {}) {
+    const text = String(rawText || '');
+    const position = errors
+        .map(error => String(error || '').match(/position\s+(\d+)/i)?.[1])
+        .map(value => Number.parseInt(value, 10))
+        .find(Number.isFinite);
+    const result = { length: text.length, position: Number.isFinite(position) ? position : null };
+    if (!includeText) return result;
+    // Redact before slicing so a key crossing a snippet boundary cannot leak partially.
+    let safeText = text;
+    for (const secret of secrets.filter(value => typeof value === 'string' && value.length > 0)) {
+        safeText = safeText.split(secret).join('*'.repeat(secret.length));
+    }
+    const start = Number.isFinite(position) ? Math.max(0, position - 260) : 0;
+    const end = Number.isFinite(position) ? position + 260 : 520;
+    return { ...result, tail: safeText.slice(-520), aroundError: safeText.slice(start, end) };
+}
+
 const CP1251_SPECIAL_CHAR_TO_BYTE = new Map([
     ['\u0402', 0x80], ['\u0403', 0x81], ['\u201a', 0x82], ['\u0453', 0x83],
     ['\u201e', 0x84], ['\u2026', 0x85], ['\u2020', 0x86], ['\u2021', 0x87],

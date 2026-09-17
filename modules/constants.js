@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS = {
     customApiModel: '',
     requestTimeout: 120,
     allowMainFallback: false,
+    debugGeneration: false,
     useMacro: false,
     emotionalChoiceFraming: true,
     disableRelationshipTracker: false,

@@ -10,6 +10,7 @@ import {
     normalizeTraitResponse,
     isLikelyModelRefusalText,
     getToneClass,
+    buildJsonDiagnostic,
 } from './utils.js';
 import { notifyInfo, notifyError } from './toasts.js';
 import { 
@@ -21,7 +22,7 @@ import {
     isActiveVnOptionsGenerationToken,
 } from './state.js';
 import { injectCombinedSocialPrompt, getCurrentPersonaScopeKey } from './social.js';
-import { VnRequestError, normalizeRequestTimeout, httpRequestError, normalizeRequestError, readCustomApiContent, withRequestDeadline } from './requests.js';
+import { VnRequestError, normalizeRequestTimeout, httpRequestError, normalizeRequestError, readCustomApiContent, withRequestDeadline, getCustomApiIdentity } from './requests.js';
 import {
     resetVnOptionsContainer,
     setVnGenerateButtonIdle,
@@ -45,7 +46,7 @@ function emitCustomApiHealth(detail = {}) {
     try {
         window.dispatchEvent(new CustomEvent(CUSTOM_API_HEALTH_EVENT, { detail }));
     } catch (error) {
-        console.debug('[BB VN][debug] custom api health event skipped', error);
+        console.debug('[BB VN] Custom API health event skipped');
     }
 }
 
@@ -304,7 +305,7 @@ export function cancelVnGeneration() {
     try {
         SillyTavern.getContext?.().stopGeneration?.();
     } catch (error) {
-        console.debug('[BB VN] stopGeneration failed:', error);
+        console.debug('[BB VN] stopGeneration failed');
     }
 }
 
@@ -323,6 +324,7 @@ export async function generateFastPrompt(promptText, options = {}) {
     if (s.useCustomApi) {
         if (!s.customApiUrl || !s.customApiModel) throw new VnRequestError('configuration');
         const controller = new AbortController();
+        const connectionId = getCustomApiIdentity(s.customApiUrl, s.customApiKey);
         setVnGenerationAbortController(controller);
         const cancel = () => controller.abort();
         signal?.addEventListener('abort', cancel, { once: true });
@@ -364,8 +366,7 @@ export async function generateFastPrompt(promptText, options = {}) {
             reportGenerationSource(`Custom API · ${s.customApiModel}`);
             emitCustomApiHealth({
                 state: 'connected',
-                url: s.customApiUrl || '',
-                key: s.customApiKey || '',
+                connectionId,
                 model: s.customApiModel || '',
                 message: s.customApiModel
                     ? `Кастомная модель ${s.customApiModel} ответила успешно.`
@@ -390,8 +391,7 @@ export async function generateFastPrompt(promptText, options = {}) {
             const canFallback = s.allowMainFallback === true && ['network', 'provider', 'timeout'].includes(error.code);
             emitCustomApiHealth({
                 state: 'error',
-                url: s.customApiUrl || '',
-                key: s.customApiKey || '',
+                connectionId,
                 model: s.customApiModel || '',
                 message: error.message + (canFallback ? ' Используется резервная основная модель.' : ''),
             });
@@ -452,20 +452,11 @@ function extractOptionsFromGeneration(rawText = '') {
 }
 
 function logOptionsJsonFailure(rawText = '', errors = [], stage = 'initial') {
-    const text = String(rawText || '');
-    const position = errors
-        .map(error => String(error || '').match(/position\s+(\d+)/i)?.[1])
-        .map(value => Number.parseInt(value, 10))
-        .find(Number.isFinite);
-    const snippetStart = Number.isFinite(position) ? Math.max(0, position - 260) : 0;
-    const snippetEnd = Number.isFinite(position) ? Math.min(text.length, position + 260) : Math.min(text.length, 520);
-
-    console.warn(`[BB VN] Options JSON ${stage} parse diagnostic`, {
-        length: text.length,
-        position: Number.isFinite(position) ? position : null,
-        tail: text.slice(Math.max(0, text.length - 520)),
-        aroundError: text.slice(snippetStart, snippetEnd),
-    });
+    const settings = extension_settings[MODULE_NAME];
+    console.warn(`[BB VN] Options JSON ${stage} parse diagnostic`, buildJsonDiagnostic(rawText, errors, {
+        includeText: settings.debugGeneration === true,
+        secrets: [settings.customApiKey],
+    }));
 }
 
 async function repairOptionsJson(rawText = '', vnOptionsToken) {
@@ -760,7 +751,7 @@ async function collectCharacterDescriptionSourceContext({ charName = '', userNam
             cardFields = context.getCharacterCardFields({ chid: matched.chid }) || null;
             result.matchedCharacterName = String(matched.character?.name || '').trim();
         } catch (error) {
-            console.debug('[BB VN] Failed to resolve character card fields for profile generation:', error);
+            console.debug('[BB VN] Failed to resolve character card fields for profile generation');
         }
     }
 
@@ -825,7 +816,7 @@ async function collectCharacterDescriptionSourceContext({ charName = '', userNam
 
             result.worldInfoText = clipPromptBlock(wiPrompt?.worldInfoString || '', 3200);
         } catch (error) {
-            console.debug('[BB VN] Failed to collect World Info context for profile generation:', error);
+            console.debug('[BB VN] Failed to collect World Info context for profile generation');
         }
     }
 
@@ -1242,7 +1233,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
         if (typeof window['bbGetSceneDirectorPrompt'] === 'function') {
             const sceneVibe = window['bbGetSceneDirectorPrompt']();
             if (sceneVibe) {
-                console.log("[BB VNE] 🎬 Успешно подхватили стиль Режиссёра:\n", sceneVibe);
+                console.debug('[BB VN] Scene Director style applied');
                 prompt = sceneVibe + "\n\n" + prompt;
             }
         }
@@ -1275,7 +1266,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
             : generationResult?.content || '';
         const finishReason = generationResult?.meta?.finishReason || '';
         const provider = generationResult?.meta?.provider || 'unknown';
-        console.debug(`[BB VN][debug] generated result length=${String(result || '').length} provider=${provider} finish_reason=${finishReason || 'none'} mode=${generationRequest.mode || 'default'} length=${replyLength}`);
+        console.debug('[BB VN] Options response received', { length: String(result || '').length, provider });
 
         if (provider === 'custom-api' && finishReason === 'length') {
             throw new Error('Кастомный API обрезал ответ по лимиту токенов (finish_reason=length). Уменьшите объём запроса, переключите длину на более короткую или сделайте реролл.');
@@ -1286,9 +1277,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
         let recoveredPayload = extractOptionsFromGeneration(result);
         let recoveredOptions = recoveredPayload.options;
         if (!recoveredPayload.ok) {
-            console.warn('[BB VN] Initial options JSON parse failed. Attempting repair...', {
-                errors: recoveredPayload.errors,
-            });
+            console.warn('[BB VN] Initial options JSON parse failed. Attempting repair.');
             logOptionsJsonFailure(result, recoveredPayload.errors, 'initial');
 
             const repairedResult = await repairOptionsJson(result, requestToken);
@@ -1374,10 +1363,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
             try {
                 parsedOptions = JSON.parse(repairedArray);
             } catch (repairError) {
-                console.warn('[BB VN] JSON parse failed after safe repair.', {
-                    directError: directParseError?.message,
-                    repairError: repairError?.message,
-                });
+                console.warn('[BB VN] JSON parse failed after safe repair.');
                 throw new Error('Модель вернула поврежденный JSON, сделайте реролл.');
             }
         }
@@ -1401,7 +1387,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
         if (!isActiveVnOptionsGenerationToken(requestToken)) return;
         if (activeVnOptionsOperation && !isCurrentOptionsOperation(requestToken)) return;
         if (e.message !== VN_GENERATION_CANCELLED_MESSAGE) {
-            console.error('[BB VN] Ошибка генерации:', e);
+            console.error('[BB VN] Generation failed:', normalizeRequestError(e).code);
             notifyError(e.message || 'Не удалось сгенерировать варианты');
         }
     } finally {

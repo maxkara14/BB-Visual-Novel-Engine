@@ -16,6 +16,7 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
     const rendered = [];
     const errors = [];
     const events = [];
+    const logs = [];
     const timers = new Map();
     let timerId = 0;
     let saves = 0;
@@ -51,11 +52,13 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
             setTimeout: callback => { timers.set(++timerId, callback); return timerId; },
             clearTimeout: id => timers.delete(id),
         } : {}),
-        console: { debug() {}, warn() {}, log() {}, error() {} },
+        console: Object.fromEntries(['debug', 'warn', 'log', 'error'].map(level => [level, (...args) => logs.push(args)])),
         SillyTavern: { getContext: () => context },
         jQuery: arg => typeof arg === 'function' ? ready.push(arg) : button,
         HTMLTextAreaElement: class {},
-        document: { querySelector: () => null },
+        document: { querySelector: () => null, createElement: tag => ({
+            tagName: tag, set innerHTML(_value) { throw new Error('HTML parsing is forbidden in model options'); },
+        }) },
         CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init.detail; } },
         window: { dispatchEvent: event => events.push(event), setInterval: () => 1, renderVNOptionsFromData: (data, open) => {
             rendered.push({ data, open }); loading = false;
@@ -113,7 +116,8 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
     }
     const state = cache.get('./state.js').namespace;
     return {
-        api: generator.namespace, state, context, calls, rendered, errors, settings, events,
+        api: generator.namespace, state, context, calls, rendered, errors, settings, events, logs,
+        utils: cache.get('./utils.js').namespace,
         requests: cache.get('./requests.js').namespace,
         expire() { for (const callback of [...timers.values()]) callback(); },
         get saves() { return saves; }, get stops() { return stops; }, get loading() { return loading; },
@@ -456,4 +460,64 @@ test('profile cancellation before source collection prevents generation', async 
     controller.abort();
     await assert.rejects(h.api.generateCharacterDescription({ charName: 'Character', signal: controller.signal }), { code: 'cancelled' });
     assert.equal(h.calls.length, 0);
+});
+
+test('model labels and values stay literal text, including markup and quotes', async () => {
+    const h = await harness();
+    const label = '<img src=x onerror=alert(1)> " & Model';
+    const value = '"><script>test</script>';
+    const option = h.utils.createTextOption(label, value);
+    assert.equal(option.tagName, 'option');
+    assert.equal(option.textContent, label);
+    assert.equal(option.value, value);
+    const ordinary = h.utils.createTextOption('normal-model', 'normal-model');
+    assert.equal(ordinary.value, 'normal-model');
+});
+
+test('default malformed JSON diagnostics contain neither model text nor parser excerpts', async () => {
+    const h = await harness();
+    const run = h.api.bbVnGenerateOptionsFlow();
+    h.respond(0, 'PRIVATE_SCENE_SENTINEL { damaged');
+    await h.waitForCalls(2);
+    h.respond(1);
+    await run;
+    assert.ok(h.logs.some(args => String(args[0]).includes('parse diagnostic')));
+    assert.equal(JSON.stringify(h.logs).includes('PRIVATE_SCENE_SENTINEL'), false);
+    assert.equal(h.saves, 1);
+});
+
+test('opt-in diagnostics show response fragments but redact the configured key', async () => {
+    const h = await harness();
+    h.settings['BB-Visual-Novel'].debugGeneration = true;
+    h.settings['BB-Visual-Novel'].customApiKey = 'test-secret-key';
+    const run = h.api.bbVnGenerateOptionsFlow();
+    h.respond(0, 'PRIVATE_SCENE_SENTINEL test-secret-key { damaged');
+    await h.waitForCalls(2);
+    h.respond(1);
+    await run;
+    assert.equal(JSON.stringify(h.logs).includes('PRIVATE_SCENE_SENTINEL'), true);
+    assert.equal(JSON.stringify(h.logs).includes('test-secret-key'), false);
+});
+
+test('debug redaction happens before a snippet boundary splits the key', async () => {
+    const h = await harness();
+    const text = 'x'.repeat(510) + 'secret-crosses-boundary' + 'x'.repeat(530);
+    const diagnostic = h.utils.buildJsonDiagnostic(text, [], { includeText: true, secrets: ['secret-crosses-boundary'] });
+    assert.equal(diagnostic.aroundError.includes('secret'), false);
+    assert.equal(diagnostic.tail.includes('boundary'), false);
+});
+
+test('custom API health events contain an opaque identity, never the key or endpoint', async () => {
+    const h = await harness({ custom: true });
+    h.settings['BB-Visual-Novel'].customApiKey = 'test-secret-key';
+    h.settings['BB-Visual-Novel'].customApiUrl = 'https://example.invalid/private-endpoint';
+    const run = h.api.generateFastPrompt('test');
+    h.respond(0);
+    await run;
+    const event = h.events.find(item => item.type === 'bb-vn-custom-api-health');
+    assert.equal(typeof event.detail.connectionId, 'number');
+    assert.equal(JSON.stringify(h.events).includes('test-secret-key'), false);
+    assert.equal(JSON.stringify(h.events).includes('private-endpoint'), false);
+    assert.equal(h.requests.getCustomApiIdentity('https://example.invalid/private-endpoint', 'test-secret-key'), event.detail.connectionId);
+    assert.notEqual(h.requests.getCustomApiIdentity('https://example.invalid/private-endpoint', 'changed-key'), event.detail.connectionId);
 });

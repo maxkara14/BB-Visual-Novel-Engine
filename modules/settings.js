@@ -5,7 +5,8 @@ import { MODULE_NAME, normalizeImpactSettings, normalizeImpactValue, normalizeVn
 import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog, bindActivePersonaState, getCurrentPersonaScopeKey, mergeCharacterRecords, resolveCharacterIdentity, exportActivePersonaSnapshot, importActivePersonaSnapshot, clearActivePersonaSnapshot, markSnapshotReplayMessage, getLatestAssistantMessageEntry } from './social.js';
 import { notifySuccess, notifyInfo, notifyError, showHudToast } from './toasts.js';
 import { restoreVNOptions, clearSavedVNOptions } from './generator.js';
-import { normalizeRequestTimeout } from './requests.js';
+import { normalizeRequestTimeout, normalizeRequestError, getCustomApiIdentity } from './requests.js';
+import { escapeHtml, createTextOption } from './utils.js';
 
 const IMPACT_SETTING_FIELDS = [
     { key: 'unforgivable', token: 'unforgivable', title: 'Критический минус', hint: 'Тяжёлый удар по доверию или влечению' },
@@ -44,10 +45,10 @@ function renderMergeSuggestionsList() {
 
     container.html(suggestions.map(item => {
         const score = Math.round(Number(item.score || 0) * 100);
-        return `<button type="button" class="menu_button bb-dbg-merge-suggestion" data-from="${String(item.source || '').replace(/"/g, '&quot;')}" data-to="${String(item.target || '').replace(/"/g, '&quot;')}" style="text-align:left; width:100%; margin-top:6px; border-color: rgba(192, 132, 252, 0.22); color: #ddd6fe;">
+        return `<button type="button" class="menu_button bb-dbg-merge-suggestion" data-from="${escapeHtml(item.source)}" data-to="${escapeHtml(item.target)}" style="text-align:left; width:100%; margin-top:6px; border-color: rgba(192, 132, 252, 0.22); color: #ddd6fe;">
             <span style="display:block; font-size:11px; color:#c4b5fd;">Кандидат на объединение · ${score}%</span>
-            <strong style="display:block; color:#f8fafc;">${item.source}</strong>
-            <span style="display:block; font-size:12px; color:#94a3b8;">→ ${item.target}</span>
+            <strong style="display:block; color:#f8fafc;">${escapeHtml(item.source)}</strong>
+            <span style="display:block; font-size:12px; color:#94a3b8;">→ ${escapeHtml(item.target)}</span>
         </button>`;
     }).join(''));
 
@@ -272,20 +273,22 @@ export function setupExtensionSettings() {
                     <span class="bb-vn-settings-section-title">⚡ Custom API</span>
                     <label class="checkbox_label bb-vn-setting-pill bb-vn-setting-pill--single"><input type="checkbox" id="bb-vn-cfg-usecustom" ${s.useCustomApi ? 'checked' : ''}><span>Использовать свой API-ключ</span></label>
                     <div id="bb-vn-custom-api-block" class="bb-vn-settings-stack" style="display: ${s.useCustomApi ? 'flex' : 'none'};">
-                        <input type="text" id="bb-vn-cfg-url" class="text_pole" placeholder="URL" value="${s.customApiUrl || ''}">
-                        <input type="password" id="bb-vn-cfg-key" class="text_pole" placeholder="API Ключ" value="${s.customApiKey || ''}">
+                        <input type="text" id="bb-vn-cfg-url" class="text_pole" placeholder="URL">
+                        <input type="password" id="bb-vn-cfg-key" class="text_pole" placeholder="API Ключ">
                         <div id="bb-vn-custom-api-status" class="bb-custom-api-status is-idle">
                             <span class="bb-custom-api-status-dot"></span>
                             <span class="bb-custom-api-status-text">Подключение не проверено</span>
                         </div>
                         <button id="bb-vn-btn-connect" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-plug"></i>&nbsp; Подключиться</button>
-                        <select id="bb-vn-cfg-model" class="text_pole" ${!s.customApiModel ? 'disabled' : ''}><option value="${s.customApiModel || ''}">${s.customApiModel || 'Модели не загружены'}</option></select>
+                        <select id="bb-vn-cfg-model" class="text_pole" ${!s.customApiModel ? 'disabled' : ''}></select>
                         <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-fallback" ${s.allowMainFallback === true ? 'checked' : ''}><span>Разрешить резервную основную модель при сбое Custom API</span></label>
                         <span class="bb-vn-settings-note">Может вызвать дополнительный запрос к другой модели. Не применяется при отмене, ошибке ключа, квоте или блокировке провайдером.</span>
                     </div>
                     <label for="bb-vn-cfg-timeout">Тайм-аут одного запроса (секунды)</label>
                     <input type="number" id="bb-vn-cfg-timeout" class="text_pole" min="15" max="600" value="${normalizeRequestTimeout(s.requestTimeout)}">
                     <span id="bb-vn-generation-source" class="bb-vn-settings-note" aria-live="polite">Источник последнего результата: запросов ещё не было.</span>
+                    <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-debug" ${s.debugGeneration === true ? 'checked' : ''}><span>Подробная диагностика ответов</span></label>
+                    <span class="bb-vn-settings-note">Включает фрагменты ответа модели в консоли браузера. Выключайте после диагностики и проверяйте текст перед отправкой отчёта.</span>
                 </div>
                 <label class="checkbox_label bb-vn-setting-pill bb-vn-setting-pill--single"><input type="checkbox" id="bb-vn-cfg-usemacro" ${s.useMacro ? 'checked' : ''}><span>Использовать макрос {{bb_vn}}</span></label>
 
@@ -354,6 +357,9 @@ export function setupExtensionSettings() {
     `;
     const target = document.querySelector("#extensions_settings2") || document.querySelector("#extensions_settings");
     if (target) target.insertAdjacentHTML('beforeend', settingsHtml);
+    jQuery('#bb-vn-cfg-url').val(s.customApiUrl || '');
+    jQuery('#bb-vn-cfg-key').val(s.customApiKey || '');
+    jQuery('#bb-vn-cfg-model').append(createTextOption(s.customApiModel || 'Модели не загружены', s.customApiModel || ''));
 
     let lastVerifiedCustomApiFingerprint = '';
     let customApiRuntimeState = '';
@@ -375,7 +381,7 @@ export function setupExtensionSettings() {
 
     const setCustomApiModelPlaceholder = (label = 'Модели не загружены', value = '') => {
         const select = jQuery('#bb-vn-cfg-model').empty();
-        select.append(`<option value="${String(value || '').replace(/"/g, '&quot;')}">${label}</option>`);
+        select.append(createTextOption(label, value));
         select.prop('disabled', true);
     };
 
@@ -424,9 +430,8 @@ export function setupExtensionSettings() {
 
     const customApiHealthHandler = (event) => {
         const detail = event?.detail && typeof event.detail === 'object' ? event.detail : {};
-        const runtimeFingerprint = buildCustomApiFingerprint(detail.url || '', detail.key || '');
-        const currentFingerprint = buildCustomApiFingerprint(jQuery('#bb-vn-cfg-url').val(), jQuery('#bb-vn-cfg-key').val());
-        if (runtimeFingerprint && currentFingerprint && runtimeFingerprint !== currentFingerprint) return;
+        const currentIdentity = getCustomApiIdentity(jQuery('#bb-vn-cfg-url').val(), jQuery('#bb-vn-cfg-key').val());
+        if (detail.connectionId !== currentIdentity) return;
         customApiRuntimeState = detail.state === 'error' ? 'error' : 'connected';
         customApiRuntimeMessage = String(detail.message || '').trim();
         syncCustomApiVisualState();
@@ -452,7 +457,7 @@ export function setupExtensionSettings() {
         }
 
         safeModels.forEach(modelId => {
-            select.append(`<option value="${modelId}">${modelId}</option>`);
+            select.append(createTextOption(modelId, modelId));
         });
 
         const initialModel = safeModels.includes(preferredModel)
@@ -500,6 +505,10 @@ export function setupExtensionSettings() {
     });
     jQuery('#bb-vn-cfg-fallback').on('change', function() {
         extension_settings[MODULE_NAME].allowMainFallback = jQuery(this).is(':checked');
+        saveSettingsDebounced();
+    });
+    jQuery('#bb-vn-cfg-debug').on('change', function() {
+        extension_settings[MODULE_NAME].debugGeneration = jQuery(this).is(':checked');
         saveSettingsDebounced();
     });
     if (window.bbVnGenerationSourceHandler) window.removeEventListener('bb-vn-generation-source', window.bbVnGenerationSourceHandler);
@@ -606,7 +615,7 @@ export function setupExtensionSettings() {
             if (savedModel) setCustomApiModelPlaceholder(`${savedModel} · подключение не подтверждено`, savedModel);
             else setCustomApiModelPlaceholder('Подключение не удалось');
             setCustomApiStatus('error', 'Ошибка подключения. Проверьте URL, ключ и доступность API.');
-            console.error('[BB VN] Ошибка подключения custom API:', e);
+            console.error('[BB VN] Custom API connection failed:', normalizeRequestError(e).code);
             notifyError("Ошибка подключения или пустой список моделей.");
         } finally { btn.html('Подключиться'); }
     });
@@ -758,7 +767,7 @@ export function setupExtensionSettings() {
             recalculateAllStats(false);
             notifySuccess(`Snapshot импортирован: ${result.characters} персонажей. Старые события до точки импорта больше не наслаиваются повторно.`);
         } catch (error) {
-            console.error('[BB VN] Snapshot import failed:', error);
+            console.error('[BB VN] Snapshot import failed.');
             notifyError("Не удалось импортировать snapshot. Проверьте JSON-файл.");
         } finally {
             jQuery(this).val('');

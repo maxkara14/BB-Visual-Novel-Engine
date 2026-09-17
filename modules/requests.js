@@ -15,6 +15,18 @@ const ERROR_MESSAGES = {
     request_rejected: 'API отклонил параметры запроса. Проверьте адрес, модель и поддерживаемый формат.',
 };
 
+let lastConnectionSignature = '';
+let connectionIdentity = 0;
+
+export function getCustomApiIdentity(url = '', key = '') {
+    const signature = JSON.stringify([String(url).trim(), String(key).trim()]);
+    if (signature !== lastConnectionSignature) {
+        lastConnectionSignature = signature;
+        connectionIdentity++;
+    }
+    return connectionIdentity;
+}
+
 export class VnRequestError extends Error {
     constructor(code) {
         super(ERROR_MESSAGES[code] || ERROR_MESSAGES.provider);

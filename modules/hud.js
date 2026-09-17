@@ -29,6 +29,7 @@ import {
     getLatestAssistantMessageEntry
 } from './social.js';
 import { crystallizeTraitFromMemories, generateCharacterDescription, isVnGenerationAbortError } from './generator.js';
+import { normalizeRequestError } from './requests.js';
 
 const HUD_VISIBILITY_RETRY_MS = 120;
 let hudVisibilityRetryTimer = null;
@@ -990,7 +991,7 @@ export function renderSocialHud() {
                     notifyInfo('Описание персонажа обновлено. При желании его можно подправить вручную.');
                 }).catch((error) => {
                     if (String(editor.data('bbDescriptionGenerationRequestId') || '') !== requestId) return;
-                    console.error('[BB VN] Character description generation failed:', error);
+                    console.error('[BB VN] Character description generation failed:', normalizeRequestError(error).code);
                     if (editor.data('bbDescriptionGenerationCancelled') === true || isVnGenerationAbortError(error)) {
                         notifyInfo('Генерация описания отменена.');
                         return;
@@ -1148,7 +1149,7 @@ export function renderSocialHud() {
                         isPositive,
                     });
                 } catch (e) {
-                    console.warn('[BB VN] Trait crystallization failed:', e);
+                    console.warn('[BB VN] Trait crystallization failed:', normalizeRequestError(e).code);
                     notifyError(e.message || 'Не удалось сформировать черту персонажа.');
                 } finally {
                     btn.html(originalHtml).css('pointer-events', 'auto');
