@@ -21,6 +21,7 @@ import {
     isActiveVnOptionsGenerationToken,
 } from './state.js';
 import { injectCombinedSocialPrompt, getCurrentPersonaScopeKey } from './social.js';
+import { VnRequestError, normalizeRequestTimeout, httpRequestError, normalizeRequestError, readCustomApiContent, withRequestDeadline } from './requests.js';
 import {
     resetVnOptionsContainer,
     setVnGenerateButtonIdle,
@@ -29,6 +30,7 @@ import {
 
 let lastCustomApiFallbackNoticeAt = 0;
 let activeVnOptionsOperation = null;
+let activeMainRequest = null;
 const MIN_RENDERABLE_OPTIONS = 2;
 const CUSTOM_API_HEALTH_EVENT = 'bb-vn-custom-api-health';
 const VN_GENERATION_CANCELLED_MESSAGE = 'Отменено пользователем';
@@ -163,6 +165,10 @@ function ensureActiveVnOptionsGeneration(token) {
     }
 }
 
+function reportGenerationSource(source) {
+    window.dispatchEvent(new CustomEvent('bb-vn-generation-source', { detail: { source } }));
+}
+
 function getOptionsChatKey(context) {
     return JSON.stringify([
         context.groupId ?? null,
@@ -192,13 +198,6 @@ export function invalidateVnOptionsGeneration() {
     activeVnOptionsOperation = null;
     createVnOptionsGenerationToken();
     operation.controller?.abort();
-    if (operation.mainRequest) {
-        try {
-            SillyTavern.getContext().stopGeneration?.();
-        } catch (error) {
-            console.debug('[BB VN] Could not stop stale options request:', error);
-        }
-    }
     restoreVNOptions(false);
 }
 
@@ -251,6 +250,7 @@ export async function runMainGen(promptText, options = {}) {
     const token = options.vnOptionsToken;
     if (token) ensureActiveVnOptionsGeneration(token);
     const operation = token ? activeVnOptionsOperation : null;
+    if ((operation?.controller.signal || options.signal)?.aborted) throw new VnRequestError('cancelled');
     const request = { quietPrompt: promptText };
     if (Number.isFinite(options.responseLength) && options.responseLength > 0) {
         request.responseLength = Math.round(options.responseLength);
@@ -259,20 +259,31 @@ export async function runMainGen(promptText, options = {}) {
         request.jsonSchema = options.jsonSchema;
     }
 
-    if (operation) operation.mainRequest = true;
+    if (activeMainRequest) throw new VnRequestError('busy');
+    const owner = {};
+    activeMainRequest = owner;
     try {
-        let result;
-        if (typeof generateQuietPrompt === 'function') {
-            result = await generateQuietPrompt(request);
-        } else if (typeof window['generateQuietPrompt'] === 'function') {
-            result = await window['generateQuietPrompt'](request);
-        } else {
-            throw new Error("Функция генерации Таверны не найдена. Обновите SillyTavern.");
-        }
+        const result = await withRequestDeadline(async () => {
+            try {
+                if (typeof generateQuietPrompt === 'function') return await generateQuietPrompt(request);
+                if (typeof window['generateQuietPrompt'] === 'function') return await window['generateQuietPrompt'](request);
+                throw new VnRequestError('configuration');
+            } finally {
+                if (activeMainRequest === owner) activeMainRequest = null;
+            }
+        }, {
+            signal: operation?.controller.signal || options.signal,
+            timeoutMs: normalizeRequestTimeout(extension_settings[MODULE_NAME]?.requestTimeout) * 1000,
+            onAbort: () => {
+                if (activeMainRequest === owner) SillyTavern.getContext().stopGeneration?.();
+            },
+        });
         if (token) ensureActiveVnOptionsGeneration(token);
+        if (typeof result !== 'string') throw new VnRequestError('invalid_response');
+        if (!result.trim()) throw new VnRequestError('empty');
         return result;
-    } finally {
-        if (operation) operation.mainRequest = false;
+    } catch (error) {
+        throw normalizeRequestError(error);
     }
 }
 
@@ -306,46 +317,51 @@ export async function generateFastPrompt(promptText, options = {}) {
         ? Math.round(options.responseLength)
         : null;
     const jsonSchema = options.jsonSchema || null;
-    const s = extension_settings[MODULE_NAME];
-    if (s.useCustomApi && s.customApiUrl && s.customApiModel) {
+    const s = { ...extension_settings[MODULE_NAME] };
+    const signal = token ? activeVnOptionsOperation.controller.signal : options.signal;
+    if (signal?.aborted) throw new VnRequestError('cancelled');
+    if (s.useCustomApi) {
+        if (!s.customApiUrl || !s.customApiModel) throw new VnRequestError('configuration');
         const controller = new AbortController();
-        if (token) activeVnOptionsOperation.controller = controller;
         setVnGenerationAbortController(controller);
+        const cancel = () => controller.abort();
+        signal?.addEventListener('abort', cancel, { once: true });
         try {
             const baseUrl = s.customApiUrl.replace(/\/$/, '');
             const endpoint = baseUrl + '/chat/completions';
             
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                signal: controller.signal,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${s.customApiKey || ''}`
-                },
-                body: JSON.stringify({
-                    model: s.customApiModel,
-                    messages:[
-                        {
-                            role: 'system',
-                            content: responseFormat === 'text'
-                                ? 'You are an internal text generator. Return only the requested final result without extra explanations or wrappers.'
-                                : 'You are an internal JSON generator. You MUST output ONLY valid JSON format. No conversational text.'
-                        },
-                        { role: 'user', content: promptText }
-                    ],
-                    temperature: 0.7,
-                    max_tokens: Math.max(4000, responseLength || 0),
-                    stream: false
-                })
-            });
-            
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
-            const data = await response.json();
+            const data = await withRequestDeadline(async requestSignal => {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    signal: requestSignal,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${s.customApiKey || ''}`
+                    },
+                    body: JSON.stringify({
+                        model: s.customApiModel,
+                        messages:[
+                            {
+                                role: 'system',
+                                content: responseFormat === 'text'
+                                    ? 'You are an internal text generator. Return only the requested final result without extra explanations or wrappers.'
+                                    : 'You are an internal JSON generator. You MUST output ONLY valid JSON format. No conversational text.'
+                            },
+                            { role: 'user', content: promptText }
+                        ],
+                        temperature: 0.7,
+                        max_tokens: Math.max(4000, responseLength || 0),
+                        stream: false
+                    })
+                });
+                if (!response.ok) throw httpRequestError(response.status);
+                try { return await response.json(); }
+                catch { throw new VnRequestError('invalid_response'); }
+            }, { signal: controller.signal, timeoutMs: normalizeRequestTimeout(s.requestTimeout) * 1000 });
             if (token) ensureActiveVnOptionsGeneration(token);
             const finishReason = data?.choices?.[0]?.finish_reason || '';
-            const content = data?.choices?.[0]?.message?.content || "";
-            if (!content.trim()) throw new Error("Прокси вернул пустой текст (Сработал фильтр).");
+            const content = readCustomApiContent(data);
+            reportGenerationSource(`Custom API · ${s.customApiModel}`);
             emitCustomApiHealth({
                 state: 'connected',
                 url: s.customApiUrl || '',
@@ -368,19 +384,21 @@ export async function generateFastPrompt(promptText, options = {}) {
             return content;
         } catch (e) {
             if (token) ensureActiveVnOptionsGeneration(token);
-            if (e.name === 'AbortError') throw new Error("Отменено пользователем");
-            console.warn(`[BB VN] Ошибка кастомного API (${e.message}), перехват на основной API...`);
+            if (signal?.aborted || controller.signal.aborted) throw new VnRequestError('cancelled');
+            const error = normalizeRequestError(e);
+            if (error.code === 'cancelled') throw error;
+            const canFallback = s.allowMainFallback === true && ['network', 'provider', 'timeout'].includes(error.code);
             emitCustomApiHealth({
                 state: 'error',
                 url: s.customApiUrl || '',
                 key: s.customApiKey || '',
                 model: s.customApiModel || '',
-                message: s.customApiModel
-                    ? `Запрос к ${s.customApiModel} сорвался. Генерация временно ушла на основную модель.`
-                    : 'Запрос к кастомной модели сорвался. Генерация временно ушла на основную модель.',
+                message: error.message + (canFallback ? ' Используется резервная основная модель.' : ''),
             });
+            if (!canFallback) throw error;
             maybeNotifyCustomApiFallback();
-            const fallbackContent = await runMainGen(promptText, { responseLength, jsonSchema, vnOptionsToken: token });
+            const fallbackContent = await runMainGen(promptText, { responseLength, jsonSchema, vnOptionsToken: token, signal });
+            reportGenerationSource('основная модель (резервная после сбоя Custom API)');
             if (includeMeta) {
                 return {
                     content: fallbackContent,
@@ -393,11 +411,12 @@ export async function generateFastPrompt(promptText, options = {}) {
             }
             return fallbackContent;
         } finally {
+            signal?.removeEventListener('abort', cancel);
             if (vnGenerationAbortController === controller) setVnGenerationAbortController(null);
-            if (activeVnOptionsOperation?.controller === controller) activeVnOptionsOperation.controller = null;
         }
     } else {
-        const content = await runMainGen(promptText, { responseLength, jsonSchema, vnOptionsToken: token });
+        const content = await runMainGen(promptText, { responseLength, jsonSchema, vnOptionsToken: token, signal });
+        reportGenerationSource('основная модель SillyTavern');
         if (includeMeta) {
             return {
                 content,
@@ -813,7 +832,7 @@ async function collectCharacterDescriptionSourceContext({ charName = '', userNam
     return result;
 }
 
-async function generateStructuredCharacterDescription({ charName = '', stats = {}, currentDescription = '' } = {}) {
+async function generateStructuredCharacterDescription({ charName = '', stats = {}, currentDescription = '', signal } = {}) {
     const safeCharName = String(charName || '').trim() || 'персонаж';
     const affinity = parseInt(stats?.affinity, 10) || 0;
     const romance = parseInt(stats?.romance, 10) || 0;
@@ -900,7 +919,7 @@ ${personaText || 'не указана'}
 [НЕДАВНИЙ ФРАГМЕНТ ЧАТА]
 ${recentChat || 'нет доступных сообщений'}`;
 
-    const generated = await generateFastPrompt(prompt, { responseFormat: 'text' });
+    const generated = await generateFastPrompt(prompt, { responseFormat: 'text', signal });
     const result = sanitizeStructuredCharacterDescriptionResult(generated);
     if (!isValidStructuredCharacterDescriptionResult(result)) {
         throw new Error('INVALID_CHARACTER_DESCRIPTION_RESULT');
@@ -908,8 +927,8 @@ ${recentChat || 'нет доступных сообщений'}`;
     return result;
 }
 
-export async function generateCharacterDescription({ charName = '', stats = {}, currentDescription = '' } = {}) {
-    return await generateStructuredCharacterDescription({ charName, stats, currentDescription });
+export async function generateCharacterDescription({ charName = '', stats = {}, currentDescription = '', signal } = {}) {
+    return await generateStructuredCharacterDescription({ charName, stats, currentDescription, signal });
     const safeCharName = String(charName || '').trim() || 'персонаж';
     const affinity = parseInt(stats?.affinity, 10) || 0;
     const romance = parseInt(stats?.romance, 10) || 0;
@@ -964,7 +983,7 @@ export async function generateCharacterDescription({ charName = '', stats = {}, 
     return result;
 }
 
-export async function crystallizeTraitFromMemories({ charName = '', userName = '', memories =[], isPositive = true } = {}) {
+export async function crystallizeTraitFromMemories({ charName = '', userName = '', memories =[], isPositive = true, signal } = {}) {
     const selectedMemories = Array.isArray(memories) ? memories.slice(-5) :[];
     if (selectedMemories.length < 5) {
         throw new Error('NOT_ENOUGH_MEMORIES');
@@ -1023,7 +1042,7 @@ ${memoriesBlock}
 
     let lastRaw = '';
     for (const attempt of attemptPrompts) {
-        const generationResult = await generateFastPrompt(attempt.prompt, { responseFormat: attempt.responseFormat });
+        const generationResult = await generateFastPrompt(attempt.prompt, { responseFormat: attempt.responseFormat, signal });
         lastRaw = typeof generationResult === 'string' ? generationResult : generationResult?.content || '';
         const normalized = normalizeTraitResponse(lastRaw);
         if (isValidTraitResult(normalized)) {
@@ -1040,7 +1059,7 @@ ${memoriesBlock}
 Черновик:
 ${lastRaw}`;
 
-        const repaired = await generateFastPrompt(repairPrompt, { responseFormat: 'text' });
+        const repaired = await generateFastPrompt(repairPrompt, { responseFormat: 'text', signal });
         const normalized = normalizeTraitResponse(repaired);
         if (isValidTraitResult(normalized)) {
             return normalized;
@@ -1180,8 +1199,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
             message,
             swipeId: message.swipe_id ?? 0,
             messageText: String(message.mes || ''),
-            controller: null,
-            mainRequest: false,
+            controller: new AbortController(),
         };
         
         const recentMessages = chat.slice(-10).map(message => `${message.name}: ${message.mes}`).join('\\n\\n');

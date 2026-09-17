@@ -2,7 +2,7 @@
 import { chat_metadata, saveChatDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { MODULE_NAME } from './constants.js';
-import { currentCalculatedStats, currentStoryMoments, socialParseDebug, setIsVnGenerationCancelled } from './state.js';
+import { currentCalculatedStats, currentStoryMoments, socialParseDebug } from './state.js';
 import { 
     escapeHtml, 
     getToneClass, 
@@ -28,7 +28,7 @@ import {
     markSnapshotReplayMessage,
     getLatestAssistantMessageEntry
 } from './social.js';
-import { cancelVnGeneration, crystallizeTraitFromMemories, generateCharacterDescription, isVnGenerationAbortError } from './generator.js';
+import { crystallizeTraitFromMemories, generateCharacterDescription, isVnGenerationAbortError } from './generator.js';
 
 const HUD_VISIBILITY_RETRY_MS = 120;
 let hudVisibilityRetryTimer = null;
@@ -964,13 +964,16 @@ export function renderSocialHud() {
                 const originalHtml = button.html();
                 const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-                setIsVnGenerationCancelled(false);
+                const controller = new AbortController();
+                editor.data('bbDescriptionGenerationController')?.abort();
+                editor.data('bbDescriptionGenerationController', controller);
                 editor.data('bbDescriptionGenerationRequestId', requestId);
                 editor.data('bbDescriptionGenerationCancelled', false);
                 button.attr('data-original-html', originalHtml);
                 button.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i>&ensp;Генерация...');
                 cancelButton.prop('disabled', false).show().html('<i class="fa-solid fa-xmark"></i>&ensp;Отмена');
                 generateCharacterDescription({
+                    signal: controller.signal,
                     charName,
                     stats: currentCalculatedStats[originalCharName] || currentCalculatedStats[charName] || {},
                     currentDescription: String(editor.find('.bb-edit-description-input').val() || '').trim(),
@@ -994,12 +997,13 @@ export function renderSocialHud() {
                     }
                     if (generatedFallback) {
                         editor.find('.bb-edit-description-input').val(generatedFallback);
-                        notifyInfo('Модель не ответила, поэтому подставлен локальный шаблон описания.');
+                        notifyInfo(`${error.message || 'Не удалось сгенерировать описание.'} Подставлен локальный шаблон описания.`);
                     } else {
-                        notifyError('Не удалось сгенерировать описание персонажа.');
+                        notifyError(error.message || 'Не удалось сгенерировать описание персонажа.');
                     }
                 }).finally(() => {
                     if (String(editor.data('bbDescriptionGenerationRequestId') || '') !== requestId) return;
+                    editor.removeData('bbDescriptionGenerationController');
                     resetDescriptionGenerationUi(editor);
                 });
             });
@@ -1018,7 +1022,7 @@ export function renderSocialHud() {
                     .prop('disabled', true)
                     .html('<i class="fa-solid fa-spinner fa-spin"></i>&ensp;Отмена...');
 
-                cancelVnGeneration();
+                editor.data('bbDescriptionGenerationController')?.abort();
             });
 
             jQuery('.bb-btn-clear-description').off('click').on('click', function(e) {
@@ -1145,6 +1149,7 @@ export function renderSocialHud() {
                     });
                 } catch (e) {
                     console.warn('[BB VN] Trait crystallization failed:', e);
+                    notifyError(e.message || 'Не удалось сформировать черту персонажа.');
                 } finally {
                     btn.html(originalHtml).css('pointer-events', 'auto');
                 }

@@ -11,10 +11,13 @@ const options = ['Открыть дверь', 'Задать вопрос', 'По
 }));
 const payload = JSON.stringify(options);
 
-async function harness({ custom = false, boot = false } = {}) {
+async function harness({ custom = false, boot = false, fakeClock = false } = {}) {
     const calls = [];
     const rendered = [];
     const errors = [];
+    const events = [];
+    const timers = new Map();
+    let timerId = 0;
     let saves = 0;
     let stops = 0;
     let loading = false;
@@ -43,14 +46,18 @@ async function harness({ custom = false, boot = false } = {}) {
     }
     const button = { hasClass: () => loading, show() {}, hide() {} };
     const sandbox = createContext({
-        AbortController, TextDecoder, Uint8Array,
+        AbortController, TextDecoder, Uint8Array, setTimeout, clearTimeout, Error, TypeError,
+        ...(fakeClock ? {
+            setTimeout: callback => { timers.set(++timerId, callback); return timerId; },
+            clearTimeout: id => timers.delete(id),
+        } : {}),
         console: { debug() {}, warn() {}, log() {}, error() {} },
         SillyTavern: { getContext: () => context },
         jQuery: arg => typeof arg === 'function' ? ready.push(arg) : button,
         HTMLTextAreaElement: class {},
         document: { querySelector: () => null },
-        CustomEvent: class {},
-        window: { dispatchEvent() {}, setInterval: () => 1, renderVNOptionsFromData: (data, open) => {
+        CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init.detail; } },
+        window: { dispatchEvent: event => events.push(event), setInterval: () => 1, renderVNOptionsFromData: (data, open) => {
             rendered.push({ data, open }); loading = false;
         } },
         fetch: (_url, init) => request('custom', init.signal),
@@ -106,7 +113,9 @@ async function harness({ custom = false, boot = false } = {}) {
     }
     const state = cache.get('./state.js').namespace;
     return {
-        api: generator.namespace, state, context, calls, rendered, errors, settings,
+        api: generator.namespace, state, context, calls, rendered, errors, settings, events,
+        requests: cache.get('./requests.js').namespace,
+        expire() { for (const callback of [...timers.values()]) callback(); },
         get saves() { return saves; }, get stops() { return stops; }, get loading() { return loading; },
         setPersona(value) { persona = value; },
         async emit(event) {
@@ -199,15 +208,17 @@ test('cancelling a custom request does not stop Tavern; late cleanup preserves t
     assert.equal(h.state.vnGenerationAbortController, null);
 });
 
-test('late failure from an old main request does not reset or notify over a new request', async () => {
+test('main-model requests cannot overlap while cancellation is still settling', async () => {
     const h = await harness();
     const old = h.api.bbVnGenerateOptionsFlow();
     h.api.invalidateVnOptionsGeneration();
-    const next = h.api.bbVnGenerateOptionsFlow();
+    await h.api.bbVnGenerateOptionsFlow();
+    assert.equal(h.calls.length, 1);
+    assert.equal(h.errors.length, 1);
+    assert.match(h.errors[0], /уже выполняет/);
     h.calls[0].reject(new Error('Old failure'));
     await old;
-    assert.equal(h.loading, true);
-    assert.deepEqual(h.errors, []);
+    const next = h.api.bbVnGenerateOptionsFlow();
     h.respond(1);
     await next;
     assert.equal(h.saves, 1);
@@ -242,6 +253,7 @@ test('a changed scene never falls back to the main model after a custom API fail
 
 test('unchanged scene can still use the existing main-model fallback', async () => {
     const h = await harness({ custom: true });
+    h.settings['BB-Visual-Novel'].allowMainFallback = true;
     const run = h.api.bbVnGenerateOptionsFlow();
     h.calls[0].reject(new Error('Network failure'));
     await h.waitForCalls(2);
@@ -290,4 +302,158 @@ test('context change during tone diversification discards the replacement set', 
     assert.equal(h.calls.length, 2);
     assert.equal(h.saves, 0);
     assert.equal(h.rendered.length, 0);
+});
+
+for (const [status, code] of [[401, 'auth'], [403, 'auth'], [429, 'rate_limit'], [400, 'request_rejected'], [404, 'request_rejected']]) {
+    test(`HTTP ${status} is classified and never falls back even when fallback is enabled`, async () => {
+        const h = await harness({ custom: true });
+        h.settings['BB-Visual-Novel'].allowMainFallback = true;
+        const run = h.api.generateFastPrompt('test');
+        h.calls[0].resolve({ ok: false, status });
+        await assert.rejects(run, { code });
+        assert.equal(h.calls.length, 1);
+    });
+}
+
+for (const [name, choice, code] of [
+    ['empty', { message: { content: '' } }, 'empty'],
+    ['reasoning only', { message: { reasoning_content: 'reasoning' } }, 'reasoning_only'],
+    ['truncated', { finish_reason: 'length', message: { content: payload } }, 'truncated'],
+    ['blocked', { finish_reason: 'content_filter', message: {} }, 'blocked'],
+    ['refusal', { message: { refusal: 'no' } }, 'blocked'],
+    ['unsupported content', { message: { content: {} } }, 'invalid_response'],
+]) {
+    test(`${name} response is classified and not applied or retried on another model`, async () => {
+        const h = await harness({ custom: true });
+        h.settings['BB-Visual-Novel'].allowMainFallback = true;
+        const run = h.api.generateFastPrompt('test');
+        h.calls[0].resolve({ ok: true, json: async () => ({ choices: [choice] }) });
+        await assert.rejects(run, { code });
+        assert.equal(h.calls.length, 1);
+        assert.equal(h.events.filter(event => event.type === 'bb-vn-generation-source').length, 0);
+    });
+}
+
+test('fallback is disabled by default and connection failures have a safe diagnostic', async () => {
+    const h = await harness({ custom: true });
+    const run = h.api.generateFastPrompt('test');
+    h.calls[0].reject(new TypeError('Sensitive response details'));
+    await assert.rejects(run, error => error.code === 'network' && !error.message.includes('Sensitive'));
+    assert.equal(h.calls.length, 1);
+});
+
+test('incomplete Custom API configuration fails instead of silently using the main model', async () => {
+    const h = await harness({ custom: true });
+    h.settings['BB-Visual-Novel'].customApiModel = '';
+    await assert.rejects(h.api.generateFastPrompt('test'), { code: 'configuration' });
+    assert.equal(h.calls.length, 0);
+});
+
+test('custom timeout releases the UI even if the transport ignores cancellation', async () => {
+    const h = await harness({ custom: true, fakeClock: true });
+    const run = h.api.bbVnGenerateOptionsFlow();
+    h.expire();
+    await run;
+    assert.equal(h.calls[0].signal.aborted, true);
+    assert.equal(h.loading, false);
+    assert.match(h.errors[0], /Время ожидания/);
+    assert.equal(h.saves, 0);
+    assert.equal(h.calls.length, 1);
+});
+
+test('main timeout stops its own request and releases UI without overlapping the unsettled transport', async () => {
+    const h = await harness({ fakeClock: true });
+    const run = h.api.bbVnGenerateOptionsFlow();
+    h.expire();
+    await run;
+    assert.equal(h.stops, 1);
+    assert.equal(h.loading, false);
+    assert.match(h.errors[0], /Время ожидания/);
+    h.respond(0);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.saves, 0);
+    const next = h.api.bbVnGenerateOptionsFlow();
+    h.respond(1);
+    await next;
+    assert.equal(h.saves, 1);
+});
+
+test('timeout includes waiting for the response body', async () => {
+    const h = await harness({ custom: true, fakeClock: true });
+    const run = h.api.generateFastPrompt('test');
+    h.calls[0].resolve({ ok: true, json: () => new Promise(() => {}) });
+    await new Promise(resolve => setImmediate(resolve));
+    h.expire();
+    await assert.rejects(run, { code: 'timeout' });
+});
+
+test('cancelling one utility request does not cancel another or stop Tavern', async () => {
+    const h = await harness({ custom: true });
+    const firstController = new AbortController();
+    const first = h.api.generateFastPrompt('profile', { signal: firstController.signal });
+    const second = h.api.generateFastPrompt('trait');
+    firstController.abort();
+    await assert.rejects(first, { code: 'cancelled' });
+    assert.equal(h.calls[0].signal.aborted, true);
+    assert.equal(h.calls[1].signal.aborted, false);
+    assert.equal(h.stops, 0);
+    h.respond(1, 'Trait: description');
+    assert.equal(await second, 'Trait: description');
+});
+
+test('cancellation before a utility request prevents both network and fallback calls', async () => {
+    const h = await harness({ custom: true });
+    const controller = new AbortController();
+    controller.abort();
+    await assert.rejects(h.api.generateFastPrompt('test', { signal: controller.signal }), { code: 'cancelled' });
+    assert.equal(h.calls.length, 0);
+});
+
+test('successful requests report the actual source including fallback', async () => {
+    const h = await harness({ custom: true });
+    let run = h.api.generateFastPrompt('test');
+    h.respond(0);
+    await run;
+    assert.match(h.events.find(event => event.type === 'bb-vn-generation-source').detail.source, /Custom API · test/);
+    h.settings['BB-Visual-Novel'].allowMainFallback = true;
+    run = h.api.generateFastPrompt('test');
+    h.calls[1].resolve({ ok: false, status: 503 });
+    await h.waitForCalls(3);
+    h.respond(2);
+    await run;
+    assert.match(h.events.at(-1).detail.source, /резервная/);
+});
+
+test('request timeout setting is bounded and rejects invalid persisted values', async () => {
+    const h = await harness();
+    const normalize = h.requests.normalizeRequestTimeout;
+    assert.equal(normalize(undefined), 120);
+    assert.equal(normalize('nonsense'), 120);
+    assert.equal(normalize(-10), 120);
+    assert.equal(normalize(1), 15);
+    assert.equal(normalize(900), 600);
+    assert.equal(normalize('45'), 45);
+});
+
+test('trait cancellation reaches the transport and prevents text/repair retries', async () => {
+    const h = await harness({ custom: true });
+    const controller = new AbortController();
+    const run = h.api.crystallizeTraitFromMemories({
+        charName: 'Character', userName: 'User',
+        memories: Array.from({ length: 5 }, (_, index) => ({ text: `Memory ${index}` })),
+        signal: controller.signal,
+    });
+    controller.abort();
+    await assert.rejects(run, { code: 'cancelled' });
+    assert.equal(h.calls.length, 1);
+    assert.equal(h.calls[0].signal.aborted, true);
+    assert.equal(h.stops, 0);
+});
+
+test('profile cancellation before source collection prevents generation', async () => {
+    const h = await harness({ custom: true });
+    const controller = new AbortController();
+    controller.abort();
+    await assert.rejects(h.api.generateCharacterDescription({ charName: 'Character', signal: controller.signal }), { code: 'cancelled' });
+    assert.equal(h.calls.length, 0);
 });

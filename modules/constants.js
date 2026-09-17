@@ -15,6 +15,8 @@ export const DEFAULT_SETTINGS = {
     customApiUrl: 'https://api.groq.com/openai/v1',
     customApiKey: '',
     customApiModel: '',
+    requestTimeout: 120,
+    allowMainFallback: false,
     useMacro: false,
     emotionalChoiceFraming: true,
     disableRelationshipTracker: false,

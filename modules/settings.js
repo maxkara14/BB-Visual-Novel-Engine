@@ -5,6 +5,7 @@ import { MODULE_NAME, normalizeImpactSettings, normalizeImpactValue, normalizeVn
 import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog, bindActivePersonaState, getCurrentPersonaScopeKey, mergeCharacterRecords, resolveCharacterIdentity, exportActivePersonaSnapshot, importActivePersonaSnapshot, clearActivePersonaSnapshot, markSnapshotReplayMessage, getLatestAssistantMessageEntry } from './social.js';
 import { notifySuccess, notifyInfo, notifyError, showHudToast } from './toasts.js';
 import { restoreVNOptions, clearSavedVNOptions } from './generator.js';
+import { normalizeRequestTimeout } from './requests.js';
 
 const IMPACT_SETTING_FIELDS = [
     { key: 'unforgivable', token: 'unforgivable', title: 'Критический минус', hint: 'Тяжёлый удар по доверию или влечению' },
@@ -279,7 +280,12 @@ export function setupExtensionSettings() {
                         </div>
                         <button id="bb-vn-btn-connect" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-plug"></i>&nbsp; Подключиться</button>
                         <select id="bb-vn-cfg-model" class="text_pole" ${!s.customApiModel ? 'disabled' : ''}><option value="${s.customApiModel || ''}">${s.customApiModel || 'Модели не загружены'}</option></select>
+                        <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-fallback" ${s.allowMainFallback === true ? 'checked' : ''}><span>Разрешить резервную основную модель при сбое Custom API</span></label>
+                        <span class="bb-vn-settings-note">Может вызвать дополнительный запрос к другой модели. Не применяется при отмене, ошибке ключа, квоте или блокировке провайдером.</span>
                     </div>
+                    <label for="bb-vn-cfg-timeout">Тайм-аут одного запроса (секунды)</label>
+                    <input type="number" id="bb-vn-cfg-timeout" class="text_pole" min="15" max="600" value="${normalizeRequestTimeout(s.requestTimeout)}">
+                    <span id="bb-vn-generation-source" class="bb-vn-settings-note" aria-live="polite">Источник последнего результата: запросов ещё не было.</span>
                 </div>
                 <label class="checkbox_label bb-vn-setting-pill bb-vn-setting-pill--single"><input type="checkbox" id="bb-vn-cfg-usemacro" ${s.useMacro ? 'checked' : ''}><span>Использовать макрос {{bb_vn}}</span></label>
 
@@ -486,6 +492,21 @@ export function setupExtensionSettings() {
         restoreVNOptions(false);
         injectCombinedSocialPrompt();
     });
+    jQuery('#bb-vn-cfg-timeout').on('change', function() {
+        const value = normalizeRequestTimeout(jQuery(this).val());
+        extension_settings[MODULE_NAME].requestTimeout = value;
+        jQuery(this).val(value);
+        saveSettingsDebounced();
+    });
+    jQuery('#bb-vn-cfg-fallback').on('change', function() {
+        extension_settings[MODULE_NAME].allowMainFallback = jQuery(this).is(':checked');
+        saveSettingsDebounced();
+    });
+    if (window.bbVnGenerationSourceHandler) window.removeEventListener('bb-vn-generation-source', window.bbVnGenerationSourceHandler);
+    window.bbVnGenerationSourceHandler = event => {
+        jQuery('#bb-vn-generation-source').text(`Источник последнего результата: ${String(event.detail?.source || '')}`);
+    };
+    window.addEventListener('bb-vn-generation-source', window.bbVnGenerationSourceHandler);
     jQuery('#bb-vn-cfg-usecustom').on('change', function() { 
         const isChecked = jQuery(this).is(':checked'); extension_settings[MODULE_NAME].useCustomApi = isChecked;
         if (isChecked) {
