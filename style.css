@@ -1656,13 +1656,12 @@ body.bb-hud-popup-active #bb-social-toast-container {
 }
 
 #bb-social-settings-wrapper .bb-vn-settings-note {
+    display: block;
     color: #94a3b8;
     font-size: 11px;
     line-height: 1.5;
 }
 
-#bb-social-settings-wrapper .bb-vn-settings-card,
-#bb-social-settings-wrapper .bb-vn-settings-panel,
 /* Constrain snapshot actions to the panel width, not the browser width. */
 #bb-social-settings-wrapper .bb-vn-settings-card--snapshot .bb-vn-settings-button {
     box-sizing: border-box;
@@ -1685,7 +1684,10 @@ body.bb-hud-popup-active #bb-social-toast-container {
     flex-shrink: 0;
 }
 
+#bb-social-settings-wrapper .bb-vn-settings-card,
+#bb-social-settings-wrapper .bb-vn-settings-panel,
 #bb-social-settings-wrapper .bb-vn-settings-card--snapshot {
+    text-align: left;
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -1772,6 +1774,22 @@ body.bb-hud-popup-active #bb-social-toast-container {
 #bb-social-settings-wrapper .bb-vn-settings-panel {
     gap: 8px;
 }
+
+#bb-social-settings-wrapper .bb-vn-settings-panel > label:not(:first-child) {
+    margin-top: 12px;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-panel > label:not(.checkbox_label),
+#bb-social-settings-wrapper .bb-vn-settings-stack > label:not(.checkbox_label) {
+    display: block;
+    text-align: left;
+}
+
+#bb-social-settings-wrapper #bb-vn-cfg-instructions {
+    min-height: 96px;
+    resize: vertical;
+}
+
 
 #bb-social-settings-wrapper .bb-vn-settings-stack {
     display: flex;

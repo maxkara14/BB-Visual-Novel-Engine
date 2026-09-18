@@ -1152,3 +1152,17 @@ test('preferences settings save plain text and clear via the same input handler'
     value = 'a'.repeat(5000); input(); assert.equal(settings['BB-Visual-Novel'].vnUserInstructions.length,4000);
     assert.ok(source.includes("jQuery('#bb-vn-cfg-instructions').val(s.vnUserInstructions || '')"));
 });
+
+
+test('settings containers retain column layout independently of snapshot buttons', async () => {
+    const css = (await readFile(new URL('style.css', root), 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '');
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+    const find = selector => rules.filter(([, selectors]) => selectors.split(',').some(s => s.trim() === selector));
+    for (const name of ['card', 'panel']) {
+        const rules = find('#bb-social-settings-wrapper .bb-vn-settings-' + name);
+        assert.ok(rules.some(([, , body]) => /display: flex/.test(body) && /flex-direction: column/.test(body) && /text-align: left/.test(body)));
+        assert.ok(rules.every(([, , body]) => !/text-align: center/.test(body)));
+    }
+    const buttons = find('#bb-social-settings-wrapper .bb-vn-settings-card--snapshot .bb-vn-settings-button');
+    assert.ok(buttons.some(([, , body]) => /max-width: 100%/.test(body) && /white-space: normal/.test(body)));
+});
