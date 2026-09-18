@@ -1,5 +1,16 @@
 // Static extension UI text only. Never apply this catalogue to stored story data.
 export const EN = {
+    "Сцена или записи изменились. Откройте редактор заново.": "The scene or entries changed. Reopen the editor.",
+    "Проверьте длину текста. Для черты используйте «Название: описание».": "Check the text length. Use “Name: description” for a trait.",
+    "Удалить запись из памяти? Баллы отношений и журнал останутся прежними. Удаление можно отменить.": "Delete this memory entry? Relationship scores and the log will stay unchanged. Deletion can be undone.",
+    "Отменить правку записи": "Undo entry change",
+    "Удалить запись": "Delete entry",
+    "Сохранить текст": "Save text",
+    "Черта: «Название: описание», до 240 символов. Воспоминание: до 2000 символов.": "Trait: “Name: description”, up to 240 characters. Memory: up to 2000 characters.",
+    "Удалено": "Deleted",
+    "Текст записи": "Entry text",
+    "Правки меняют память для будущих ответов, но не баллы отношений и не журнал событий. Удалённые записи можно вернуть через отмену. Сохраняются последние 20 правок каждой записи.": "Edits change memory for future responses, not relationship scores or the event log. Deleted entries can be restored with Undo. The last 20 changes to each entry are retained.",
+    "Редактор памяти и черт": "Memory and trait editor",
     "Снимки состояния": "State snapshots",
     "Экспорт скачивает текущее состояние и не меняет точку восстановления. Импорт заменяет основу активной персоны, а не складывает два набора отношений. Сообщения чата остаются.": "Export downloads the current state without changing the recovery point. Import replaces the active persona baseline instead of adding two relationship sets. Chat messages remain.",
     "Экспортировать состояние": "Export state",

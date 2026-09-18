@@ -38,6 +38,14 @@ You can disable relationship tracking while keeping action generation. The `{{bb
 
 Expand a character card and open **How relationships add up** to see the starting chat or snapshot value, adjustments, effective changes, and totals for trust and romance. Net changes respect scale limits and active swipes; zero can mean that opposite events cancelled out.
 
+## Memory and trait editor
+
+Expand a character card, open **Memory and trait editor**, select an entry, and save its revised text. Current soft and deep memories, archived memories, and traits are available. Traits use “Name: description” (up to 240 characters); memories allow up to 2000 characters.
+
+Delete hides an entry from memory supplied to the model while preserving its source event, scores, and log. Deleted entries remain listed for undo. Undo entry change restores up to 20 previous changes to the selected entry, including after a page reload.
+
+Edits belong to the persona and source entry of the active swipe or imported baseline. Changing scenes cancels pending actions. Normal recalculation still determines available entries: the editor does not automatically recover memories displaced from bounded memory. Deleting a trait does not undo its past crystallization or move consumed memories out of the archive. Exports contain the edited visible state without undo history.
+
 ## Connections and languages
 
 | Setting | Behavior |

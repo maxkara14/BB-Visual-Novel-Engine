@@ -1,3 +1,4 @@
+import { resetMemoryEditor, trackEditableRecord, applyMemoryEdits } from './memory-editor.js';
 import { rememberRelationshipStart } from './relationship-breakdown.js';
 import { t, ui } from './i18n.js';
 import { parseSnapshot } from './snapshot.js';
@@ -2392,6 +2393,7 @@ export function appendCharacterMemory(charStats, delta, reason, moodlet = '', op
     const hasDuplicate = !options?.allowDuplicate && charStats.memories[bucket].some(entry => buildMemoryEntryDedupKey(entry) === memoryKey);
     if (memoryKey && hasDuplicate) return;
 
+    if (options.source) trackEditableRecord(memory, options.source, delta > 0 ? 'positive' : 'negative', 'text');
     charStats.memories[bucket].push(memory);
     
     if (bucket === 'soft' && charStats.memories.soft.length > 4) {
@@ -2634,6 +2636,7 @@ export async function handleNewCharacterInterviews(chars) {
 }
 
 export function recalculateAllStats(isNewMessage = false) {
+    resetMemoryEditor();
     if (extension_settings[MODULE_NAME]?.disableRelationshipTracker === true) {
         setCurrentCalculatedStats({});
         currentStoryMoments.length = 0;
@@ -2673,6 +2676,17 @@ export function recalculateAllStats(isNewMessage = false) {
         if (Array.isArray(chat_metadata['bb_vn_ignored_chars']) && chat_metadata['bb_vn_ignored_chars'].includes(safeName)) return;
 
         const normalizedStats = normalizeImportedCharacterStats(stats);
+        for (const kind of ['soft', 'deep', 'archive']) {
+            const sources = new Map((stats.memories?.[kind] || []).map(record => [buildMemoryEntryDedupKey(record), record]));
+            for (const record of normalizedStats.memories[kind]) {
+                const source = sources.get(buildMemoryEntryDedupKey(record));
+                if (source) trackEditableRecord(record, source, 'memory', 'text');
+            }
+        }
+        let traitIndex = 0;
+        for (const source of stats.core_traits || []) {
+            if (normalizeImportedTraitEntry(source)) trackEditableRecord(normalizedStats.core_traits[traitIndex++], source, 'trait', 'trait');
+        }
         const currentBase = parseInt(chat_metadata['bb_vn_char_bases']?.[safeName], 10);
         const importedBase = parseInt(baselineBaseMap?.[safeName], 10);
         const currentRomanceBase = parseInt(chat_metadata['bb_vn_char_bases_romance']?.[safeName], 10);
@@ -2713,6 +2727,7 @@ export function recalculateAllStats(isNewMessage = false) {
     }
 
     if (!chat || !chat.length) {
+        for (const [name, stats] of Object.entries(newStats)) applyMemoryEdits(stats, scopeKey, name);
         renderHudCallback();
         injectCombinedSocialPrompt();
         return;
@@ -2789,7 +2804,7 @@ export function recalculateAllStats(isNewMessage = false) {
                     rememberRelationshipStart(newStats[cName], scopeState, cName);
                 }
                 if (!newStats[cName].core_traits) newStats[cName].core_traits = [];
-                newStats[cName].core_traits.push(t);
+                newStats[cName].core_traits.push(trackEditableRecord({ ...t }, t, 'trait', 'trait'));
             });
         }
 
@@ -2980,7 +2995,7 @@ export function recalculateAllStats(isNewMessage = false) {
                     });
                 }
                 recordedImpacts.forEach(impact => {
-                    appendCharacterMemory(newStats[charName], impact.delta, update.reason || "", moodlet, { allowDuplicate: isDebugInjected });
+                    appendCharacterMemory(newStats[charName], impact.delta, update.reason || "", moodlet, { allowDuplicate: isDebugInjected, source: update });
                 });
 
                 const previousTier = getTierInfo(previousAffinity).label;
@@ -3041,9 +3056,10 @@ export function recalculateAllStats(isNewMessage = false) {
         stats.core_traits.forEach(t => { if (t.type === 'positive') posTraitsCount++; else if (t.type === 'negative') negTraitsCount++; else legacyTraitsCount++; });
         const posToArchive = (posTraitsCount * 5) + (legacyTraitsCount * 5);
         const negToArchive = (negTraitsCount * 5) + (legacyTraitsCount * 5);
-        stats.memories.archive = [];
+        stats.memories.archive = stats.memories.archive || [];
         const newDeep = [];
-        let posArchived = 0, negArchived = 0;
+        let posArchived = stats.memories.archive.filter(memory => memory.tone === 'positive').length;
+        let negArchived = stats.memories.archive.filter(memory => memory.tone === 'negative').length;
         for (const m of stats.memories.deep) {
             if (m.tone === 'positive' && posArchived < posToArchive) { stats.memories.archive.push(m); posArchived++; }
             else if (m.tone === 'negative' && negArchived < negToArchive) { stats.memories.archive.push(m); negArchived++; }
@@ -3051,6 +3067,8 @@ export function recalculateAllStats(isNewMessage = false) {
         }
         stats.memories.deep = newDeep;
     }
+
+    for (const [name, stats] of Object.entries(newStats)) applyMemoryEdits(stats, scopeKey, name);
 
     if (isNewMessage && liveToastCandidates.length > 0) {
         liveToastCandidates

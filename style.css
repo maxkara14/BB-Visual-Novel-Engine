@@ -2635,3 +2635,12 @@ body.bb-hud-popup-active #bb-social-toast-container {
 .bb-relationship-breakdown td { text-align: center; font-variant-numeric: tabular-nums; }
 .bb-relationship-breakdown tbody tr:last-child { border-top: 1px solid rgba(148,163,184,.2); font-weight: bold; }
 .bb-relationship-breakdown p { margin: 8px 0 0; color: #94a3b8; line-height: 1.5; }
+
+.bb-memory-editor { margin: 8px 0; padding: 10px; border: 1px solid rgba(148,163,184,.2); border-radius: 12px; font-size: 12px; min-width: 0; }
+.bb-memory-editor summary { cursor: pointer; color: #cbd5e1; }
+.bb-memory-editor p { color: #94a3b8; line-height: 1.5; margin: 8px 0; }
+.bb-memory-editor label { display: block; margin: 8px 0; }
+.bb-memory-editor select, .bb-memory-editor textarea { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+.bb-memory-editor textarea { resize: vertical; }
+.bb-memory-editor-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.bb-memory-editor-actions button { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }

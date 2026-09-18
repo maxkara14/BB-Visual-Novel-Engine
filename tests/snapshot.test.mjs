@@ -8,7 +8,7 @@ async function harness() {
     const nodes = new Map();
     const context = { chat: [], chatId:'test-chat', name1:'Player', substituteParams: text=>text.replaceAll('{{user}}','Player'), callPopup:async()=>false };
     const settings = {'BB-Visual-Novel':{}};
-    const sandbox = createContext({ TextEncoder, console, setTimeout, clearTimeout, SillyTavern:{getContext:()=>context}, window:{}, document:{querySelector:selector=>nodes.get(selector)||null}, jQuery:()=>({val:()=>null}) });
+    const sandbox = createContext({ Event, TextEncoder, console, setTimeout, clearTimeout, SillyTavern:{getContext:()=>context}, window:{}, document:{querySelector:selector=>nodes.get(selector)||null}, jQuery:()=>({val:()=>null}) });
     const mocks = {
         '../../../../../script.js': {chat_metadata:metadata,saveChatDebounced:()=>saves++,setExtensionPrompt(){},extension_prompt_roles:{SYSTEM:0},extension_prompt_types:{IN_CHAT:0},callPopup:async()=>false},
         '../../../../extensions.js': {extension_settings:settings},
@@ -23,8 +23,9 @@ async function harness() {
         cache.set(name,mod);return mod;
     }
     const social=load('./social.js');await social.link(load);await social.evaluate();
+    const editorUi=load('./memory-editor-ui.js');await editorUi.link(load);await editorUi.evaluate();
     const controls=load('./snapshot-controls.js');await controls.link(load);await controls.evaluate();
-    return {nodes,controls:controls.namespace,breakdown:cache.get('./relationship-breakdown.js').namespace,api:social.namespace,snapshot:cache.get('./snapshot.js').namespace,state:cache.get('./state.js').namespace,context,metadata,settings,get saves(){return saves;}};
+    return {editorUi:editorUi.namespace,editor:cache.get('./memory-editor.js').namespace,nodes,controls:controls.namespace,breakdown:cache.get('./relationship-breakdown.js').namespace,api:social.namespace,snapshot:cache.get('./snapshot.js').namespace,state:cache.get('./state.js').namespace,context,metadata,settings,get saves(){return saves;}};
 }
 const fixture = () => ({schema_version:1,module:'BB-Visual-Novel',persona_label:'Original persona',data:{characters:{Alex:{affinity:25,romance:0,status:'Friend',history:[],memories:{soft:[],deep:[],archive:[]},core_traits:[]}},char_bases:{Alex:3},char_bases_romance:{},global_log:[{time:'12:00',type:'system',text:'Saved log'}],story_moments:[]}});
 
@@ -213,4 +214,101 @@ test('snapshot controls refresh text and availability when scope changes',async(
  const scope={snapshot_baseline:{imported_at:'2026-09-18T12:00:00Z'}};
  h.controls.refreshSnapshotControls(scope);assert.equal(button.disabled,false);assert.match(status.textContent,/2026/);
  h.controls.refreshSnapshotControls({});assert.equal(button.disabled,true);assert.match(status.textContent,/Импорт не активен/);
+});
+
+test('memory edits persist on sources, undo deletion and preserve scores and journal across swipes',async()=>{
+ const h=await harness();const scope=h.api.getCurrentPersonaScopeKey();
+ const event={name:'Alex',friendship_impact:'minor_positive',romance_impact:'none',reason:'Helped carry books',scope};
+ const msg={name:'Alex',mes:'Alex says thanks',swipe_id:0,swipes:['Alex says thanks','Alex turns away'],extra:{bb_social_swipes:{0:[event],1:[{...event,reason:'Shared an umbrella'}]}}};
+ h.context.chat.push(msg);h.api.recalculateAllStats(false);
+ const score=h.state.currentCalculatedStats.Alex.affinity;
+ const originalLog=h.api.exportActivePersonaSnapshot().data.global_log.map(e=>e.text);
+ const entry=()=>h.editor.memoryEditorEntries('Alex')[0];
+ let record=entry();h.editor.changeMemoryEntry(record.index,record.revision,'edit','A revised recollection');h.api.recalculateAllStats(false);
+ assert.equal(h.state.currentCalculatedStats.Alex.memories.soft[0].text,'A revised recollection');
+ assert.equal(h.state.currentCalculatedStats.Alex.affinity,score);
+ assert.deepEqual(h.api.exportActivePersonaSnapshot().data.global_log.map(e=>e.text),originalLog);
+ assert.equal(event.reason,'Helped carry books');
+ msg.swipe_id=1;h.api.recalculateAllStats(false);assert.equal(entry().text,'Shared an umbrella');
+ msg.swipe_id=0;h.api.recalculateAllStats(false);assert.equal(entry().text,'A revised recollection');
+ record=entry();h.editor.changeMemoryEntry(record.index,record.revision,'delete');h.api.recalculateAllStats(false);
+ assert.equal(h.state.currentCalculatedStats.Alex.memories.soft.length,0);assert.equal(entry().hidden,true);
+ assert.equal(h.state.currentCalculatedStats.Alex.affinity,score);
+ record=entry();h.editor.changeMemoryEntry(record.index,record.revision,'undo');h.api.recalculateAllStats(false);assert.equal(entry().text,'A revised recollection');
+ record=entry();h.editor.changeMemoryEntry(record.index,record.revision,'undo');h.api.recalculateAllStats(false);assert.equal(entry().text,'Helped carry books');
+ record=entry();h.editor.changeMemoryEntry(record.index,record.revision,'edit','Persisted');h.api.recalculateAllStats(false);
+ // Rehydrate serialized chat and metadata into fresh modules, as after a reload.
+ const reloaded=await harness();Object.assign(reloaded.metadata,JSON.parse(JSON.stringify(h.metadata)));reloaded.context.chat=JSON.parse(JSON.stringify(h.context.chat));
+ reloaded.api.recalculateAllStats(false);assert.equal(reloaded.state.currentCalculatedStats.Alex.memories.soft[0].text,'Persisted');
+ assert.equal(reloaded.editor.memoryEditorEntries('Alex')[0].canUndo,true);
+});
+test('imported memory and trait edits are materialized in exports, including archived memories',async()=>{
+ const h=await harness();const data=fixture();
+ data.data.characters.Alex.memories.archive=[{text:'Archived promise',delta:10,tone:'positive'}];
+ data.data.characters.Alex.core_traits=[{trait:'Kind: Offers help',type:'positive'}];
+ h.api.importActivePersonaSnapshot(data);h.context.chat.push({name:'Alex',mes:'Alex waits',extra:{}});h.api.recalculateAllStats(false);
+ let rows=h.editor.memoryEditorEntries('Alex');assert.equal(rows.length,2);
+ let trait=rows.find(r=>r.kind==='trait');
+ assert.throws(()=>h.editor.changeMemoryEntry(trait.index,trait.revision,'edit','No separator'),/EDITOR_TEXT/);
+ h.editor.changeMemoryEntry(trait.index,trait.revision,'edit','Patient: Listens first');h.api.recalculateAllStats(false);
+ const archive=h.editor.memoryEditorEntries('Alex').find(r=>r.kind==='archive');h.editor.changeMemoryEntry(archive.index,archive.revision,'delete');h.api.recalculateAllStats(false);
+ const exported=h.api.exportActivePersonaSnapshot();assert.equal(exported.data.characters.Alex.affinity,25);
+ assert.equal(exported.data.characters.Alex.memories.archive.length,0);assert.equal(exported.data.characters.Alex.core_traits[0].trait,'Patient: Listens first');
+ assert.equal(JSON.stringify(exported).includes('bb_vn_text_edits'),false);
+ const other=await harness();other.api.importActivePersonaSnapshot(exported);other.api.recalculateAllStats(false);
+ assert.equal(other.state.currentCalculatedStats.Alex.core_traits[0].trait,'Patient: Listens first');
+ assert.equal(other.state.currentCalculatedStats.Alex.memories.archive.length,0);
+});
+test('editor rejects stale operations and separates personas on a shared source',async()=>{
+ const h=await harness();const source={};
+ const calculate=scope=>{h.editor.resetMemoryEditor();const stats={memories:{soft:[h.editor.trackEditableRecord({text:'Original'},source,'positive','text')]},core_traits:[]};h.editor.applyMemoryEdits(stats,scope,'Alex');return stats;};
+ calculate('A');let row=h.editor.memoryEditorEntries('Alex')[0];h.editor.changeMemoryEntry(row.index,row.revision,'edit','Persona A');
+ assert.throws(()=>h.editor.changeMemoryEntry(row.index,row.revision,'delete'),/EDITOR_STALE/);
+ assert.equal(calculate('B').memories.soft[0].text,'Original');assert.equal(calculate('A').memories.soft[0].text,'Persona A');
+});
+
+test('memory editor renders escaped text and guards delayed confirmation against changed scene',async()=>{
+ const h=await harness();const source={};
+ const stats={memories:{soft:[h.editor.trackEditableRecord({text:'<img src=x onerror=alert(1)>'},source,'positive','text')]},core_traits:[]};
+ h.editor.resetMemoryEditor();h.editor.applyMemoryEdits(stats,'A','Alex');
+ h.settings['BB-Visual-Novel'].uiLanguage='en';
+ const html=h.editorUi.buildMemoryEditorHtml('Alex');assert.match(html,/Memory and trait editor/);assert.ok(html.includes('&lt;img'));assert.ok(!html.includes('<img'));
+ const listeners={};const row=h.editor.memoryEditorEntries('Alex')[0];
+ const select={value:String(row.index),options:[{value:String(row.index)}],addEventListener(){},dispatchEvent(){}};
+ const text={};const buttons=['edit','delete','undo'].map(action=>({dataset:{action},addEventListener(type,callback){listeners[action]=callback;}}));
+ const editor={dataset:{char:'Alex'},querySelector:selector=>selector==='.bb-memory-select'?select:text,querySelectorAll:()=>buttons};
+ const root={querySelectorAll:()=>[editor]};let changed=0,errors=[];
+ h.editorUi.mountMemoryEditors(root,{getContext:()=>h.context,getPersonaKey:()=> 'A',confirm:async()=>{h.context.chat.push({mes:'New scene'});return true;},changed:()=>changed++,error:message=>errors.push(message)});
+ await listeners.delete({stopPropagation(){}});assert.equal(changed,0);assert.equal(errors.length,1);assert.equal(source.bb_vn_text_edits,undefined);
+ h.editorUi.mountMemoryEditors(root,{getContext:()=>h.context,getPersonaKey:()=> 'A',confirm:async()=>false,changed:()=>changed++,error:message=>errors.push(message)});
+ await listeners.delete({stopPropagation(){}});assert.equal(changed,0);
+ text.value='Edited safely';await listeners.edit({stopPropagation(){}});assert.equal(changed,1);assert.equal(source.bb_vn_text_edits.A.positive.text,'Edited safely');
+});
+test('trait edits from chat survive recalculation and archive retention does not multiply',async()=>{
+ const h=await harness();const scope=h.api.getCurrentPersonaScopeKey();
+ h.context.chat.push({name:'Alex',mes:'Alex is patient',swipe_id:0,extra:{bb_vn_char_traits_swipes:{0:[{charName:'Alex',trait:'Patient: Waits calmly',type:'positive',scope}]}}});h.api.recalculateAllStats(false);
+ const row=h.editor.memoryEditorEntries('Alex').find(r=>r.kind==='trait');assert.ok(row);
+ h.editor.changeMemoryEntry(row.index,row.revision,'edit','Patient: Thinks first');h.api.recalculateAllStats(false);
+ assert.equal(h.state.currentCalculatedStats.Alex.core_traits[0].trait,'Patient: Thinks first');
+ assert.equal(h.context.chat[0].extra.bb_vn_char_traits_swipes[0][0].trait,'Patient: Waits calmly');
+ const imported=fixture();imported.data.characters.Alex.memories.archive=[{text:'Old promise',delta:10,tone:'positive'}];
+ h.api.importActivePersonaSnapshot(imported);h.api.recalculateAllStats(false);h.api.recalculateAllStats(false);
+ assert.equal(h.state.currentCalculatedStats.Alex.memories.archive.length,1);
+});
+
+test('memory undo is bounded and edited text reaches the social prompt',async()=>{
+ const h=await harness();const data=fixture();data.data.characters.Alex.memories.deep=[{text:'Original promise',delta:10,tone:'positive'}];
+ h.api.importActivePersonaSnapshot(data);h.context.chat.push({name:'Alex',mes:'Alex remembers the promise',extra:{}});h.api.recalculateAllStats(false);
+ for(let i=0;i<22;i++){
+  const row=h.editor.memoryEditorEntries('Alex').find(r=>r.kind==='deep');h.editor.changeMemoryEntry(row.index,row.revision,'edit','Rewritten promise '+i);h.api.recalculateAllStats(false);
+ }
+ assert.match(h.api.getCombinedSocial(),/Rewritten promise 21/);
+ const scope=h.api.bindActivePersonaState().scopeState;
+ const stored=scope.snapshot_baseline.characters.Alex.memories.deep[0];
+ assert.equal(Object.values(stored.bb_vn_text_edits)[0].memory.undo.length,20);
+ for(let i=0;i<20;i++){
+  const row=h.editor.memoryEditorEntries('Alex')[0];h.editor.changeMemoryEntry(row.index,row.revision,'undo');h.api.recalculateAllStats(false);
+ }
+ assert.equal(h.editor.memoryEditorEntries('Alex')[0].canUndo,false);
+ assert.equal(h.state.currentCalculatedStats.Alex.affinity,25);
 });
