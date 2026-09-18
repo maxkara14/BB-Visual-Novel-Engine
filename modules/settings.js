@@ -377,8 +377,8 @@ export function setupExtensionSettings() {
                     <span id="bb-social-snapshot-status" class="bb-vn-settings-note" aria-live="polite"></span>
                     <input type="file" id="bb-social-snapshot-file" accept=".json,application/json" style="display:none;">
                     <div class="bb-vn-settings-actions-grid">
-                        <button id="bb-social-export-btn" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-file-export"></i>&ensp; Экспортировать состояние</button>
-                        <button id="bb-social-import-btn" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-file-import"></i>&ensp; Импортировать состояние</button>
+                        <button id="bb-social-export-btn" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-file-export" aria-hidden="true"></i><span>Экспорт</span></button>
+                        <button id="bb-social-import-btn" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-file-import" aria-hidden="true"></i><span>Импорт</span></button>
                     </div>
                     <button id="bb-social-clear-snapshot-btn" class="menu_button bb-vn-settings-button" style="color:#fda4af; border-color:rgba(244,114,182,0.22);">Убрать импортированную основу</button>
                 </div>

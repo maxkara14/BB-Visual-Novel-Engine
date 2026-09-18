@@ -1663,6 +1663,28 @@ body.bb-hud-popup-active #bb-social-toast-container {
 
 #bb-social-settings-wrapper .bb-vn-settings-card,
 #bb-social-settings-wrapper .bb-vn-settings-panel,
+/* Constrain snapshot actions to the panel width, not the browser width. */
+#bb-social-settings-wrapper .bb-vn-settings-card--snapshot .bb-vn-settings-button {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+    gap: 8px;
+    padding: 8px 10px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+    text-align: center;
+    height: auto;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-card--snapshot .bb-vn-settings-button span {
+    min-width: 0;
+}
+
+#bb-social-settings-wrapper .bb-vn-settings-card--snapshot .bb-vn-settings-button i {
+    flex-shrink: 0;
+}
+
 #bb-social-settings-wrapper .bb-vn-settings-card--snapshot {
     display: flex;
     flex-direction: column;
