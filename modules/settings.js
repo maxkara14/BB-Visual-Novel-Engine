@@ -260,96 +260,122 @@ export function setupExtensionSettings() {
             <div class="inline-drawer-toggle inline-drawer-header"><b>💖 BB Visual Novel Engine</b><div class="inline-drawer-icon fa-solid fa-chevron-down down"></div></div>
             <div class="inline-drawer-content bb-vn-settings-shell">
                 <span class="bb-vn-settings-intro">Настройки Интерактивного Кино</span>
-                <div class="bb-vn-settings-card">
-                    <div class="bb-vn-settings-toggle-grid">
-                        <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-autosend" ${s.autoSend ? 'checked' : ''}><span>Авто-отправка при выборе</span></label>
-                        <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-autogen" ${s.autoGen ? 'checked' : ''}><span>Авто-показ вариантов действий</span></label>
-                        <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-emotional-choice" ${s.emotionalChoiceFraming ? 'checked' : ''}><span>Тон и прогноз вариантов</span></label>
-                        <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-disable-tracker" ${s.disableRelationshipTracker ? 'checked' : ''}><span>Отключить трекер отношений</span></label>
-                    </div>
-                    <div class="bb-vn-settings-panel">
-                        <label for="bb-vn-cfg-ui-language">Язык интерфейса</label>
-                        <select id="bb-vn-cfg-ui-language" class="text_pole"><option value="auto">Auto</option><option value="ru">Русский</option><option value="en">English</option></select>
-                        <span class="bb-vn-settings-note">Auto использует язык SillyTavern или браузера. После смены языка интерфейса обновите страницу.</span>
-                        <label for="bb-vn-cfg-output-language">Язык новых ответов</label>
-                        <select id="bb-vn-cfg-output-language" class="text_pole"><option value="chat">Как в чате</option><option value="ru">Русский</option><option value="en">English</option></select>
-                        <span class="bb-vn-settings-note">Для новых вариантов, профилей, черт и записей об отношениях. Сохранённые данные не переводятся.</span>
-                        <label for="bb-vn-cfg-instructions">Постоянные пожелания к вариантам</label>
-                        <textarea id="bb-vn-cfg-instructions" class="text_pole" rows="4" maxlength="4000"></textarea>
-                        <span class="bb-vn-settings-note">Для вариантов во всех чатах, до 4000 символов. Разовая подсказка уточняет пожелания; язык и формат ответа сохраняются. Не применяется к профилям и чертам.</span>
-                        <button type="button" id="bb-vn-cfg-instructions-clear" class="menu_button" style="width: 100%; white-space: normal;">Очистить пожелания</button>
-                        <label for="bb-vn-cfg-reply-length" class="bb-vn-settings-panel-label">Длина VN-ответа</label>
-                        <select id="bb-vn-cfg-reply-length" class="text_pole">
-                            <option value="short" ${selectedReplyLength === 'short' ? 'selected' : ''}>Короткий - быстрый темп</option>
-                            <option value="medium" ${selectedReplyLength === 'medium' ? 'selected' : ''}>Средний - баланс</option>
-                            <option value="long" ${selectedReplyLength === 'long' ? 'selected' : ''}>Длинный - больше сцены</option>
-                        </select>
-                        <span class="bb-vn-settings-note">Влияет и на длину вариантов действий, и на то, насколько активно VN продвигает следующий ответ.</span>
-                    </div>
-                </div>
-                <div class="bb-vn-settings-card bb-vn-settings-card--accent">
-                    <span class="bb-vn-settings-section-title">⚡ Подключения</span>
-                    <div id="bb-vn-connection-controls" class="bb-vn-settings-stack"></div>
-                    <span class="bb-vn-settings-note">Используется для вариантов ответа, описаний персонажей и черт характера.</span>
-                    <div id="bb-vn-custom-api-block" class="bb-vn-settings-stack" style="display: ${resolveVnGenerationSource(s) === 'custom' ? 'flex' : 'none'};">
-                        <input type="text" id="bb-vn-cfg-url" class="text_pole" placeholder="URL">
-                        <input type="password" id="bb-vn-cfg-key" class="text_pole" placeholder="API Ключ">
-                        <div id="bb-vn-custom-api-status" class="bb-custom-api-status is-idle">
-                            <span class="bb-custom-api-status-dot"></span>
-                            <span class="bb-custom-api-status-text">Подключение не проверено</span>
+                <details class="bb-vn-settings-section" data-section="game" open>
+                    <summary>Игра</summary>
+                    <div class="bb-vn-settings-section-body">
+                        <div class="bb-vn-settings-toggle-grid">
+                            <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-autosend" ${s.autoSend ? 'checked' : ''}><span>Авто-отправка при выборе</span></label>
+                            <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-autogen" ${s.autoGen ? 'checked' : ''}><span>Авто-показ вариантов действий</span></label>
+                            <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-emotional-choice" ${s.emotionalChoiceFraming ? 'checked' : ''}><span>Тон и прогноз вариантов</span></label>
                         </div>
-                        <button id="bb-vn-btn-connect" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-plug"></i>&nbsp; Подключиться</button>
-                        <select id="bb-vn-cfg-model" class="text_pole" ${!s.customApiModel ? 'disabled' : ''}></select>
-                        <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-fallback" ${s.allowMainFallback === true ? 'checked' : ''}><span>Разрешить резервную основную модель при сбое Custom API</span></label>
-                        <span class="bb-vn-settings-note">Может вызвать дополнительный запрос к другой модели. Не применяется при отмене, ошибке ключа, квоте или блокировке провайдером.</span>
                     </div>
-                    <details id="bb-vn-advanced-settings">
-                    <summary>Дополнительно</summary>
-                    <div class="bb-vn-settings-stack">
-                    <span class="bb-vn-settings-note">Обычно менять эти настройки не нужно. Оставьте формат Auto: расширение само выберет способ получения вариантов.</span>
-                    <label for="bb-vn-cfg-max-tokens">Лимит токенов ответа (своё API)</label>
-                    <input type="number" id="bb-vn-cfg-max-tokens" class="text_pole" min="0" max="131072" step="1" value="${normalizeCustomApiMaxTokens(s.customApiMaxTokens)}">
-                    <span class="bb-vn-settings-note">0 — автоматически, как раньше. Вручную: 256–131072 токена на запрос. Рассуждения могут входить в этот бюджет. Предел зависит от модели и провайдера; настройка общая для вариантов, описаний и черт и не меняет лимиты основного подключения или профиля.</span>
-                    <label for="bb-vn-cfg-timeout">Тайм-аут одного запроса (секунды)</label>
-                    <input type="number" id="bb-vn-cfg-timeout" class="text_pole" min="15" max="600" value="${normalizeRequestTimeout(s.requestTimeout)}">
-                    <label for="bb-vn-cfg-json-mode">Формат VN-ответа</label>
-                    <select id="bb-vn-cfg-json-mode" class="text_pole">
-                        <option value="auto">Auto</option><option value="schema">JSON Schema</option>
-                        <option value="json">JSON mode (Custom API)</option><option value="prompt">Только инструкции</option>
-                    </select>
-                    <span class="bb-vn-settings-note">Auto: основное подключение и профиль — инструкции; Custom API — схема с переходом к JSON mode и инструкциям только при подтверждённой несовместимости.</span>
-                    <label for="bb-vn-cfg-extra-requests">Дополнительные запросы VN (0–5)</label>
-                    <input id="bb-vn-cfg-extra-requests" type="number" class="text_pole" min="0" max="5" value="${normalizeAdditionalRequests(s.vnMaxAdditionalRequests)}">
-                    <span class="bb-vn-settings-note">Общий лимит на повтор формата, резервную модель, исправление, дополнение и разнообразие вариантов.</span>
+                </details>
+                <details class="bb-vn-settings-section" data-section="answers">
+                    <summary>Язык и ответы</summary>
+                    <div class="bb-vn-settings-section-body">
+                        <div class="bb-vn-settings-panel">
+                            <label for="bb-vn-cfg-ui-language">Язык интерфейса</label>
+                            <select id="bb-vn-cfg-ui-language" class="text_pole"><option value="auto">Auto</option><option value="ru">Русский</option><option value="en">English</option></select>
+                            <span class="bb-vn-settings-note">Auto использует язык SillyTavern или браузера. После смены языка интерфейса обновите страницу.</span>
+                            <label for="bb-vn-cfg-output-language">Язык новых ответов</label>
+                            <select id="bb-vn-cfg-output-language" class="text_pole"><option value="chat">Как в чате</option><option value="ru">Русский</option><option value="en">English</option></select>
+                            <span class="bb-vn-settings-note">Для новых вариантов, профилей, черт и записей об отношениях. Сохранённые данные не переводятся.</span>
+                            <label for="bb-vn-cfg-instructions">Постоянные пожелания к вариантам</label>
+                            <textarea id="bb-vn-cfg-instructions" class="text_pole" rows="4" maxlength="4000"></textarea>
+                            <span class="bb-vn-settings-note">Для вариантов во всех чатах, до 4000 символов. Разовая подсказка уточняет пожелания; язык и формат ответа сохраняются. Не применяется к профилям и чертам.</span>
+                            <button type="button" id="bb-vn-cfg-instructions-clear" class="menu_button" style="width: 100%; white-space: normal;">Очистить пожелания</button>
+                            <label for="bb-vn-cfg-reply-length" class="bb-vn-settings-panel-label">Длина VN-ответа</label>
+                            <select id="bb-vn-cfg-reply-length" class="text_pole">
+                                <option value="short" ${selectedReplyLength === 'short' ? 'selected' : ''}>Короткий - быстрый темп</option>
+                                <option value="medium" ${selectedReplyLength === 'medium' ? 'selected' : ''}>Средний - баланс</option>
+                                <option value="long" ${selectedReplyLength === 'long' ? 'selected' : ''}>Длинный - больше сцены</option>
+                            </select>
+                            <span class="bb-vn-settings-note">Влияет и на длину вариантов действий, и на то, насколько активно VN продвигает следующий ответ.</span>
+                        </div>
                     </div>
-                    <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-debug" ${s.debugGeneration === true ? 'checked' : ''}><span>Подробная диагностика ответов</span></label>
-                    <span class="bb-vn-settings-note">Включает фрагменты ответа модели в консоли браузера. Выключайте после диагностики и проверяйте текст перед отправкой отчёта.</span>
-                    </details>
-                    <span id="bb-vn-generation-stage" class="bb-vn-settings-note" aria-live="polite"></span>
-                    <span id="bb-vn-generation-source" class="bb-vn-settings-note" aria-live="polite">Источник последнего результата: запросов ещё не было.</span>
-                </div>
-                <label class="checkbox_label bb-vn-setting-pill bb-vn-setting-pill--single"><input type="checkbox" id="bb-vn-cfg-usemacro" ${s.useMacro ? 'checked' : ''}><span>Использовать макрос {{bb_vn}}</span></label>
+                </details>
+                <details class="bb-vn-settings-section" data-section="connection">
+                    <summary>Подключения</summary>
+                    <div class="bb-vn-settings-section-body">
+                        <div class="bb-vn-settings-card bb-vn-settings-card--accent">
+                            <div id="bb-vn-connection-controls" class="bb-vn-settings-stack"></div>
+                            <span class="bb-vn-settings-note">Используется для вариантов ответа, описаний персонажей и черт характера.</span>
+                            <div id="bb-vn-custom-api-block" class="bb-vn-settings-stack" style="display: ${resolveVnGenerationSource(s) === 'custom' ? 'flex' : 'none'};">
+                                <input type="text" id="bb-vn-cfg-url" class="text_pole" placeholder="URL">
+                                <input type="password" id="bb-vn-cfg-key" class="text_pole" placeholder="API Ключ">
+                                <div id="bb-vn-custom-api-status" class="bb-custom-api-status is-idle">
+                                    <span class="bb-custom-api-status-dot"></span>
+                                    <span class="bb-custom-api-status-text">Подключение не проверено</span>
+                                </div>
+                                <button id="bb-vn-btn-connect" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-plug"></i>&nbsp; Подключиться</button>
+                                <select id="bb-vn-cfg-model" class="text_pole" ${!s.customApiModel ? 'disabled' : ''}></select>
+                                <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-fallback" ${s.allowMainFallback === true ? 'checked' : ''}><span>Разрешить резервную основную модель при сбое Custom API</span></label>
+                                <span class="bb-vn-settings-note">Может вызвать дополнительный запрос к другой модели. Не применяется при отмене, ошибке ключа, квоте или блокировке провайдером.</span>
+                            </div>
+                            <details id="bb-vn-advanced-settings">
+                                <summary>Дополнительно</summary>
+                                <div class="bb-vn-settings-stack">
+                                    <span class="bb-vn-settings-note">Обычно менять эти настройки не нужно. Оставьте формат Auto: расширение само выберет способ получения вариантов.</span>
+                                    <label for="bb-vn-cfg-max-tokens">Лимит токенов ответа (своё API)</label>
+                                    <input type="number" id="bb-vn-cfg-max-tokens" class="text_pole" min="0" max="131072" step="1" value="${normalizeCustomApiMaxTokens(s.customApiMaxTokens)}">
+                                    <span class="bb-vn-settings-note">0 — автоматически, как раньше. Вручную: 256–131072 токена на запрос. Рассуждения могут входить в этот бюджет. Предел зависит от модели и провайдера; настройка общая для вариантов, описаний и черт и не меняет лимиты основного подключения или профиля.</span>
+                                    <label for="bb-vn-cfg-timeout">Тайм-аут одного запроса (секунды)</label>
+                                    <input type="number" id="bb-vn-cfg-timeout" class="text_pole" min="15" max="600" value="${normalizeRequestTimeout(s.requestTimeout)}">
+                                    <label for="bb-vn-cfg-json-mode">Формат VN-ответа</label>
+                                    <select id="bb-vn-cfg-json-mode" class="text_pole">
+                                        <option value="auto">Auto</option><option value="schema">JSON Schema</option>
+                                        <option value="json">JSON mode (Custom API)</option><option value="prompt">Только инструкции</option>
+                                    </select>
+                                    <span class="bb-vn-settings-note">Auto: основное подключение и профиль — инструкции; Custom API — схема с переходом к JSON mode и инструкциям только при подтверждённой несовместимости.</span>
+                                    <label for="bb-vn-cfg-extra-requests">Дополнительные запросы VN (0–5)</label>
+                                    <input id="bb-vn-cfg-extra-requests" type="number" class="text_pole" min="0" max="5" value="${normalizeAdditionalRequests(s.vnMaxAdditionalRequests)}">
+                                    <span class="bb-vn-settings-note">Общий лимит на повтор формата, резервную модель, исправление, дополнение и разнообразие вариантов.</span>
+                                </div>
+                                <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-debug" ${s.debugGeneration === true ? 'checked' : ''}><span>Подробная диагностика ответов</span></label>
+                                <span class="bb-vn-settings-note">Включает фрагменты ответа модели в консоли браузера. Выключайте после диагностики и проверяйте текст перед отправкой отчёта.</span>
+                            </details>
+                            <span id="bb-vn-generation-stage" class="bb-vn-settings-note" aria-live="polite"></span>
+                            <span id="bb-vn-generation-source" class="bb-vn-settings-note" aria-live="polite">Источник последнего результата: запросов ещё не было.</span>
+                        </div>
+                    </div>
+                </details>
+                <details class="bb-vn-settings-section" data-section="relationships">
+                    <summary>Отношения</summary>
+                    <div class="bb-vn-settings-section-body">
+                        <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-disable-tracker" ${s.disableRelationshipTracker ? 'checked' : ''}><span>Отключить трекер отношений</span></label>
+                        <label class="checkbox_label bb-vn-setting-pill bb-vn-setting-pill--single"><input type="checkbox" id="bb-vn-cfg-usemacro" ${s.useMacro ? 'checked' : ''}><span>Использовать макрос {{bb_vn}}</span></label>
 
-                <div class="inline-drawer bb-vn-settings-drawer">
-                    <div class="inline-drawer-toggle inline-drawer-header">
-                        <b>🎚️ Кастомная шкала отношений</b>
-                        <div class="inline-drawer-icon fa-solid fa-chevron-down down"></div>
-                    </div>
-                    <div class="inline-drawer-content bb-vn-settings-drawer-content">
                         <span class="bb-vn-settings-note">Здесь вы можете задать свои значения для шкал дружбы и романтики. После изменения отношения сразу пересчитываются по всей истории.</span>
                         ${impactGroupsHtml}
                         <button id="bb-vn-impact-reset" class="menu_button bb-vn-settings-button bb-vn-settings-button--ghost">
                             <i class="fa-solid fa-rotate-left"></i>&ensp; Сбросить обе шкалы
                         </button>
                     </div>
-                </div>
-
-                <div class="inline-drawer bb-vn-settings-drawer">
-                    <div class="inline-drawer-toggle inline-drawer-header">
-                        <b>🛠️ Консоль Разработчика</b>
-                        <div class="inline-drawer-icon fa-solid fa-chevron-down down"></div>
+                </details>
+                <details class="bb-vn-settings-section" data-section="data">
+                    <summary>Данные</summary>
+                    <div class="bb-vn-settings-section-body">
+                        <div class="bb-vn-settings-card bb-vn-settings-card--snapshot">
+                            <span class="bb-vn-settings-section-title">Снимки состояния</span>
+                            <span class="bb-vn-settings-note">Экспорт скачивает текущее состояние и не меняет точку восстановления. Импорт заменяет основу активной персоны, а не складывает два набора отношений. Сообщения чата остаются.</span>
+                            <span id="bb-social-snapshot-status" class="bb-vn-settings-note" aria-live="polite"></span>
+                            <input type="file" id="bb-social-snapshot-file" accept=".json,application/json" style="display:none;">
+                            <div class="bb-vn-settings-actions-grid">
+                                <button id="bb-social-export-btn" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-file-export" aria-hidden="true"></i><span>Экспорт</span></button>
+                                <button id="bb-social-import-btn" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-file-import" aria-hidden="true"></i><span>Импорт</span></button>
+                            </div>
+                            <button id="bb-social-clear-snapshot-btn" class="menu_button bb-vn-settings-button" style="color:#fda4af; border-color:rgba(244,114,182,0.22);">Убрать импортированную основу</button>
+                        </div>
+                        <div class="bb-vn-settings-stack">
+                            <button id="bb-social-restore-chars-btn" class="menu_button bb-vn-settings-button">Вернуть скрытых персонажей</button>
+                            <button id="bb-social-clear-log-btn" class="menu_button bb-vn-settings-button">Очистить журнал</button>
+                            <button id="bb-social-wipe-btn" class="menu_button bb-vn-settings-button bb-vn-settings-button--danger">Сбросить историю</button>
+                        </div>
                     </div>
-                    <div class="inline-drawer-content bb-vn-settings-drawer-content">
+                </details>
+                <details class="bb-vn-settings-section" data-section="debug">
+                    <summary>Отладка</summary>
+                    <div class="bb-vn-settings-section-body">
                         <input type="text" id="bb-debug-char-name" class="text_pole" placeholder="Имя персонажа">
                         <input type="text" id="bb-debug-reason" class="text_pole" placeholder="Текст причины" value="Дебаг-действие">
                         <div class="bb-vn-settings-actions-grid">
@@ -373,24 +399,7 @@ export function setupExtensionSettings() {
                         <button id="bb-dbg-reset-char" class="menu_button bb-vn-settings-button" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: #ef4444;">💀 Полностью обнулить персонажа</button>
                         <button id="bb-dbg-toast" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-bell"></i>&ensp; Рандомное уведомление</button>
                     </div>
-                </div>
-
-                <div class="bb-vn-settings-card bb-vn-settings-card--snapshot">
-                    <span class="bb-vn-settings-section-title">Снимки состояния</span>
-                    <span class="bb-vn-settings-note">Экспорт скачивает текущее состояние и не меняет точку восстановления. Импорт заменяет основу активной персоны, а не складывает два набора отношений. Сообщения чата остаются.</span>
-                    <span id="bb-social-snapshot-status" class="bb-vn-settings-note" aria-live="polite"></span>
-                    <input type="file" id="bb-social-snapshot-file" accept=".json,application/json" style="display:none;">
-                    <div class="bb-vn-settings-actions-grid">
-                        <button id="bb-social-export-btn" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-file-export" aria-hidden="true"></i><span>Экспорт</span></button>
-                        <button id="bb-social-import-btn" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-file-import" aria-hidden="true"></i><span>Импорт</span></button>
-                    </div>
-                    <button id="bb-social-clear-snapshot-btn" class="menu_button bb-vn-settings-button" style="color:#fda4af; border-color:rgba(244,114,182,0.22);">Убрать импортированную основу</button>
-                </div>
-                <div class="bb-vn-settings-stack">
-                    <button id="bb-social-restore-chars-btn" class="menu_button bb-vn-settings-button">Вернуть скрытых персонажей</button>
-                    <button id="bb-social-clear-log-btn" class="menu_button bb-vn-settings-button">Очистить журнал</button>
-                    <button id="bb-social-wipe-btn" class="menu_button bb-vn-settings-button bb-vn-settings-button--danger">Сбросить историю</button>
-                </div>
+                </details>
             </div>
         </div>
     `;

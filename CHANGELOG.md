@@ -6,6 +6,8 @@
 
 ### Unreleased — VNE-TEST
 
+- Настройки собраны в шесть компактных раскрывающихся разделов по примеру Enhance Gen.
+
 - Добавлены сохраняемые пожелания к вариантам, очистка и приоритет разовой подсказки; интерфейс RU/EN.
 
 - Добавлены поиск персонажей, сортировка и сохраняемый компактный вид без сброса редакторов при фильтрации.
@@ -48,6 +50,8 @@
 ## English
 
 ### Unreleased — VNE-TEST
+
+- Organized settings into six compact collapsible sections, following Enhance Gen.
 
 - Added persistent option preferences, clearing and one-time guidance precedence, with RU/EN controls.
 

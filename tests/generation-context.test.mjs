@@ -1166,3 +1166,27 @@ test('settings containers retain column layout independently of snapshot buttons
     const buttons = find('#bb-social-settings-wrapper .bb-vn-settings-card--snapshot .bb-vn-settings-button');
     assert.ok(buttons.some(([, , body]) => /max-width: 100%/.test(body) && /white-space: normal/.test(body)));
 });
+
+
+test('settings groups are balanced, keep controls accessible, and only gameplay starts open', async () => {
+    const source = await readFile(new URL('modules/settings.js', root), 'utf8');
+    const template = source.slice(source.indexOf('const settingsHtml'), source.indexOf('const target = document.querySelector'));
+    const stack = [], groups = [], ids = new Map();
+    for (const match of template.matchAll(/<(\/?)([a-z][a-z0-9-]*)\b[^>]*>/gi)) {
+        const [tag, closing, name] = match;
+        if (closing) { assert.equal(stack.pop()?.name, name, tag); continue; }
+        const group = tag.match(/data-section="([^"]+)"/)?.[1];
+        if (group) groups.push({name: group, open: /\sopen[\s>]/.test(tag)});
+        const id = tag.match(/\sid="([^"]+)"/)?.[1];
+        if (id) { assert.ok(!ids.has(id), id); ids.set(id, stack.findLast(node => node.group)?.group); }
+        if (!['input','hr','br'].includes(name)) stack.push({name, group});
+    }
+    assert.equal(stack.length, 0);
+    assert.deepEqual(groups.map(g => g.name), ['game','answers','connection','relationships','data','debug']);
+    assert.deepEqual(groups.filter(g => g.open).map(g => g.name), ['game']);
+    for (const [id, group] of Object.entries({
+        'bb-vn-cfg-autosend':'game', 'bb-vn-cfg-instructions':'answers',
+        'bb-vn-connection-controls':'connection','bb-vn-cfg-disable-tracker':'relationships',
+        'bb-social-export-btn':'data','bb-dbg-add-pts':'debug',
+    })) assert.equal(ids.get(id),group);
+});

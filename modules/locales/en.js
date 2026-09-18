@@ -1,5 +1,11 @@
 // Static extension UI text only. Never apply this catalogue to stored story data.
 export const EN = {
+    "Игра": "Gameplay",
+    "Язык и ответы": "Language and replies",
+    "Подключения": "Connections",
+    "Отношения": "Relationships",
+    "Данные": "Data",
+    "Отладка": "Debugging",
     "Постоянные пожелания к вариантам": "Persistent option preferences",
     "Очистить пожелания": "Clear preferences",
     "Для вариантов во всех чатах, до 4000 символов. Разовая подсказка уточняет пожелания; язык и формат ответа сохраняются. Не применяется к профилям и чертам.": "For options in all chats, up to 4000 characters. One-time guidance refines these preferences; output language and format still apply. Does not apply to profiles or traits.",

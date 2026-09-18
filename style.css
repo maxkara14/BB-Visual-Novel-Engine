@@ -2709,3 +2709,51 @@ body.bb-hud-popup-active #bb-social-toast-container {
 .bb-cards-compact .bb-char-summary-footer .bb-char-mini-chip { display: none; }
 .bb-cards-compact .bb-char-summary-main > .bb-crystal-tracker { grid-column: 1 / -1; }
 .bb-route-card-stack.bb-cards-compact { gap: 8px; }
+
+/* Compact settings groups, following Enhance Gen's disclosure layout. */
+#bb-social-settings-wrapper .bb-vn-settings-section {
+    min-width: 0;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 10px;
+    background: rgba(11, 18, 32, 0.45);
+    text-align: left;
+}
+#bb-social-settings-wrapper .bb-vn-settings-section > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    list-style: none;
+}
+#bb-social-settings-wrapper .bb-vn-settings-section > summary::-webkit-details-marker { display: none; }
+#bb-social-settings-wrapper .bb-vn-settings-section > summary::after { content: '›'; margin-left: auto; }
+#bb-social-settings-wrapper .bb-vn-settings-section[open] > summary::after { transform: rotate(90deg); }
+#bb-social-settings-wrapper .bb-vn-settings-section > summary:focus-visible { outline: 2px solid #7dd3fc; outline-offset: -2px; border-radius: 10px; }
+#bb-social-settings-wrapper .bb-vn-settings-section-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0 12px 12px;
+    min-width: 0;
+}
+#bb-social-settings-wrapper .bb-vn-settings-section-body > .bb-vn-settings-card,
+#bb-social-settings-wrapper .bb-vn-settings-section-body > .bb-vn-settings-panel {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+}
+#bb-social-settings-wrapper .bb-vn-settings-section-body .text_pole,
+#bb-social-settings-wrapper .bb-vn-settings-section-body .menu_button {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+#bb-social-settings-wrapper .bb-vn-settings-section-body .menu_button { white-space: normal; padding: 8px 10px; }
+#bb-social-settings-wrapper .bb-vn-settings-section-body .bb-vn-settings-toggle-grid { grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); }
+#bb-social-settings-wrapper .bb-vn-settings-section-body .bb-vn-setting-pill { padding: 8px; min-height: 38px; }
