@@ -1311,6 +1311,8 @@ test('option visibility swaps compact restore button and panel, safely reversing
  const bar=make(300), restore=make(30);restore.hidden=true;
  h.document.getElementById=id=>id==='bb-vn-action-bar'?bar:id==='bb-vn-enable-options'?restore:null;
  api.syncOptionsVisibility(false,true);assert.equal(bar.inert,true);assert.equal(restore.hidden,false);
+ assert.equal(bar.animations[0].frames[1].transform,'translateY(10px)');
+ assert.equal(bar.animations[0].frames[1].height,undefined);
  const old=bar.animations[0];api.syncOptionsVisibility(true,true);assert.equal(old.cancelled,true);assert.equal(old.onfinish,null);
  bar.animations.at(-1).onfinish();restore.animations.at(-1).onfinish();
  assert.equal(bar.hidden,false);assert.equal(bar.inert,false);assert.equal(restore.hidden,true);assert.equal(bar.style.overflow,'');

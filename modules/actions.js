@@ -334,7 +334,11 @@ export function injectVNActionsUI() {
     }
     const barHtml = t('<div id="bb-vn-action-bar" style="display: flex;"><div id="bb-vn-btn-generate" class="bb-vn-main-btn" title="Открыть панель действий VN"></div><div id="bb-vn-options-container"></div></div>');
     jQuery('#send_form').prepend(barHtml);
-    jQuery('#send_form').prepend(ui`<button type="button" id="bb-vn-enable-options" title="Включить варианты VN" aria-label="Включить варианты VN" hidden><i class="fa-solid fa-clapperboard" aria-hidden="true"></i><span>VN</span><i class="fa-solid fa-power-off" aria-hidden="true"></i></button>`);
+    const restoreHost = document.getElementById('leftSendForm') || document.getElementById('send_form');
+    const restoreButton = jQuery(ui`<button type="button" id="bb-vn-enable-options" title="Включить варианты VN" aria-label="Включить варианты VN" hidden>VN</button>`);
+    const menuButton = document.getElementById('options_button');
+    if (menuButton?.parentElement === restoreHost) jQuery(menuButton).before(restoreButton);
+    else jQuery(restoreHost).prepend(restoreButton);
     jQuery('#bb-vn-enable-options').on('click', () => setVnOptionsEnabled(true));
     syncOptionsVisibility(extension_settings[MODULE_NAME]?.vnOptionsEnabled !== false);
     setVnGenerateButtonIdle();

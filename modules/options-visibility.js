@@ -3,7 +3,8 @@ const animations = new WeakMap();
 function reveal(element, visible, animate) {
     if (!element) return;
     const previous = animations.get(element);
-    const from = element.hidden ? 0 : element.getBoundingClientRect?.().height || 0;
+    const current = previous && globalThis.getComputedStyle?.(element);
+    const interrupted = current ? { opacity: current.opacity, transform: current.transform } : null;
     if (previous) {
         previous.onfinish = null;
         previous.cancel();
@@ -15,17 +16,14 @@ function reveal(element, visible, animate) {
         if (element.style) element.style.overflow = '';
         return;
     }
-    const wasHidden = element.hidden;
     element.hidden = false;
-    element.style.overflow = '';
-    const naturalHeight = element.getBoundingClientRect().height;
-    element.style.overflow = 'hidden';
-    const collapsed = {height:'0px', opacity:0, paddingTop:'0px', paddingBottom:'0px', marginTop:'0px', marginBottom:'0px', borderTopWidth:'0px', borderBottomWidth:'0px'};
-    const expanded = {height:naturalHeight + 'px', opacity:1};
-    const frames = visible
-        ? [wasHidden ? collapsed : {height:from + 'px'}, expanded]
-        : [{height:from + 'px', opacity:1}, collapsed];
-    const animation = element.animate(frames, {duration:220, easing:'cubic-bezier(0.4, 0, 0.2, 1)'});
+    const collapsed = { opacity: 0, transform: 'translateY(10px)' };
+    const expanded = { opacity: 1, transform: 'translateY(0)' };
+    const frames = visible ? [interrupted || collapsed, expanded] : [interrupted || expanded, collapsed];
+    const animation = element.animate(frames, {
+        duration: visible ? 280 : 200,
+        easing: visible ? 'cubic-bezier(0.22, 1, 0.36, 1)' : 'ease-in',
+    });
     animations.set(element, animation);
     animation.onfinish = () => {
         element.hidden = !visible;
