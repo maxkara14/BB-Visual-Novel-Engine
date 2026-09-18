@@ -1,3 +1,4 @@
+import { syncOptionsVisibility } from './options-visibility.js';
 import { t, ui } from './i18n.js';
 /* global SillyTavern */
 import { callPopup, chat_metadata, saveChatDebounced } from '../../../../../script.js';
@@ -50,7 +51,7 @@ function buildUtilityRow({ hasOptions = false, hasSavedOptions = false } = {}) {
                 <i class="fa-solid fa-chevron-up"></i>
                 <span>Скрыть</span>
             </button>
-            <button type="button" class="bb-vn-utility-panel" id="bb-vn-btn-disable" title="Выключить варианты VN. Включить снова: настройки VNE → Игра.">
+            <button type="button" class="bb-vn-utility-panel" id="bb-vn-btn-disable" title="Выключить варианты VN. Кнопка VN останется для включения.">
                 <i class="fa-solid fa-power-off"></i><span>Выключить</span>
             </button>
         </div>
@@ -328,13 +329,14 @@ window['renderVNOptionsFromData'] = renderVNOptionsFromData;
 export function injectVNActionsUI() {
     const existing = document.getElementById('bb-vn-action-bar');
     if (existing) {
-        existing.hidden = extension_settings[MODULE_NAME]?.vnOptionsEnabled === false;
+        syncOptionsVisibility(extension_settings[MODULE_NAME]?.vnOptionsEnabled !== false);
         return;
     }
     const barHtml = t('<div id="bb-vn-action-bar" style="display: flex;"><div id="bb-vn-btn-generate" class="bb-vn-main-btn" title="Открыть панель действий VN"></div><div id="bb-vn-options-container"></div></div>');
     jQuery('#send_form').prepend(barHtml);
-    const bar = document.getElementById('bb-vn-action-bar');
-    if (bar) bar.hidden = extension_settings[MODULE_NAME]?.vnOptionsEnabled === false;
+    jQuery('#send_form').prepend(ui`<button type="button" id="bb-vn-enable-options" title="Включить варианты VN" aria-label="Включить варианты VN" hidden><i class="fa-solid fa-clapperboard" aria-hidden="true"></i><span>VN</span><i class="fa-solid fa-power-off" aria-hidden="true"></i></button>`);
+    jQuery('#bb-vn-enable-options').on('click', () => setVnOptionsEnabled(true));
+    syncOptionsVisibility(extension_settings[MODULE_NAME]?.vnOptionsEnabled !== false);
     setVnGenerateButtonIdle();
 
     const ta = document.querySelector('#send_textarea');

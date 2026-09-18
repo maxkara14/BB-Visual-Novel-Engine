@@ -1302,3 +1302,18 @@ test('disabling clears pending auto-generation and re-enabling does not requeue 
  h.api.setVnOptionsEnabled(true);assert.equal(pending.size,0);assert.equal(h.calls.length,0);
  await h.emit('MESSAGE_RECEIVED');assert.equal(pending.size,1);
 });
+
+
+test('option visibility swaps compact restore button and panel, safely reversing animations',async()=>{
+ const h=await harness();const api=await h.loadApi('./options-visibility.js');
+ const make=height=>({hidden:false,inert:false,style:{},animations:[],getBoundingClientRect(){return {height:this.hidden?0:height};},
+  animate(frames){const animation={frames,cancel(){this.cancelled=true;}};this.animations.push(animation);return animation;}});
+ const bar=make(300), restore=make(30);restore.hidden=true;
+ h.document.getElementById=id=>id==='bb-vn-action-bar'?bar:id==='bb-vn-enable-options'?restore:null;
+ api.syncOptionsVisibility(false,true);assert.equal(bar.inert,true);assert.equal(restore.hidden,false);
+ const old=bar.animations[0];api.syncOptionsVisibility(true,true);assert.equal(old.cancelled,true);assert.equal(old.onfinish,null);
+ bar.animations.at(-1).onfinish();restore.animations.at(-1).onfinish();
+ assert.equal(bar.hidden,false);assert.equal(bar.inert,false);assert.equal(restore.hidden,true);assert.equal(bar.style.overflow,'');
+ api.syncOptionsVisibility(false);assert.equal(bar.hidden,true);assert.equal(restore.hidden,false);assert.equal(restore.inert,false);
+ api.syncOptionsVisibility(true);assert.equal(bar.hidden,false);assert.equal(restore.hidden,true);
+});

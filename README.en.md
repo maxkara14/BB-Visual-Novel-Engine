@@ -144,7 +144,7 @@ This controls VNE’s history block, not total input tokens or the output limit.
 
 ### Disabling options
 
-“Turn off” inside “VN Actions” hides the entire panel, including its heading. Restore it in VNE settings → “Gameplay” → “VN options”. This is a global setting saved across reloads. The current request is cancelled and queued auto-generation is cleared; relationships, memory and profile/trait generation remain available. Saved options are kept. Re-enabling restores the panel without a new request; auto-generation resumes on the next character reply.
+“Turn off” inside “VN Actions” smoothly hides the panel, leaving a small “VN” button to restore it. You can also re-enable it in VNE settings → “Gameplay” → “VN options”. This is a global setting saved across reloads. The current request is cancelled and queued auto-generation is cleared; relationships, memory and profile/trait generation remain available. Saved options are kept. Re-enabling restores the panel without a new request; auto-generation resumes on the next character reply.
 
 ## Author
 

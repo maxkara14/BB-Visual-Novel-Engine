@@ -1,5 +1,7 @@
 // Static extension UI text only. Never apply this catalogue to stored story data.
 export const EN = {
+    "Включить варианты VN": "Enable VN options",
+    "Выключить варианты VN. Кнопка VN останется для включения.": "Turn off VN options. The VN button will remain to re-enable them.",
     "Варианты VN": "VN options",
     "Выключить": "Turn off",
     "Выключить варианты VN. Включить снова: настройки VNE → Игра.": "Turn off VN options. Re-enable in VNE settings → Gameplay.",

@@ -6,7 +6,7 @@
 
 ### Unreleased — VNE-TEST
 
-- Добавлено независимое отключение панели вариантов с сохранением отношений и памяти; повторное включение через настройки «Игра».
+- Добавлено независимое отключение панели вариантов с сохранением отношений и памяти; повторное включение компактной кнопкой VN или через настройки «Игра», с анимацией перехода.
 
 - Добавлен выбор 1–100 последних сообщений для контекста вариантов; по умолчанию 10.
 
@@ -55,7 +55,7 @@
 
 ### Unreleased — VNE-TEST
 
-- Added independent disabling of the option panel while keeping relationships and memory; re-enable in Gameplay settings.
+- Added independent disabling of the option panel while keeping relationships and memory; re-enable with a compact VN button or in Gameplay settings, with animated transitions.
 
 - Added a choice of 1–100 recent messages for option context; defaults to 10.
 

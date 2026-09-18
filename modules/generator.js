@@ -1,3 +1,4 @@
+import { syncOptionsVisibility } from './options-visibility.js';
 import { t, ui } from './i18n.js';
 import { buildOutputLanguageDirective } from './language.js';
 /* global SillyTavern */
@@ -1167,13 +1168,15 @@ export function setVnOptionsEnabled(enabled) {
     const value = enabled !== false;
     extension_settings[MODULE_NAME].vnOptionsEnabled = value;
     if (!value) invalidateVnOptionsGeneration();
-    const bar = document.getElementById('bb-vn-action-bar');
-    if (bar) bar.hidden = !value;
+
     const checkbox = document.getElementById('bb-vn-cfg-options-enabled');
     if (checkbox) checkbox.checked = value;
-    resetVnOptionsContainer({ clear: true });
-    setVnGenerateButtonIdle();
-    if (value) restoreVNOptions(false);
+    if (value) {
+        resetVnOptionsContainer({ clear: true });
+        setVnGenerateButtonIdle();
+        restoreVNOptions(false);
+    }
+    syncOptionsVisibility(value, true);
     window.dispatchEvent(new CustomEvent('bb-vn-options-enabled-changed'));
     saveSettingsDebounced();
 }
