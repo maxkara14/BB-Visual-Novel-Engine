@@ -312,3 +312,14 @@ test('memory undo is bounded and edited text reaches the social prompt',async()=
  assert.equal(h.editor.memoryEditorEntries('Alex')[0].canUndo,false);
  assert.equal(h.state.currentCalculatedStats.Alex.affinity,25);
 });
+
+test('memory selector previews are bounded without truncating the editable record',async()=>{
+ const h=await harness();h.settings['BB-Visual-Novel'].uiLanguage='en';
+ const original='A long memory with many details '.repeat(20);
+ const record=h.editor.trackEditableRecord({text:original},{},'positive','text');
+ h.editor.resetMemoryEditor();h.editor.applyMemoryEdits({memories:{soft:[record]},core_traits:[]},'A','Alex');
+ const html=h.editorUi.buildMemoryEditorHtml('Alex');
+ const label=html.match(/<option value="0">([^<]*)<\/option>/)[1];
+ assert.ok(Array.from(label).length<=32);assert.ok(label.endsWith('…'));
+ assert.equal(h.editor.memoryEditorEntries('Alex')[0].text,original);
+});

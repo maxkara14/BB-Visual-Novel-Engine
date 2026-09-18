@@ -2642,5 +2642,22 @@ body.bb-hud-popup-active #bb-social-toast-container {
 .bb-memory-editor label { display: block; margin: 8px 0; }
 .bb-memory-editor select, .bb-memory-editor textarea { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
 .bb-memory-editor textarea { resize: vertical; }
-.bb-memory-editor-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.bb-memory-editor-actions button { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.bb-memory-editor-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; width: 100%; }
+.bb-memory-editor-actions .menu_button {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    height: auto;
+    min-height: 36px;
+    aspect-ratio: auto;
+    margin: 0;
+    padding: 8px 12px;
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+}
+.bb-memory-editor .bb-memory-select { overflow: hidden; text-overflow: ellipsis; }
+.bb-memory-editor .bb-memory-text { min-height: 110px; line-height: 1.5; }

@@ -6,7 +6,12 @@ export function buildMemoryEditorHtml(name) {
     const records = memoryEditorEntries(name);
     if (!records.length) return '';
     const labels = { soft: t('Мягкие следы'), deep: t('Незабываемые события'), archive: t('Архив'), trait: t('Черты характера') };
-    const options = records.map(record => `<option value="${record.index}">${escapeHtml(`${labels[record.kind]}${record.hidden ? ` · ${t('Удалено')}` : ''}: ${record.text.slice(0, 80)}`)}</option>`).join('');
+    const options = records.map((record, position) => {
+        const label = `${position + 1}. ${labels[record.kind]}${record.hidden ? ` · ${t('Удалено')}` : ''}: ${record.text.replace(/\s+/g, ' ').trim()}`;
+        const characters = Array.from(label);
+        const preview = characters.length > 32 ? characters.slice(0, 31).join('') + '…' : label;
+        return `<option value="${record.index}">${escapeHtml(preview)}</option>`;
+    }).join('');
     return ui`<details class="bb-memory-editor" data-char="${escapeHtml(name)}">
         <summary>Редактор памяти и черт</summary>
         <p>Правки меняют память для будущих ответов, но не баллы отношений и не журнал событий. Удалённые записи можно вернуть через отмену. Сохраняются последние 20 правок каждой записи.</p>
