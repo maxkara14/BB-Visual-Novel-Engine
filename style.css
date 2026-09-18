@@ -2795,3 +2795,9 @@ body.bb-hud-popup-active #bb-social-toast-container {
     border-color: rgba(var(--bb-section-accent), 0.35);
     background: rgba(var(--bb-section-accent), 0.08);
 }
+
+#bb-social-settings-wrapper .bb-vn-settings-section { box-sizing: border-box; }
+#bb-social-settings-wrapper .bb-vn-settings-section > summary::after { transition: transform 0.26s cubic-bezier(0.4, 0, 0.2, 1); }
+@media (prefers-reduced-motion: reduce) {
+    #bb-social-settings-wrapper .bb-vn-settings-section > summary::after { transition: none; }
+}

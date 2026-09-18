@@ -1190,3 +1190,38 @@ test('settings groups are balanced, keep controls accessible, and only gameplay 
         'bb-social-export-btn':'data','bb-dbg-add-pts':'debug',
     })) assert.equal(ids.get(id),group);
 });
+
+
+test('settings animation opens, closes, reverses rapid clicks and leaves natural height', async () => {
+    const h = await harness(); const api = await h.loadApi('./settings-animation.js');
+    let click; const animations = [];
+    const section = { open: false, style: {overflow:''},
+        querySelector: () => ({addEventListener: (_event, fn) => {click = fn;}}),
+        getBoundingClientRect() { return {height: this.open ? 300 : 50}; },
+        animate(frames, timing) { const a = {frames, timing, cancel() {this.cancelled=true;}}; animations.push(a); return a; },
+    };
+    const root = {querySelectorAll: () => [section]};
+    api.mountSettingsAnimations(root); const originalClick=click; api.mountSettingsAnimations(root); assert.equal(click,originalClick);
+    const press = () => click({preventDefault(){}});
+    press(); assert.equal(section.open,true); assert.equal(animations[0].frames[1].height,'300px');
+    animations[0].onfinish(); assert.equal(section.style.overflow,'');
+    press(); assert.equal(section.open,true); assert.equal(animations[1].frames[1].height,'50px');
+    press(); assert.equal(animations[1].cancelled,true); assert.equal(animations[1].onfinish,null);
+    animations[2].onfinish(); assert.equal(section.open,true);
+    press(); animations[3].onfinish(); assert.equal(section.open,false); assert.equal(section.style.overflow,'');
+    assert.equal(section.style.height,undefined);
+    section.animate = undefined; press(); assert.equal(section.open,true);
+});
+
+
+test('reduced motion switches sections without starting an animation', async () => {
+    const source = await readFile(new URL('modules/settings-animation.js',root),'utf8');
+    const module = new SourceTextModule(source, {context:createContext({matchMedia:()=>({matches:true})})});
+    await module.link(()=>{}); await module.evaluate();
+    let click;
+    const section = {open:false,style:{overflow:''},querySelector:()=>({addEventListener:(_event,fn)=>{click=fn;}}),
+        getBoundingClientRect:()=>({height:50}),animate(){assert.fail('reduced motion must not animate');}};
+    module.namespace.mountSettingsAnimations({querySelectorAll:()=>[section]});
+    click({preventDefault(){}}); assert.equal(section.open,true);
+    click({preventDefault(){}}); assert.equal(section.open,false);
+});

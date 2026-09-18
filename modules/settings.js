@@ -1,3 +1,4 @@
+import { mountSettingsAnimations } from './settings-animation.js';
 import { refreshSnapshotControls, snapshotRemovalPrompt } from './snapshot-controls.js';
 import { t, ui, normalizeUiLanguage } from './i18n.js';
  /* global SillyTavern */
@@ -405,6 +406,7 @@ export function setupExtensionSettings() {
     `;
     const target = document.querySelector("#extensions_settings2") || document.querySelector("#extensions_settings");
     if (target) target.insertAdjacentHTML('beforeend', settingsHtml);
+    mountSettingsAnimations(document.getElementById('bb-social-settings-wrapper'));
     refreshSnapshotControls(bindActivePersonaState().scopeState);
     const snapshotContext = SillyTavern.getContext();
     for (const name of ['CHAT_CHANGED', 'PERSONA_CHANGED']) {
