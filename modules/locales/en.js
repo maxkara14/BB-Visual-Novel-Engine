@@ -1,5 +1,8 @@
 // Static extension UI text only. Never apply this catalogue to stored story data.
 export const EN = {
+    "Лимит токенов ответа (своё API)": "Response token limit (Custom API)",
+    "0 — автоматически, как раньше. Вручную: 256–131072 токена на запрос. Рассуждения могут входить в этот бюджет. Предел зависит от модели и провайдера; настройка общая для вариантов, описаний и черт и не меняет лимиты основного подключения или профиля.": "0 keeps the previous automatic budget. Manual: 256–131072 tokens per request. Reasoning may share this budget. Model and provider limits apply; this setting covers options, descriptions, and traits without changing the main connection or profile limits.",
+    "API сообщил об ограничении длины ответа. Для своего API увеличьте «Лимит токенов ответа» в «Дополнительно» или сократите запрос. Рассуждения могут расходовать тот же бюджет; возможен также предел контекста модели.": "The API reported a length limit. For Custom API, increase the Response token limit under Advanced or shorten the request. Reasoning may share the same budget; the model context limit may also be responsible.",
     "Режим макроса активен. Прямой {{bb_vn}} в generate_data не найден, возможно он уже был развёрнут пресетом ранее.": "Macro mode is active. No literal {{bb_vn}} was found in generate_data; the preset may have already expanded it.",
     "Макрос {{bb_vn}} внедрён:": "Macro {{bb_vn}} injected:",
     "Проверка текущего ответа": "Checking the current response",

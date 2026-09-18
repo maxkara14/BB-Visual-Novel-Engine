@@ -1036,3 +1036,30 @@ test('social diagnostics translate system text while preserving macro and charac
  assert.equal(api.ui`Отброшены сомнительные обновления: ${name}`,'Skipped questionable updates: Связь');
  h.settings['BB-Visual-Novel'].uiLanguage='ru';assert.equal(api.t(message),message);
 });
+
+test('custom token limit normalizes input and settings handler saves it',async()=>{
+ const h=await harness();const normalize=h.requests.normalizeCustomApiMaxTokens;
+ for(const [input,expected] of [[undefined,0],['',0],[-1,0],['bad',0],[Infinity,0],[1,256],[8192.4,8192],[999999,131072]])assert.equal(normalize(input),expected);
+ const source=await readFile(new URL('modules/settings.js',root),'utf8');
+ const body=source.match(/jQuery\('#bb-vn-cfg-max-tokens'\)\.on\('change', function\(\) \{([\s\S]*?)\n    \}\);/)[1];
+ let value='16384',saved=0;
+ const jq=()=>({val(next){if(next!==undefined)value=next;return value;}});
+ new Function('jQuery','normalizeCustomApiMaxTokens','extension_settings','MODULE_NAME','saveSettingsDebounced',body).call({},jq,normalize,h.settings,'BB-Visual-Novel',()=>saved++);
+ assert.equal(h.settings['BB-Visual-Novel'].customApiMaxTokens,16384);assert.equal(value,16384);assert.equal(saved,1);
+ assert.ok(source.includes('normalizeCustomApiMaxTokens(s.customApiMaxTokens)'));
+});
+test('custom requests use the exact configured budget and preserve automatic budgets',async()=>{
+ const h=await harness({custom:true});
+ for(const [setting,length,expected] of [[undefined,1000,4000],[0,6000,6000],[16384,1000,16384],[512,6000,512]]){
+  h.settings['BB-Visual-Novel'].customApiMaxTokens=setting;
+  const index=h.calls.length;const run=h.api.generateFastPrompt('Generate',{responseLength:length});
+  assert.equal(h.calls[index].body.max_tokens,expected);h.respond(index);await run;
+ }
+});
+test('custom token budget does not override main or profile budgets',async()=>{
+ const h=await harness();h.settings['BB-Visual-Novel'].customApiMaxTokens=16384;
+ const main=h.api.generateFastPrompt('Generate',{responseLength:1200});
+ assert.equal(h.calls[0].args.responseLength,1200);h.respond(0);await main;
+ selectProfile(h);const profile=h.api.generateFastPrompt('Generate',{responseLength:1800});
+ await h.waitForCalls(2);assert.equal(h.calls[1].maxTokens,1800);h.respond(1);await profile;
+});

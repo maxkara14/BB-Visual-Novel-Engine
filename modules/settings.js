@@ -6,7 +6,7 @@ import { MODULE_NAME, normalizeImpactSettings, normalizeImpactValue, normalizeVn
 import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog, bindActivePersonaState, getCurrentPersonaScopeKey, mergeCharacterRecords, resolveCharacterIdentity, exportActivePersonaSnapshot, importActivePersonaSnapshot, clearActivePersonaSnapshot, markSnapshotReplayMessage, getLatestAssistantMessageEntry } from './social.js';
 import { notifySuccess, notifyInfo, notifyError, showHudToast } from './toasts.js';
 import { restoreVNOptions, clearSavedVNOptions, invalidateVnOptionsGeneration } from './generator.js';
-import { normalizeRequestTimeout, normalizeRequestError, getCustomApiIdentity } from './requests.js';
+import { normalizeRequestTimeout, normalizeCustomApiMaxTokens, normalizeRequestError, getCustomApiIdentity } from './requests.js';
 import { escapeHtml, createTextOption } from './utils.js';
 import { resolveVnGenerationSource } from './connections.js';
 import { normalizeOutputLanguage } from './language.js';
@@ -301,6 +301,9 @@ export function setupExtensionSettings() {
                     <summary>Дополнительно</summary>
                     <div class="bb-vn-settings-stack">
                     <span class="bb-vn-settings-note">Обычно менять эти настройки не нужно. Оставьте формат Auto: расширение само выберет способ получения вариантов.</span>
+                    <label for="bb-vn-cfg-max-tokens">Лимит токенов ответа (своё API)</label>
+                    <input type="number" id="bb-vn-cfg-max-tokens" class="text_pole" min="0" max="131072" step="1" value="${normalizeCustomApiMaxTokens(s.customApiMaxTokens)}">
+                    <span class="bb-vn-settings-note">0 — автоматически, как раньше. Вручную: 256–131072 токена на запрос. Рассуждения могут входить в этот бюджет. Предел зависит от модели и провайдера; настройка общая для вариантов, описаний и черт и не меняет лимиты основного подключения или профиля.</span>
                     <label for="bb-vn-cfg-timeout">Тайм-аут одного запроса (секунды)</label>
                     <input type="number" id="bb-vn-cfg-timeout" class="text_pole" min="15" max="600" value="${normalizeRequestTimeout(s.requestTimeout)}">
                     <label for="bb-vn-cfg-json-mode">Формат VN-ответа</label>
@@ -525,6 +528,12 @@ export function setupExtensionSettings() {
         clearSavedVNOptions();
         restoreVNOptions(false);
         injectCombinedSocialPrompt();
+    });
+    jQuery('#bb-vn-cfg-max-tokens').on('change', function() {
+        const value = normalizeCustomApiMaxTokens(jQuery(this).val());
+        extension_settings[MODULE_NAME].customApiMaxTokens = value;
+        jQuery(this).val(value);
+        saveSettingsDebounced();
     });
     jQuery('#bb-vn-cfg-timeout').on('change', function() {
         const value = normalizeRequestTimeout(jQuery(this).val());

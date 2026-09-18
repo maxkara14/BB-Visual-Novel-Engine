@@ -23,7 +23,7 @@ import {
     isActiveVnOptionsGenerationToken,
 } from './state.js';
 import { injectCombinedSocialPrompt, getCurrentPersonaScopeKey } from './social.js';
-import { VnRequestError, normalizeRequestTimeout, httpRequestError, normalizeRequestError, readCustomApiContent, withRequestDeadline, getCustomApiIdentity } from './requests.js';
+import { VnRequestError, normalizeRequestTimeout, normalizeCustomApiMaxTokens, httpRequestError, normalizeRequestError, readCustomApiContent, withRequestDeadline, getCustomApiIdentity } from './requests.js';
 import { generateWithProfile, resolveVnGenerationSource } from './connections.js';
 import { normalizeJsonMode, normalizeAdditionalRequests, initialJsonMode, customResponseFormat, isUnsupportedOutputFormat, isEmptyOptionsInput, parseVnOptions } from './structured-output.js';
 import {
@@ -407,7 +407,7 @@ async function generateFastPromptOnce(promptText, options = {}) {
                             { role: 'user', content: promptText }
                         ],
                         temperature: 0.7,
-                        max_tokens: Math.max(4000, responseLength || 0),
+                        max_tokens: normalizeCustomApiMaxTokens(s.customApiMaxTokens) || Math.max(4000, responseLength || 0),
                         ...(token && customResponseFormat(options.jsonMode, jsonSchema)
                             ? { response_format: customResponseFormat(options.jsonMode, jsonSchema) } : {}),
                         stream: false

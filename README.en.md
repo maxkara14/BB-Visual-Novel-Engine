@@ -63,6 +63,8 @@ JSON is the internal packaging for option labels and replies. You do not need to
 
 The per-request timeout defaults to 120 seconds and supports 15–600 seconds. Option generation allows three additional requests by default, configurable from 0 to 5. Format retries, model fallback, repair, missing options, and tone diversity share this budget.
 
+Custom API has a **Response token limit** under Advanced: `0` preserves the previous automatic budget (at least 4000); manual values range from 256 to 131072. The value is sent as `max_tokens` for each options, description, or trait request. Main connections and profiles keep their own limits. Models may support a lower maximum. Reasoning may share the budget with the final text.
+
 ## Data storage
 
 Settings, connection selection, and the Custom API key are stored in SillyTavern extension settings. Story data lives in chat and message metadata, scoped to the active persona and swipes.

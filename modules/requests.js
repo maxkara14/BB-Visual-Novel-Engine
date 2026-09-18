@@ -9,7 +9,7 @@ const ERROR_MESSAGES = {
     blocked: 'Провайдер заблокировал запрос или отказался возвращать результат.',
     empty: 'Модель вернула пустой ответ.',
     reasoning_only: 'Модель вернула только рассуждения. Проверьте лимит ответа и настройки модели.',
-    truncated: 'Ответ обрезан по лимиту токенов. Уменьшите длину или увеличьте лимит ответа.',
+    truncated: 'API сообщил об ограничении длины ответа. Для своего API увеличьте «Лимит токенов ответа» в «Дополнительно» или сократите запрос. Рассуждения могут расходовать тот же бюджет; возможен также предел контекста модели.',
     invalid_response: 'API вернул ответ в неподдерживаемом формате.',
     busy: 'Основная модель уже выполняет служебный запрос VNE. Дождитесь его завершения.',
     configuration: 'Укажите URL и модель для Custom API.',
@@ -40,6 +40,12 @@ export class VnRequestError extends Error {
         this.name = 'VnRequestError';
         this.code = code;
     }
+}
+
+// Zero preserves the existing per-task automatic budget.
+export function normalizeCustomApiMaxTokens(value) {
+    const tokens = Number(value);
+    return Number.isFinite(tokens) && tokens > 0 ? Math.max(256, Math.min(131072, Math.round(tokens))) : 0;
 }
 
 export function normalizeRequestTimeout(value) {

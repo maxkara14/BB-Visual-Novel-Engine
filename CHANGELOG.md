@@ -6,6 +6,8 @@
 
 ### Unreleased — VNE-TEST
 
+- Добавлен настраиваемый лимит токенов ответа своего API; уточнена ошибка ограничения длины.
+
 Изменения 17–18 сентября 2026 года. Пока только в тестовой ветке, без нового номера релиза. В manifest сохранено `3.1.0 Release`.
 
 - Генерация защищена от смены чата, персоны, сообщения и свайпа: устаревшие результаты не применяются.
@@ -36,6 +38,8 @@
 ## English
 
 ### Unreleased — VNE-TEST
+
+- Added a configurable Custom API response token limit and clarified length-limit errors.
 
 Changes from September 17–18, 2026. Available on the test branch only, without a new release number. The manifest still says `3.1.0 Release`.
 

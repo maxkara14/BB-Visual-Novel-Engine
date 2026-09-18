@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS = {
     customApiKey: '',
     customApiModel: '',
     requestTimeout: 120,
+    customApiMaxTokens: 0,
     allowMainFallback: false,
     debugGeneration: false,
     vnGenerationSource: '',
