@@ -2807,6 +2807,9 @@ body.bb-hud-popup-active #bb-social-toast-container {
 
 #bb-vn-enable-options[hidden] { display: none !important; }
 #bb-vn-enable-options {
+    position: relative;
+    top: -2px;
+    align-self: center;
     display: inline-flex;
     align-items: center;
     justify-content: center;
