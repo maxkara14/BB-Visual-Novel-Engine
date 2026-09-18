@@ -2712,16 +2712,18 @@ body.bb-hud-popup-active #bb-social-toast-container {
 
 /* Compact settings groups, following Enhance Gen's disclosure layout. */
 #bb-social-settings-wrapper .bb-vn-settings-section {
+    --bb-section-accent: 125, 211, 252;
     min-width: 0;
     border: 1px solid rgba(148, 163, 184, 0.18);
-    border-radius: 10px;
-    background: rgba(11, 18, 32, 0.45);
+    border-radius: 12px;
+    background: linear-gradient(110deg, rgba(var(--bb-section-accent), 0.055), rgba(11, 18, 32, 0.65));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
     text-align: left;
 }
 #bb-social-settings-wrapper .bb-vn-settings-section > summary {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     padding: 11px 12px;
     font-size: 13px;
     font-weight: 700;
@@ -2729,7 +2731,7 @@ body.bb-hud-popup-active #bb-social-toast-container {
     list-style: none;
 }
 #bb-social-settings-wrapper .bb-vn-settings-section > summary::-webkit-details-marker { display: none; }
-#bb-social-settings-wrapper .bb-vn-settings-section > summary::after { content: '›'; margin-left: auto; }
+#bb-social-settings-wrapper .bb-vn-settings-section > summary::after { content: '›'; margin-left: auto; color: rgb(var(--bb-section-accent)); font-size: 20px; line-height: 1; }
 #bb-social-settings-wrapper .bb-vn-settings-section[open] > summary::after { transform: rotate(90deg); }
 #bb-social-settings-wrapper .bb-vn-settings-section > summary:focus-visible { outline: 2px solid #7dd3fc; outline-offset: -2px; border-radius: 10px; }
 #bb-social-settings-wrapper .bb-vn-settings-section-body {
@@ -2755,5 +2757,41 @@ body.bb-hud-popup-active #bb-social-toast-container {
     box-sizing: border-box;
 }
 #bb-social-settings-wrapper .bb-vn-settings-section-body .menu_button { white-space: normal; padding: 8px 10px; }
-#bb-social-settings-wrapper .bb-vn-settings-section-body .bb-vn-settings-toggle-grid { grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); }
+#bb-social-settings-wrapper .bb-vn-settings-section-body .bb-vn-settings-toggle-grid { grid-template-columns: minmax(0, 1fr); }
 #bb-social-settings-wrapper .bb-vn-settings-section-body .bb-vn-setting-pill { padding: 8px; min-height: 38px; }
+
+#bb-social-settings-wrapper .bb-vn-settings-section[data-section="answers"] { --bb-section-accent: 196, 181, 253; }
+#bb-social-settings-wrapper .bb-vn-settings-section[data-section="connection"] { --bb-section-accent: 253, 211, 141; }
+#bb-social-settings-wrapper .bb-vn-settings-section[data-section="relationships"] { --bb-section-accent: 249, 168, 212; }
+#bb-social-settings-wrapper .bb-vn-settings-section[data-section="data"] { --bb-section-accent: 110, 231, 183; }
+#bb-social-settings-wrapper .bb-vn-settings-section[data-section="debug"] { --bb-section-accent: 148, 163, 184; }
+#bb-social-settings-wrapper .bb-vn-settings-section[open] { border-color: rgba(var(--bb-section-accent), 0.4); }
+#bb-social-settings-wrapper .bb-vn-settings-section > summary:hover { background: rgba(var(--bb-section-accent), 0.06); border-radius: 12px; }
+#bb-social-settings-wrapper .bb-vn-section-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: rgba(var(--bb-section-accent), 0.1);
+    color: rgb(var(--bb-section-accent));
+    font-size: 13px;
+}
+#bb-social-settings-wrapper .bb-vn-settings-section[data-section="game"] .bb-vn-setting-pill {
+    flex-direction: row-reverse;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    text-align: left;
+    transform: none;
+}
+#bb-social-settings-wrapper .bb-vn-settings-section[data-section="game"] .bb-vn-setting-pill span { flex: 1; font-size: 12px; }
+#bb-social-settings-wrapper .bb-vn-settings-section[data-section="game"] .bb-vn-setting-pill input { margin: 0; accent-color: #7dd3fc; }
+#bb-social-settings-wrapper .bb-vn-settings-section[data-section="game"] .bb-vn-setting-pill:has(input:checked) {
+    border-color: rgba(var(--bb-section-accent), 0.35);
+    background: rgba(var(--bb-section-accent), 0.08);
+}

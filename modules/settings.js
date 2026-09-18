@@ -261,7 +261,7 @@ export function setupExtensionSettings() {
             <div class="inline-drawer-content bb-vn-settings-shell">
                 <span class="bb-vn-settings-intro">Настройки Интерактивного Кино</span>
                 <details class="bb-vn-settings-section" data-section="game" open>
-                    <summary>Игра</summary>
+                    <summary><i class="fa-solid fa-gamepad bb-vn-section-icon" aria-hidden="true"></i><span>Игра</span></summary>
                     <div class="bb-vn-settings-section-body">
                         <div class="bb-vn-settings-toggle-grid">
                             <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-autosend" ${s.autoSend ? 'checked' : ''}><span>Авто-отправка при выборе</span></label>
@@ -271,7 +271,7 @@ export function setupExtensionSettings() {
                     </div>
                 </details>
                 <details class="bb-vn-settings-section" data-section="answers">
-                    <summary>Язык и ответы</summary>
+                    <summary><i class="fa-solid fa-comment-dots bb-vn-section-icon" aria-hidden="true"></i><span>Язык и ответы</span></summary>
                     <div class="bb-vn-settings-section-body">
                         <div class="bb-vn-settings-panel">
                             <label for="bb-vn-cfg-ui-language">Язык интерфейса</label>
@@ -295,7 +295,7 @@ export function setupExtensionSettings() {
                     </div>
                 </details>
                 <details class="bb-vn-settings-section" data-section="connection">
-                    <summary>Подключения</summary>
+                    <summary><i class="fa-solid fa-plug bb-vn-section-icon" aria-hidden="true"></i><span>Подключения</span></summary>
                     <div class="bb-vn-settings-section-body">
                         <div class="bb-vn-settings-card bb-vn-settings-card--accent">
                             <div id="bb-vn-connection-controls" class="bb-vn-settings-stack"></div>
@@ -340,7 +340,7 @@ export function setupExtensionSettings() {
                     </div>
                 </details>
                 <details class="bb-vn-settings-section" data-section="relationships">
-                    <summary>Отношения</summary>
+                    <summary><i class="fa-solid fa-heart bb-vn-section-icon" aria-hidden="true"></i><span>Отношения</span></summary>
                     <div class="bb-vn-settings-section-body">
                         <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-disable-tracker" ${s.disableRelationshipTracker ? 'checked' : ''}><span>Отключить трекер отношений</span></label>
                         <label class="checkbox_label bb-vn-setting-pill bb-vn-setting-pill--single"><input type="checkbox" id="bb-vn-cfg-usemacro" ${s.useMacro ? 'checked' : ''}><span>Использовать макрос {{bb_vn}}</span></label>
@@ -353,7 +353,7 @@ export function setupExtensionSettings() {
                     </div>
                 </details>
                 <details class="bb-vn-settings-section" data-section="data">
-                    <summary>Данные</summary>
+                    <summary><i class="fa-solid fa-database bb-vn-section-icon" aria-hidden="true"></i><span>Данные</span></summary>
                     <div class="bb-vn-settings-section-body">
                         <div class="bb-vn-settings-card bb-vn-settings-card--snapshot">
                             <span class="bb-vn-settings-section-title">Снимки состояния</span>
@@ -374,7 +374,7 @@ export function setupExtensionSettings() {
                     </div>
                 </details>
                 <details class="bb-vn-settings-section" data-section="debug">
-                    <summary>Отладка</summary>
+                    <summary><i class="fa-solid fa-wrench bb-vn-section-icon" aria-hidden="true"></i><span>Отладка</span></summary>
                     <div class="bb-vn-settings-section-body">
                         <input type="text" id="bb-debug-char-name" class="text_pole" placeholder="Имя персонажа">
                         <input type="text" id="bb-debug-reason" class="text_pole" placeholder="Текст причины" value="Дебаг-действие">
