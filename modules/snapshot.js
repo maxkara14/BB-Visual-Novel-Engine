@@ -116,3 +116,23 @@ export async function confirmSnapshotFile(file, { getContext, getPersonaKey, con
     assertCurrent();
     return apply(parsed.snapshot);
 }
+
+// Confirmation is bound to both the original scene and the exact imported baseline.
+export async function confirmSnapshotRemoval({ getContext, getPersonaKey, getScope, confirm, clear }) {
+    const initial = getContext();
+    const chat = initial.chat;
+    const key = JSON.stringify([initial.chatId, initial.characterId, initial.groupId]);
+    const length = chat?.length;
+    const persona = getPersonaKey();
+    const scope = getScope();
+    const baseline = scope.snapshot_baseline;
+    if (!baseline) return false;
+    if (await confirm(Boolean(scope.snapshot_restore_state)) !== true) return false;
+    const current = getContext();
+    if (current.chat !== chat || current.chat?.length !== length
+        || JSON.stringify([current.chatId, current.characterId, current.groupId]) !== key
+        || getPersonaKey() !== persona || getScope() !== scope || scope.snapshot_baseline !== baseline) {
+        fail('SNAPSHOT_CONTEXT_CHANGED');
+    }
+    return clear();
+}

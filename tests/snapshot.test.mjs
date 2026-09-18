@@ -5,9 +5,10 @@ import { SourceTextModule, SyntheticModule, createContext } from 'node:vm';
 const root = new URL('../modules/', import.meta.url);
 async function harness() {
     const metadata = {}; let saves = 0;
+    const nodes = new Map();
     const context = { chat: [], chatId:'test-chat', name1:'Player', substituteParams: text=>text.replaceAll('{{user}}','Player'), callPopup:async()=>false };
     const settings = {'BB-Visual-Novel':{}};
-    const sandbox = createContext({ TextEncoder, console, setTimeout, clearTimeout, SillyTavern:{getContext:()=>context}, window:{}, document:{querySelector:()=>null}, jQuery:()=>({val:()=>null}) });
+    const sandbox = createContext({ TextEncoder, console, setTimeout, clearTimeout, SillyTavern:{getContext:()=>context}, window:{}, document:{querySelector:selector=>nodes.get(selector)||null}, jQuery:()=>({val:()=>null}) });
     const mocks = {
         '../../../../../script.js': {chat_metadata:metadata,saveChatDebounced:()=>saves++,setExtensionPrompt(){},extension_prompt_roles:{SYSTEM:0},extension_prompt_types:{IN_CHAT:0},callPopup:async()=>false},
         '../../../../extensions.js': {extension_settings:settings},
@@ -22,7 +23,8 @@ async function harness() {
         cache.set(name,mod);return mod;
     }
     const social=load('./social.js');await social.link(load);await social.evaluate();
-    return {breakdown:cache.get('./relationship-breakdown.js').namespace,api:social.namespace,snapshot:cache.get('./snapshot.js').namespace,state:cache.get('./state.js').namespace,context,metadata,settings,get saves(){return saves;}};
+    const controls=load('./snapshot-controls.js');await controls.link(load);await controls.evaluate();
+    return {nodes,controls:controls.namespace,breakdown:cache.get('./relationship-breakdown.js').namespace,api:social.namespace,snapshot:cache.get('./snapshot.js').namespace,state:cache.get('./state.js').namespace,context,metadata,settings,get saves(){return saves;}};
 }
 const fixture = () => ({schema_version:1,module:'BB-Visual-Novel',persona_label:'Original persona',data:{characters:{Alex:{affinity:25,romance:0,status:'Friend',history:[],memories:{soft:[],deep:[],archive:[]},core_traits:[]}},char_bases:{Alex:3},char_bases_romance:{},global_log:[{time:'12:00',type:'system',text:'Saved log'}],story_moments:[]}});
 
@@ -162,4 +164,53 @@ test('romance breakdown uses effective negative limit and platonic filtering',as
  scopeState.platonic_chars=['Alex'];h.api.recalculateAllStats(false);
  d=h.breakdown.getRelationshipBreakdown(h.state.currentCalculatedStats.Alex,scopeState,'Alex');
  assert.equal(d.romance.change,0);assert.equal(d.romance.total,-99);
+});
+
+test('snapshot status supports new and old imports and escapes no untrusted HTML',async()=>{
+ const h=await harness();const {scopeState}=h.api.bindActivePersonaState();
+ assert.match(h.controls.snapshotStatusText(scopeState),/Импорт не активен/);
+ h.api.importActivePersonaSnapshot(fixture());
+ assert.ok(Number.isFinite(Date.parse(scopeState.snapshot_baseline.imported_at)));
+ assert.match(h.controls.snapshotStatusText(scopeState),/основа активна/);
+ delete scopeState.snapshot_baseline.imported_at;
+ assert.match(h.controls.snapshotStatusText(scopeState),/время неизвестно/);
+ h.settings['BB-Visual-Novel'].uiLanguage='en';
+ assert.match(h.controls.snapshotStatusText(scopeState),/time unknown/);
+ assert.match(h.controls.snapshotRemovalPrompt(false),/no saved recovery point/);
+ assert.match(h.controls.snapshotRemovalPrompt(true),/before the first import/);
+ h.api.clearActivePersonaSnapshot();assert.match(h.controls.snapshotStatusText(scopeState),/No active import/);
+});
+test('removal confirmation cancels safely and rejects scene, persona and baseline changes',async()=>{
+ for(const change of ['cancel','chat','persona','length','baseline','none']){
+  const h=await harness();h.api.importActivePersonaSnapshot(fixture());let persona='A',cleared=0;
+  const scope=h.api.bindActivePersonaState().scopeState;
+  const options={getContext:()=>h.context,getPersonaKey:()=>persona,getScope:()=>scope,
+   confirm:async hasRestore=>{assert.equal(hasRestore,true);
+    if(change==='cancel')return false;
+    if(change==='chat')h.context.chat=[];
+    if(change==='persona')persona='B';
+    if(change==='length')h.context.chat.push({mes:'New message'});
+    if(change==='baseline')h.api.importActivePersonaSnapshot(fixture());
+    return true;},clear:()=>{cleared++;return h.api.clearActivePersonaSnapshot();}};
+  if(['chat','persona','length','baseline'].includes(change))await assert.rejects(h.snapshot.confirmSnapshotRemoval(options),/SNAPSHOT_CONTEXT_CHANGED/);
+  else assert.equal(await h.snapshot.confirmSnapshotRemoval(options),change==='none');
+  assert.equal(cleared,change==='none'?1:0);
+  if(change!=='none')assert.ok(scope.snapshot_baseline);
+ }
+});
+test('legacy baseline without recovery requires confirmation and inactive baseline does nothing',async()=>{
+ const h=await harness();let asked=0;const {scopeState}=h.api.bindActivePersonaState();
+ const options={getContext:()=>h.context,getPersonaKey:()=> 'A',getScope:()=>scopeState,confirm:async hasRestore=>{asked++;assert.equal(hasRestore,false);return true;},clear:h.api.clearActivePersonaSnapshot};
+ assert.equal(await h.snapshot.confirmSnapshotRemoval(options),false);assert.equal(asked,0);
+ h.api.importActivePersonaSnapshot(fixture());scopeState.snapshot_restore_state=null;
+ assert.equal(await h.snapshot.confirmSnapshotRemoval(options),true);assert.equal(asked,1);
+});
+
+test('snapshot controls refresh text and availability when scope changes',async()=>{
+ const h=await harness();const status={},button={};
+ h.nodes.set('#bb-social-snapshot-status',status);h.nodes.set('#bb-social-clear-snapshot-btn',button);
+ h.controls.refreshSnapshotControls({});assert.equal(button.disabled,true);
+ const scope={snapshot_baseline:{imported_at:'2026-09-18T12:00:00Z'}};
+ h.controls.refreshSnapshotControls(scope);assert.equal(button.disabled,false);assert.match(status.textContent,/2026/);
+ h.controls.refreshSnapshotControls({});assert.equal(button.disabled,true);assert.match(status.textContent,/Импорт не активен/);
 });

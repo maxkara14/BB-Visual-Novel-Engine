@@ -1,3 +1,4 @@
+import { refreshSnapshotControls, snapshotRemovalPrompt } from './snapshot-controls.js';
 import { t, ui, normalizeUiLanguage } from './i18n.js';
  /* global SillyTavern */
 import { chat_metadata, saveChatDebounced, saveSettingsDebounced } from '../../../../../script.js';
@@ -10,7 +11,7 @@ import { normalizeRequestTimeout, normalizeCustomApiMaxTokens, normalizeRequestE
 import { escapeHtml, createTextOption } from './utils.js';
 import { resolveVnGenerationSource } from './connections.js';
 import { normalizeOutputLanguage } from './language.js';
-import { confirmSnapshotFile } from './snapshot.js';
+import { confirmSnapshotFile, confirmSnapshotRemoval } from './snapshot.js';
 import { mountVnConnectionControls } from './connection-ui.js';
 import { normalizeJsonMode, normalizeAdditionalRequests } from './structured-output.js';
 
@@ -190,6 +191,7 @@ export function wipeAllSocialData() {
     scopeState.merge_suggestions = [];
     scopeState.log_cutoff_index = 0;
     scopeState.snapshot_baseline = null;
+    refreshSnapshotControls(scopeState);
     scopeState.snapshot_cutoff_index = 0;
     scopeState.snapshot_restore_state = null;
     scopeState.snapshot_post_import_replay_keys = {};
@@ -370,14 +372,15 @@ export function setupExtensionSettings() {
                 </div>
 
                 <div class="bb-vn-settings-card bb-vn-settings-card--snapshot">
-                    <span class="bb-vn-settings-section-title">Снимок базы связей</span>
-                    <span class="bb-vn-settings-note">Экспорт сохраняет текущие связи, воспоминания, черты, журнал и дневник. Импорт подключает этот снимок как базу текущей персоны и продолжает считать только новые события.</span>
+                    <span class="bb-vn-settings-section-title">Снимки состояния</span>
+                    <span class="bb-vn-settings-note">Экспорт скачивает текущее состояние и не меняет точку восстановления. Импорт заменяет основу активной персоны, а не складывает два набора отношений. Сообщения чата остаются.</span>
+                    <span id="bb-social-snapshot-status" class="bb-vn-settings-note" aria-live="polite"></span>
                     <input type="file" id="bb-social-snapshot-file" accept=".json,application/json" style="display:none;">
                     <div class="bb-vn-settings-actions-grid">
-                        <button id="bb-social-export-btn" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-file-export"></i>&ensp; Экспорт</button>
-                        <button id="bb-social-import-btn" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-file-import"></i>&ensp; Импорт</button>
+                        <button id="bb-social-export-btn" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-file-export"></i>&ensp; Экспортировать состояние</button>
+                        <button id="bb-social-import-btn" class="menu_button bb-vn-settings-button"><i class="fa-solid fa-file-import"></i>&ensp; Импортировать состояние</button>
                     </div>
-                    <button id="bb-social-clear-snapshot-btn" class="menu_button bb-vn-settings-button" style="color:#fda4af; border-color:rgba(244,114,182,0.22);">Очистить snapshot-базу</button>
+                    <button id="bb-social-clear-snapshot-btn" class="menu_button bb-vn-settings-button" style="color:#fda4af; border-color:rgba(244,114,182,0.22);">Убрать импортированную основу</button>
                 </div>
                 <div class="bb-vn-settings-stack">
                     <button id="bb-social-restore-chars-btn" class="menu_button bb-vn-settings-button">Вернуть скрытых персонажей</button>
@@ -389,6 +392,12 @@ export function setupExtensionSettings() {
     `;
     const target = document.querySelector("#extensions_settings2") || document.querySelector("#extensions_settings");
     if (target) target.insertAdjacentHTML('beforeend', settingsHtml);
+    refreshSnapshotControls(bindActivePersonaState().scopeState);
+    const snapshotContext = SillyTavern.getContext();
+    for (const name of ['CHAT_CHANGED', 'PERSONA_CHANGED']) {
+        const event = snapshotContext.event_types?.[name];
+        if (event) snapshotContext.eventSource?.on(event, () => refreshSnapshotControls(bindActivePersonaState().scopeState));
+    }
     jQuery('#bb-vn-cfg-url').val(s.customApiUrl || '');
     jQuery('#bb-vn-cfg-key').val(s.customApiKey || '');
     jQuery('#bb-vn-cfg-model').append(createTextOption(s.customApiModel || t('Модели не загружены'), s.customApiModel || ''));
@@ -831,11 +840,12 @@ export function setupExtensionSettings() {
                     <p>Формат: ${escapeHtml(summary.format)} · Экспорт: ${escapeHtml(summary.exportedAt || t('Не указан'))}</p>
                     <p>Персонажей: ${summary.characters} · Записей журнала: ${summary.logs} · Событий дневника: ${summary.moments}</p>
                     <p>Будут заменены текущая база отношений, память, черты, профили, скрытые и платонические персонажи, журнал и дневник активной персоны. Это замена, а не объединение.</p>
-                    <p>Сообщения чата не меняются. Для возврата к состоянию до первого импорта используйте «Очистить snapshot-базу». Старые события до точки импорта повторно не учитываются; новые события продолжают считаться.</p>
+                    <p>Сообщения чата не меняются. Для возврата к состоянию до первого импорта используйте «Убрать импортированную основу». Старые события до точки импорта повторно не учитываются; новые события продолжают считаться.</p>
                     <p>Продолжить импорт?</p>`, 'confirm'),
                 apply: importActivePersonaSnapshot,
             });
             if (!result) return;
+            refreshSnapshotControls(bindActivePersonaState().scopeState);
             saveChatDebounced();
             recalculateAllStats(false);
             notifySuccess(ui`Snapshot импортирован: ${result.characters} персонажей. Старые события до точки импорта больше не наслаиваются повторно.`);
@@ -853,12 +863,26 @@ export function setupExtensionSettings() {
         }
     });
 
-    jQuery('#bb-social-clear-snapshot-btn').on('click', () => {
-        const hadSnapshot = clearActivePersonaSnapshot();
-        saveChatDebounced();
-        recalculateAllStats(false);
-        if (hadSnapshot) notifyInfo(t("Snapshot-база очищена. Состояние до импорта восстановлено, расчёт снова идёт от данных чата."));
-        else notifyInfo(t("Активной snapshot-базы не было."));
+    jQuery('#bb-social-clear-snapshot-btn').on('click', async () => {
+        try {
+            const removed = await confirmSnapshotRemoval({
+                getContext: () => SillyTavern.getContext(),
+                getPersonaKey: getCurrentPersonaScopeKey,
+                getScope: () => bindActivePersonaState().scopeState,
+                confirm: hasRestore => SillyTavern.getContext().callPopup(snapshotRemovalPrompt(hasRestore), 'confirm'),
+                clear: clearActivePersonaSnapshot,
+            });
+            if (!removed) return;
+            saveChatDebounced();
+            recalculateAllStats(false);
+            notifyInfo(t('Импортированная основа убрана. Отношения пересчитаны по данным чата.'));
+        } catch (error) {
+            notifyError(t(error.message === 'SNAPSHOT_CONTEXT_CHANGED'
+                ? 'Чат, персона или импорт изменились. Действие отменено; проверьте текущее состояние и повторите.'
+                : 'Не удалось убрать импортированную основу.'));
+        } finally {
+            refreshSnapshotControls(bindActivePersonaState().scopeState);
+        }
     });
 
     jQuery('#bb-social-restore-chars-btn').on('click', () => { const { scopeState } = bindActivePersonaState(); scopeState.ignored_chars = []; chat_metadata['bb_vn_ignored_chars'] = scopeState.ignored_chars; saveChatDebounced(); recalculateAllStats(); notifySuccess(t("Скрытые персонажи восстановлены!")); });

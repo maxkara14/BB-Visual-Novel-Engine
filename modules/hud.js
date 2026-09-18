@@ -1,3 +1,4 @@
+import { refreshSnapshotControls } from './snapshot-controls.js';
 import { buildRelationshipBreakdownHtml } from './relationship-breakdown.js';
 import { t, ui, templateText, template } from './i18n.js';
 /* global SillyTavern */
@@ -683,6 +684,7 @@ function buildCharacterCardHtml(charName = '') {
 }
 
 export function renderSocialHud() {
+    refreshSnapshotControls(chat_metadata.bb_vn_persona_states?.[chat_metadata.bb_vn_active_persona_scope] || {});
     bindActivePersonaState();
     if (extension_settings[MODULE_NAME]?.disableRelationshipTracker === true) {
         const charsBox = document.getElementById('bb-hud-chars');

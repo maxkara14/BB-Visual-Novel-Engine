@@ -6,6 +6,8 @@
 
 ### Unreleased — VNE-TEST
 
+- Добавлены статус и время импорта, понятные действия со снимками и подтверждение удаления основы с защитой от смены контекста.
+
 - Добавлена расшифровка доверия и романтики в карточке: основа, поправки, фактические изменения и итог, включая импорт и пределы шкал.
 
 - Добавлен настраиваемый лимит токенов ответа своего API; уточнена ошибка ограничения длины.
@@ -40,6 +42,8 @@
 ## English
 
 ### Unreleased — VNE-TEST
+
+- Added import status and time, clearer snapshot actions, and baseline removal confirmation guarded against context changes.
 
 - Added a character-card breakdown of trust and romance: baseline, adjustments, effective changes, and totals, including snapshots and scale limits.
 

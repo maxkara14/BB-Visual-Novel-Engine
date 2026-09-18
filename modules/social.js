@@ -1191,6 +1191,7 @@ export function importActivePersonaSnapshot(rawSnapshot = '') {
     scopeState.char_registry = cloneJsonData(snapshotData.char_registry, {});
     scopeState.merge_suggestions = cloneJsonData(snapshotData.merge_suggestions, []);
     scopeState.snapshot_baseline = {
+        imported_at: new Date().toISOString(),
         characters: normalizedCharacters,
         global_log: cloneJsonData(snapshotData.global_log, []),
         story_moments: cloneJsonData(snapshotData.story_moments, []),

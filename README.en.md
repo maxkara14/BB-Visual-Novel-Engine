@@ -81,9 +81,11 @@ A snapshot contains relationships, memories, traits, profiles and avatars, the l
 
 Import **replaces** the active persona's baseline; it does not merge it. Chat messages are not replaced. Events before the import point are not added to the snapshot again. New events and marked regenerated events continue to count.
 
-**Clear snapshot baseline** restores the baseline saved before the first import and recalculates the current chat history. It does not roll chat messages back in time. Repeated imports retain the original recovery point until the baseline is cleared.
+**Remove imported baseline** restores the baseline saved before the first import and recalculates the current chat history. It does not roll chat messages back in time. Repeated imports retain the original recovery point until the baseline is cleared.
 
 VNE schema version 1 and the old bare data object containing `characters` are supported. Unknown versions, other extensions' files, invalid field types, and files larger than 20 MiB are rejected before changing the baseline. Nesting and record counts are also bounded. Select the file again if the chat or persona changes during confirmation. Snapshot v2 from the third-party fork is not imported automatically.
+
+Settings show the active import and its time; older imports without a timestamp display “time unknown”. Removing the baseline requires confirmation, explaining recalculation and recovery availability. Switching the chat, persona, or imported baseline during confirmation cancels removal.
 
 ## Troubleshooting
 
