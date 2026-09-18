@@ -1063,3 +1063,40 @@ test('custom token budget does not override main or profile budgets',async()=>{
  selectProfile(h);const profile=h.api.generateFastPrompt('Generate',{responseLength:1800});
  await h.waitForCalls(2);assert.equal(h.calls[1].maxTokens,1800);h.respond(1);await profile;
 });
+
+test('character navigation filters Unicode names and sorts without changing data',async()=>{
+ const h=await harness();const api=await h.loadApi('./character-toolbar.js');
+ const stats={'Темари':{affinity:0,romance:3},'Алекс':{affinity:-4,romance:7},'Alex 10':{affinity:2},'Alex 2':{affinity:2}};
+ const before=JSON.stringify(stats);
+ assert.deepEqual([...api.selectCharacterNames(stats,'  ТЕМ  ','name','ru')],['Темари']);
+ assert.deepEqual([...api.selectCharacterNames(stats,'Ａｌｅｘ','name','en')],['Alex 2','Alex 10']);
+ assert.equal(api.selectCharacterNames(stats,'','trust_asc','ru')[0],'Алекс');
+ assert.equal(api.selectCharacterNames(stats,'','romance_desc','ru')[0],'Алекс');
+ assert.equal(api.selectCharacterNames(stats,'','bad','en')[0],'Alex 2');
+ assert.equal(api.selectCharacterNames(stats,'missing').length,0);
+ assert.equal(JSON.stringify(stats),before);
+});
+test('toolbar reorders existing cards, preserves drafts, saves preferences and resets search per scene',async()=>{
+ const h=await harness();const api=await h.loadApi('./character-toolbar.js');
+ function node(tag){return {tag,children:[],listeners:{},dataset:{},classList:{toggle(){}},append(...items){for(const item of items){this.children=this.children.filter(old=>old!==item);this.children.push(item);}},setAttribute(){},addEventListener(name,fn){this.listeners[name]=fn;},focus(){}};}
+ const doc={createElement:node};
+ const stats={Alex:{affinity:2},Blair:{affinity:5}};const settings={};const context={chat:[],chatId:'toolbar-chat'};let saves=0;
+ function mount(persona='A'){
+  const cards=Object.keys(stats).map(name=>Object.assign(node('card'),{dataset:{char:name},draft:'Unsaved text'}));
+  const stack=node('stack');stack.append(...cards);stack.querySelectorAll=()=>cards;
+  const root={ownerDocument:doc,children:[],querySelector:()=>stack,insertBefore(item){this.children.push(item);}};
+  api.mountCharacterToolbar(root,stats,settings,context,persona,()=>saves++);
+  const toolbar=root.children[0];return {cards,stack,search:toolbar.children[0].children[0],sort:toolbar.children[1].children[0],compact:toolbar.children[2].children[0],reset:toolbar.children[3],count:toolbar.children[4],empty:root.children[1]};
+ }
+ let view=mount();assert.equal(view.stack.children[0].dataset.char,'Blair');
+ view.search.value='Alex';view.search.listeners.input();assert.equal(view.cards[1].hidden,true);assert.equal(view.cards[0].draft,'Unsaved text');
+ view.sort.value='name';view.sort.listeners.change();assert.equal(settings.hudCharacterSort,'name');
+ view.compact.checked=true;view.compact.listeners.change();assert.equal(settings.hudCompactCards,true);assert.equal(saves,2);
+ view=mount();assert.equal(view.search.value,'Alex');assert.equal(view.compact.checked,true);
+ view=mount('B');assert.equal(view.search.value,'');
+ view.search.value='Nobody';view.search.listeners.input();assert.equal(view.empty.hidden,false);
+ view.reset.listeners.click();assert.equal(view.search.value,'');assert.equal(view.empty.hidden,true);
+ context.chat=[];view=mount();assert.equal(view.search.value,'');
+ const many=Object.fromEntries(Array.from({length:500},(_,i)=>['Character '+i,{affinity:i%100}]));
+ assert.equal(api.selectCharacterNames(many,'','name','en').length,500);
+});

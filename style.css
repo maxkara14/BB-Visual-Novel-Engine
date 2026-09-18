@@ -2661,3 +2661,20 @@ body.bb-hud-popup-active #bb-social-toast-container {
 }
 .bb-memory-editor .bb-memory-select { overflow: hidden; text-overflow: ellipsis; }
 .bb-memory-editor .bb-memory-text { min-height: 110px; line-height: 1.5; }
+
+/* Character navigation uses the panel width and leaves card editors mounted. */
+.bb-character-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 12px; margin-bottom: 12px; border: 1px solid rgba(148,163,184,.2); border-radius: 12px; }
+.bb-character-toolbar label { min-width: 0; font-size: 12px; color: #cbd5e1; }
+.bb-character-toolbar .text_pole { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; margin: 4px 0 0; }
+.bb-character-toolbar .bb-character-compact-toggle { display: flex; align-items: center; gap: 8px; }
+.bb-character-toolbar .menu_button { width: 100%; min-width: 0; box-sizing: border-box; margin: 0; padding: 8px; white-space: normal; height: auto; aspect-ratio: auto; }
+.bb-character-result-count { font-size: 12px; color: #94a3b8; }
+.bb-route-card-stack .bb-char-card[hidden], .bb-empty-hud[hidden] { display: none !important; }
+.bb-cards-compact .bb-char-summary { grid-template-columns: 44px minmax(0, 1fr); gap: 8px; }
+.bb-cards-compact .bb-char-avatar-column { min-width: 44px; gap: 4px; }
+.bb-cards-compact .bb-char-avatar { width: 44px; min-width: 44px; height: 54px; border-radius: 12px; }
+.bb-cards-compact .bb-char-avatar-ornament { display: none; }
+.bb-cards-compact .bb-char-card-shell { padding: 10px; }
+.bb-cards-compact .bb-char-summary-status-row { margin-top: 6px; padding: 6px; }
+.bb-cards-compact .bb-char-summary-scoreline { padding: 6px; margin-top: 6px; }
+.bb-cards-compact .bb-char-summary-footer { margin-top: 6px; }

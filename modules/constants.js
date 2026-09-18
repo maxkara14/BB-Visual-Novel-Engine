@@ -25,6 +25,8 @@ export const DEFAULT_SETTINGS = {
     vnMaxAdditionalRequests: 3,
     outputLanguage: 'chat',
     uiLanguage: 'auto',
+    hudCharacterSort: 'trust_desc',
+    hudCompactCards: false,
     useMacro: false,
     emotionalChoiceFraming: true,
     disableRelationshipTracker: false,

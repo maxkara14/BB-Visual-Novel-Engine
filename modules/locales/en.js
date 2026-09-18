@@ -1,5 +1,15 @@
 // Static extension UI text only. Never apply this catalogue to stored story data.
 export const EN = {
+    "Поиск персонажа": "Find a character",
+    "Сортировка персонажей": "Sort characters",
+    "Доверие: сначала выше": "Trust: highest first",
+    "Доверие: сначала ниже": "Trust: lowest first",
+    "Романтика: сначала выше": "Romance: highest first",
+    "По имени": "By name",
+    "Компактные карточки": "Compact cards",
+    "Сбросить поиск": "Clear search",
+    "Персонажи не найдены. Измените поиск.": "No matching characters. Try another search.",
+    "Показано:": "Showing:",
     "Сцена или записи изменились. Откройте редактор заново.": "The scene or entries changed. Reopen the editor.",
     "Проверьте длину текста. Для черты используйте «Название: описание».": "Check the text length. Use “Name: description” for a trait.",
     "Удалить запись из памяти? Баллы отношений и журнал останутся прежними. Удаление можно отменить.": "Delete this memory entry? Relationship scores and the log will stay unchanged. Deletion can be undone.",

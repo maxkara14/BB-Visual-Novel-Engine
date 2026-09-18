@@ -38,6 +38,10 @@ You can disable relationship tracking while keeping action generation. The `{{bb
 
 Expand a character card and open **How relationships add up** to see the starting chat or snapshot value, adjustments, effective changes, and totals for trust and romance. Net changes respect scale limits and active swipes; zero can mean that opposite events cancelled out.
 
+## Character navigation
+
+Above the cards, search by name, sort by trust (highest/lowest), romance, or name, and enable compact cards. Searching hides cards without deleting characters or clearing editor drafts. Sort and compact preferences persist; search resets when the chat or persona changes. Panel totals cover all characters, while the search counter shows matches.
+
 ## Memory and trait editor
 
 Expand a character card, open **Memory and trait editor**, select an entry, and save its revised text. Current soft and deep memories, archived memories, and traits are available. Traits use “Name: description” (up to 240 characters); memories allow up to 2000 characters.

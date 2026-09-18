@@ -6,6 +6,8 @@
 
 ### Unreleased — VNE-TEST
 
+- Добавлены поиск персонажей, сортировка и сохраняемый компактный вид без сброса редакторов при фильтрации.
+
 - Добавлен редактор воспоминаний и черт с удалением и отменой до 20 правок записи, без изменения баллов и журнала. Исправлена потеря архива импортированного снимка при пересчёте.
 
 - Добавлены статус и время импорта, понятные действия со снимками и подтверждение удаления основы с защитой от смены контекста.
@@ -44,6 +46,8 @@
 ## English
 
 ### Unreleased — VNE-TEST
+
+- Added character search, sorting, and persistent compact cards while preserving editor drafts during filtering.
 
 - Added memory and trait editing, deletion, and up to 20 undo steps per entry without changing scores or logs. Fixed imported archived memories being lost during recalculation.
 

@@ -1,9 +1,10 @@
+import { mountCharacterToolbar, syncCharacterToolbarContext } from './character-toolbar.js';
 import { buildMemoryEditorHtml, mountMemoryEditors } from './memory-editor-ui.js';
 import { refreshSnapshotControls } from './snapshot-controls.js';
 import { buildRelationshipBreakdownHtml } from './relationship-breakdown.js';
 import { t, ui, templateText, template } from './i18n.js';
 /* global SillyTavern */
-import { chat_metadata, saveChatDebounced } from '../../../../../script.js';
+import { chat_metadata, saveChatDebounced, saveSettingsDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { MODULE_NAME } from './constants.js';
 import { currentCalculatedStats, currentStoryMoments, socialParseDebug } from './state.js';
@@ -697,6 +698,7 @@ export function renderSocialHud() {
         return;
     }
     const context = SillyTavern.getContext?.();
+    syncCharacterToolbarContext(context || {}, getCurrentPersonaScopeKey());
     const chat = Array.isArray(context?.chat) ? context.chat : [];
     const lastChatMessage = chat.length > 0 ? chat[chat.length - 1] : null;
     const shouldShowLastUsedTone = !lastChatMessage || !lastChatMessage.is_user;
@@ -899,6 +901,7 @@ export function renderSocialHud() {
                 <div class="bb-route-card-stack">${cardsHtml}</div>
             `;
 
+            mountCharacterToolbar(charsBox, currentCalculatedStats, extension_settings[MODULE_NAME], context, getCurrentPersonaScopeKey(), saveSettingsDebounced);
             mountMemoryEditors(charsBox, {
                 getContext: () => SillyTavern.getContext(),
                 getPersonaKey: getCurrentPersonaScopeKey,
