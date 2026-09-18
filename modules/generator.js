@@ -1,7 +1,7 @@
 import { t, ui } from './i18n.js';
 import { buildOutputLanguageDirective } from './language.js';
 /* global SillyTavern */
-import { chat_metadata, saveChatDebounced, generateQuietPrompt } from '../../../../../script.js';
+import { chat_metadata, saveChatDebounced, saveSettingsDebounced, generateQuietPrompt } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { MODULE_NAME, OPTIONS_PROMPT, normalizeVnReplyLength, normalizeVnContextMessages } from './constants.js';
 import { 
@@ -184,7 +184,7 @@ function getOptionsChatKey(context) {
 
 function isCurrentOptionsOperation(token) {
     const operation = activeVnOptionsOperation;
-    if (!operation || operation.token !== token) return false;
+    if (extension_settings[MODULE_NAME]?.vnOptionsEnabled === false || !operation || operation.token !== token) return false;
     const context = SillyTavern.getContext();
     return context.chat === operation.chat
         && getOptionsChatKey(context) === operation.chatKey
@@ -1163,7 +1163,23 @@ export function tryBindPendingChoiceContextToMessage(msg) {
     return true;
 }
 
+export function setVnOptionsEnabled(enabled) {
+    const value = enabled !== false;
+    extension_settings[MODULE_NAME].vnOptionsEnabled = value;
+    if (!value) invalidateVnOptionsGeneration();
+    const bar = document.getElementById('bb-vn-action-bar');
+    if (bar) bar.hidden = !value;
+    const checkbox = document.getElementById('bb-vn-cfg-options-enabled');
+    if (checkbox) checkbox.checked = value;
+    resetVnOptionsContainer({ clear: true });
+    setVnGenerateButtonIdle();
+    if (value) restoreVNOptions(false);
+    window.dispatchEvent(new CustomEvent('bb-vn-options-enabled-changed'));
+    saveSettingsDebounced();
+}
+
 export async function bbVnGenerateOptionsFlow(request = []) {
+    if (extension_settings[MODULE_NAME]?.vnOptionsEnabled === false) return;
     const btn = jQuery('#bb-vn-btn-generate');
     const generationRequest = normalizeOptionsGenerationRequest(request);
     
@@ -1342,6 +1358,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
 }
 
 export function restoreVNOptions(autoOpen = false) {
+    if (extension_settings[MODULE_NAME]?.vnOptionsEnabled === false) return;
     const chat = SillyTavern.getContext().chat;
     if (!chat || chat.length === 0) {
         clearVNOptions();

@@ -11,6 +11,7 @@ import {
 import {
     bbVnGenerateOptionsFlow,
     clearSavedVNOptions,
+    setVnOptionsEnabled,
 } from './generator.js';
 import { injectCombinedSocialPrompt } from './social.js';
 import { notifyInfo } from './toasts.js';
@@ -48,6 +49,9 @@ function buildUtilityRow({ hasOptions = false, hasSavedOptions = false } = {}) {
             <button type="button" class="bb-vn-utility-panel" id="bb-vn-btn-cancel" title="Свернуть">
                 <i class="fa-solid fa-chevron-up"></i>
                 <span>Скрыть</span>
+            </button>
+            <button type="button" class="bb-vn-utility-panel" id="bb-vn-btn-disable" title="Выключить варианты VN. Включить снова: настройки VNE → Игра.">
+                <i class="fa-solid fa-power-off"></i><span>Выключить</span>
             </button>
         </div>
     `;
@@ -166,6 +170,7 @@ async function requestGuidedGeneration({ hasOptions = false } = {}) {
 }
 
 function bindVnUtilityActions({ hasOptions = false } = {}) {
+    jQuery('#bb-vn-btn-disable').off('click').on('click', () => setVnOptionsEnabled(false));
     const optionsContainer = jQuery('#bb-vn-options-container');
 
     jQuery('#bb-vn-btn-cancel').off('click').on('click', () => {
@@ -198,6 +203,7 @@ function bindVnUtilityActions({ hasOptions = false } = {}) {
 }
 
 export function renderVnActionPanel(autoOpen = true) {
+    if (extension_settings[MODULE_NAME]?.vnOptionsEnabled === false) return;
     const optionsContainer = resetVnOptionsContainer();
     optionsContainer.html(`${buildEmptyPanelHtml()}${buildUtilityRow({ hasOptions: false, hasSavedOptions: false })}`);
     bindVnUtilityActions({ hasOptions: false });
@@ -213,6 +219,7 @@ export function renderVnActionPanel(autoOpen = true) {
 }
 
 export function renderVNOptionsFromData(parsedOptions, autoOpen = false) {
+    if (extension_settings[MODULE_NAME]?.vnOptionsEnabled === false) return;
     let optionsHtml = '';
     const useEmotionalChoiceFraming = !!extension_settings[MODULE_NAME].emotionalChoiceFraming;
 
@@ -319,9 +326,15 @@ export function renderVNOptionsFromData(parsedOptions, autoOpen = false) {
 window['renderVNOptionsFromData'] = renderVNOptionsFromData;
 
 export function injectVNActionsUI() {
-    if (document.getElementById('bb-vn-action-bar')) return;
+    const existing = document.getElementById('bb-vn-action-bar');
+    if (existing) {
+        existing.hidden = extension_settings[MODULE_NAME]?.vnOptionsEnabled === false;
+        return;
+    }
     const barHtml = t('<div id="bb-vn-action-bar" style="display: flex;"><div id="bb-vn-btn-generate" class="bb-vn-main-btn" title="Открыть панель действий VN"></div><div id="bb-vn-options-container"></div></div>');
     jQuery('#send_form').prepend(barHtml);
+    const bar = document.getElementById('bb-vn-action-bar');
+    if (bar) bar.hidden = extension_settings[MODULE_NAME]?.vnOptionsEnabled === false;
     setVnGenerateButtonIdle();
 
     const ta = document.querySelector('#send_textarea');

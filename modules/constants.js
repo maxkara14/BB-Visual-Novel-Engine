@@ -11,6 +11,7 @@ export const DEFAULT_IMPACT_VALUES = {
 export const DEFAULT_SETTINGS = {
     autoSend: true,
     autoGen: false,
+    vnOptionsEnabled: true,
     useCustomApi: false,
     customApiUrl: 'https://api.groq.com/openai/v1',
     customApiKey: '',

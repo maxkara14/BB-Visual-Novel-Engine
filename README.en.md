@@ -142,6 +142,10 @@ Under “Language and replies”, “Messages in option context” selects the l
 
 This controls VNE’s history block, not total input tokens or the output limit. Persona, author’s note and summary still use macro substitution; Scene Director context is retained. Character profiles, memories and relationships are not separately copied into this block. The main connection may receive them through Tavern context, VNE injection or the {{bb_vn}} macro. Connection profiles and Custom API receive the assembled prompt; they do not automatically inherit all Tavern context. This setting does not cap extra preset or macro content.
 
+### Disabling options
+
+“Turn off” inside “VN Actions” hides the entire panel, including its heading. Restore it in VNE settings → “Gameplay” → “VN options”. This is a global setting saved across reloads. The current request is cancelled and queued auto-generation is cleared; relationships, memory and profile/trait generation remain available. Saved options are kept. Re-enabling restores the panel without a new request; auto-generation resumes on the next character reply.
+
 ## Author
 
 [BruniikBron: Lo-Fi & Mods](https://bblofi.online/) · [Telegram](https://t.me/Brun11kBr0n)

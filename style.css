@@ -2801,3 +2801,6 @@ body.bb-hud-popup-active #bb-social-toast-container {
 @media (prefers-reduced-motion: reduce) {
     #bb-social-settings-wrapper .bb-vn-settings-section > summary::after { transition: none; }
 }
+
+#bb-vn-action-bar[hidden] { display: none !important; }
+#bb-vn-btn-disable { grid-column: 1 / -1; }

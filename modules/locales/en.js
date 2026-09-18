@@ -1,5 +1,8 @@
 // Static extension UI text only. Never apply this catalogue to stored story data.
 export const EN = {
+    "Варианты VN": "VN options",
+    "Выключить": "Turn off",
+    "Выключить варианты VN. Включить снова: настройки VNE → Игра.": "Turn off VN options. Re-enable in VNE settings → Gameplay.",
     "Сообщений в контексте вариантов": "Messages in option context",
     "Последние 1–100 сообщений, по умолчанию 10. Последний ответ остаётся ориентиром сцены. Это объём истории для вариантов, а не лимит токенов ответа; основное подключение может добавлять контекст SillyTavern.": "The latest 1–100 messages, 10 by default. The last reply remains the scene anchor. This controls history for options, not output tokens; the main connection may add SillyTavern context.",
     "Игра": "Gameplay",

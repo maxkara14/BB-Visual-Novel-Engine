@@ -6,6 +6,8 @@
 
 ### Unreleased — VNE-TEST
 
+- Добавлено независимое отключение панели вариантов с сохранением отношений и памяти; повторное включение через настройки «Игра».
+
 - Добавлен выбор 1–100 последних сообщений для контекста вариантов; по умолчанию 10.
 
 - Настройки собраны в шесть компактных раскрывающихся разделов по примеру Enhance Gen.
@@ -52,6 +54,8 @@
 ## English
 
 ### Unreleased — VNE-TEST
+
+- Added independent disabling of the option panel while keeping relationships and memory; re-enable in Gameplay settings.
 
 - Added a choice of 1–100 recent messages for option context; defaults to 10.
 

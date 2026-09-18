@@ -17,6 +17,7 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
     const rendered = [];
     const errors = [];
     const events = [];
+    const browserListeners = new Map();
     const logs = [];
     const timers = new Map();
     let timerId = 0;
@@ -70,9 +71,9 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
         SillyTavern: { getContext: () => context },
         jQuery: arg => typeof arg === 'function' ? ready.push(arg) : button,
         HTMLTextAreaElement: class {},
-        document: { querySelector: () => null, createElement: createNode },
-        CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init.detail; } },
-        window: { dispatchEvent: event => events.push(event), setInterval: () => 1, renderVNOptionsFromData: (data, open) => {
+        document: { getElementById: () => null, querySelector: () => null, createElement: createNode },
+        CustomEvent: class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+        window: { addEventListener: (name, callback) => browserListeners.set(name, callback), dispatchEvent: event => {events.push(event); browserListeners.get(event.type)?.(event);}, setInterval: () => 1, renderVNOptionsFromData: (data, open) => {
             rendered.push({ data, open }); loading = false;
         } },
         fetch: (_url, init) => { const pending = request('custom', init.signal); calls.at(-1).body = JSON.parse(init.body); return pending; },
@@ -91,7 +92,7 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
             },
         } }],
         ['../../../../../script.js', {
-            chat_metadata: {}, saveChatDebounced: () => { saves++; },
+            saveSettingsDebounced() {}, chat_metadata: {}, saveChatDebounced: () => { saves++; },
             generateQuietPrompt: args => { const pending = request('main'); calls.at(-1).args = args; return pending; },
         }],
         ['../../../../extensions.js', { extension_settings: settings }],
@@ -151,7 +152,7 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
     }
     const state = cache.get('./state.js').namespace;
     return {
-        window: sandbox.window, api: generator.namespace, state, context, calls, rendered, errors, settings, events, logs, profileState, createNode,
+        document: sandbox.document, window: sandbox.window, api: generator.namespace, state, context, calls, rendered, errors, settings, events, logs, profileState, createNode,
         connections: cache.get('./connections.js').namespace,
         async loadApi(name) {
             const module = await load(name);
@@ -1261,4 +1262,43 @@ test('short history is retained in full and empty chat makes no request', async 
     const h=await harness();h.settings['BB-Visual-Novel'].vnContextMessages=100;
     let run=h.api.bbVnGenerateOptionsFlow();assert.match(h.calls[0].args.quietPrompt,/Initial scene/);h.respond(0);await run;
     h.context.chat=[];await h.api.bbVnGenerateOptionsFlow();assert.equal(h.calls.length,1);assert.equal(h.loading,false);
+});
+
+
+test('disabling hides the whole bar, syncs settings, and preserves saved choices', async () => {
+ const h=await harness(); const bar={hidden:false}, checkbox={checked:true};
+ h.document.getElementById=id=>id==='bb-vn-action-bar'?bar:id==='bb-vn-cfg-options-enabled'?checkbox:null;
+ const run=h.api.bbVnGenerateOptionsFlow();h.respond(0);await run;
+ const saved=JSON.stringify(h.context.chat);
+ h.api.setVnOptionsEnabled(false);assert.equal(bar.hidden,true);assert.equal(checkbox.checked,false);
+ h.api.restoreVNOptions(true);await h.api.bbVnGenerateOptionsFlow();
+ assert.equal(h.calls.length,1);assert.equal(h.rendered.length,1);assert.equal(JSON.stringify(h.context.chat),saved);
+ assert.equal(h.settings['BB-Visual-Novel'].disableRelationshipTracker,undefined);
+ h.api.setVnOptionsEnabled(true);assert.equal(bar.hidden,false);assert.equal(checkbox.checked,true);
+ assert.equal(h.calls.length,1);assert.equal(h.rendered.length,2);assert.equal(h.rendered[1].open,false);
+ assert.ok(h.events.some(e=>e.type==='bb-vn-options-enabled-changed'));
+});
+
+test('disabling invalidates late results from every connection and blocks further requests',async()=>{
+ for(const source of ['main','profile','custom']){
+  const h=await harness();Object.assign(h.settings['BB-Visual-Novel'],{vnGenerationSource:source,vnConnectionProfileId:'profile-a'});
+  const run=h.api.bbVnGenerateOptionsFlow();await h.waitForCalls(1);
+  h.api.setVnOptionsEnabled(false);h.respond(0);await run;
+  assert.equal(h.saves,0);assert.equal(h.rendered.length,0);assert.equal(h.errors.length,0);
+  await h.api.bbVnGenerateOptionsFlow();assert.equal(h.calls.length,1);
+  h.api.setVnOptionsEnabled(true);assert.equal(h.calls.length,1);
+ }
+});
+
+
+test('disabling clears pending auto-generation and re-enabling does not requeue it',async()=>{
+ const h=await harness({boot:true});const pending=new Map();let id=0;
+ h.window.setTimeout=callback=>{pending.set(++id,callback);return id;};
+ h.window.clearTimeout=key=>pending.delete(key);
+ h.settings['BB-Visual-Novel'].autoGen=true;
+ await h.emit('MESSAGE_RECEIVED');assert.equal(pending.size,1);
+ h.api.setVnOptionsEnabled(false);assert.equal(pending.size,0);
+ await h.emit('MESSAGE_RECEIVED');assert.equal(pending.size,0);
+ h.api.setVnOptionsEnabled(true);assert.equal(pending.size,0);assert.equal(h.calls.length,0);
+ await h.emit('MESSAGE_RECEIVED');assert.equal(pending.size,1);
 });

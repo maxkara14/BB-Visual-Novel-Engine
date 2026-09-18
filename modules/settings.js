@@ -7,7 +7,7 @@ import { extension_settings } from '../../../../extensions.js';
 import { MODULE_NAME, normalizeVnContextMessages, normalizeImpactSettings, normalizeImpactValue, normalizeVnReplyLength, resolveImpactScaleSettings } from './constants.js';
 import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog, bindActivePersonaState, getCurrentPersonaScopeKey, mergeCharacterRecords, resolveCharacterIdentity, exportActivePersonaSnapshot, importActivePersonaSnapshot, clearActivePersonaSnapshot, markSnapshotReplayMessage, getLatestAssistantMessageEntry } from './social.js';
 import { notifySuccess, notifyInfo, notifyError, showHudToast } from './toasts.js';
-import { restoreVNOptions, clearSavedVNOptions, invalidateVnOptionsGeneration } from './generator.js';
+import { restoreVNOptions, setVnOptionsEnabled, clearSavedVNOptions, invalidateVnOptionsGeneration } from './generator.js';
 import { normalizeRequestTimeout, normalizeCustomApiMaxTokens, normalizeRequestError, getCustomApiIdentity } from './requests.js';
 import { escapeHtml, createTextOption } from './utils.js';
 import { resolveVnGenerationSource } from './connections.js';
@@ -265,6 +265,7 @@ export function setupExtensionSettings() {
                     <summary><i class="fa-solid fa-gamepad bb-vn-section-icon" aria-hidden="true"></i><span>Игра</span></summary>
                     <div class="bb-vn-settings-section-body">
                         <div class="bb-vn-settings-toggle-grid">
+                            <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-options-enabled" ${s.vnOptionsEnabled !== false ? 'checked' : ''}><span>Варианты VN</span></label>
                             <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-autosend" ${s.autoSend ? 'checked' : ''}><span>Авто-отправка при выборе</span></label>
                             <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-autogen" ${s.autoGen ? 'checked' : ''}><span>Авто-показ вариантов действий</span></label>
                             <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-emotional-choice" ${s.emotionalChoiceFraming ? 'checked' : ''}><span>Тон и прогноз вариантов</span></label>
@@ -416,6 +417,9 @@ export function setupExtensionSettings() {
         const event = snapshotContext.event_types?.[name];
         if (event) snapshotContext.eventSource?.on(event, () => refreshSnapshotControls(bindActivePersonaState().scopeState));
     }
+    jQuery('#bb-vn-cfg-options-enabled').on('change', function() {
+        setVnOptionsEnabled(this.checked);
+    });
     jQuery('#bb-vn-cfg-context-messages').on('change', function() {
         const value = normalizeVnContextMessages(jQuery(this).val());
         extension_settings[MODULE_NAME].vnContextMessages = value;
