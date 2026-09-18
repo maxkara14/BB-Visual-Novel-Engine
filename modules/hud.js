@@ -1,3 +1,4 @@
+import { buildRelationshipBreakdownHtml } from './relationship-breakdown.js';
 import { t, ui, templateText, template } from './i18n.js';
 /* global SillyTavern */
 import { chat_metadata, saveChatDebounced } from '../../../../../script.js';
@@ -446,6 +447,11 @@ function buildCharacterDescriptionTemplate({ charName = '', stats = {}, displayS
     ].join('\n');
 }
 
+function relationshipBreakdownHtml(stats, name) {
+    const scope = chat_metadata.bb_vn_persona_states?.[chat_metadata.bb_vn_active_persona_scope] || {};
+    return buildRelationshipBreakdownHtml(stats, scope, name);
+}
+
 function buildCharacterCardHtml(charName = '') {
     const stats = currentCalculatedStats[charName];
     if (!stats) return '';
@@ -612,6 +618,7 @@ function buildCharacterCardHtml(charName = '') {
                 </div>
             </div>
             <div class="bb-char-body">
+                ${relationshipBreakdownHtml(stats, charName)}
                 <div class="bb-char-route-meta">
                     <div class="bb-char-meta-card"><span class="bb-char-meta-label">Последний сдвиг</span><strong style="color: ${lastShift ? lastShift.color : '#f8fafc'};">${escapeHtml(lastShift ? lastShift.full : t('Без сдвига'))}</strong></div>
                     <div class="bb-char-meta-card"><span class="bb-char-meta-label">Динамика</span><strong style="color: #cbd5e1;">${escapeHtml(t(getTrendNarrative(stats.history || [])))}</strong></div>
@@ -846,7 +853,8 @@ export function renderSocialHud() {
                                         <button type="button" class="bb-char-edit-btn" data-char="${escapeHtml(charName)}" title="Настройки персонажа" style="background: none; border: none; color: #64748b; cursor: pointer; padding: 0; font-size: 14px; min-width: auto; margin-top: -2px;"><i class="fa-solid fa-sliders"></i></button>
                                     </div>
                                 </div>
-                                <div class="bb-char-route-meta">
+                                ${relationshipBreakdownHtml(stats, charName)}
+                <div class="bb-char-route-meta">
                                     <div class="bb-char-meta-card"><span class="bb-char-meta-label">Последний сдвиг</span><strong style="color: ${lastShift ? lastShift.color : '#f8fafc'};">${escapeHtml(lastShiftPoints)}</strong></div>
                                     <div class="bb-char-meta-card"><span class="bb-char-meta-label">Динамика</span><strong style="color: #cbd5e1;">${escapeHtml(t(getTrendNarrative(stats.history || [])))}</strong></div>
                                 </div>
@@ -887,7 +895,7 @@ export function renderSocialHud() {
             `;
 
             jQuery('.bb-char-card').off('click').on('click', function(e) {
-                if (jQuery(e.target).closest('.bb-char-edit-btn, .bb-char-editor, .bb-char-body, .bb-btn-crystallize-pos, .bb-btn-crystallize-neg').length) return;
+                if (jQuery(e.target).closest('.bb-char-edit-btn, .bb-char-editor, .bb-char-body, .bb-relationship-breakdown, .bb-btn-crystallize-pos, .bb-btn-crystallize-neg').length) return;
                 const card = jQuery(this);
                 setCharacterCardExpanded(card, !card.hasClass('expanded'));
             });

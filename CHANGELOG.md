@@ -6,6 +6,8 @@
 
 ### Unreleased — VNE-TEST
 
+- Добавлена расшифровка доверия и романтики в карточке: основа, поправки, фактические изменения и итог, включая импорт и пределы шкал.
+
 - Добавлен настраиваемый лимит токенов ответа своего API; уточнена ошибка ограничения длины.
 
 Изменения 17–18 сентября 2026 года. Пока только в тестовой ветке, без нового номера релиза. В manifest сохранено `3.1.0 Release`.
@@ -38,6 +40,8 @@
 ## English
 
 ### Unreleased — VNE-TEST
+
+- Added a character-card breakdown of trust and romance: baseline, adjustments, effective changes, and totals, including snapshots and scale limits.
 
 - Added a configurable Custom API response token limit and clarified length-limit errors.
 

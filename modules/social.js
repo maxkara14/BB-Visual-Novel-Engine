@@ -1,3 +1,4 @@
+import { rememberRelationshipStart } from './relationship-breakdown.js';
 import { t, ui } from './i18n.js';
 import { parseSnapshot } from './snapshot.js';
 import { buildOutputLanguageDirective } from './language.js';
@@ -2681,6 +2682,7 @@ export function recalculateAllStats(isNewMessage = false) {
         normalizedStats.affinity = clampRelationshipValue((normalizedStats.affinity || 0) + affinityOffset);
         normalizedStats.romance = clampRelationshipValue((normalizedStats.romance || 0) + romanceOffset);
         newStats[safeName] = normalizedStats;
+        rememberRelationshipStart(normalizedStats, scopeState, safeName);
     });
     const chat = SillyTavern.getContext().chat;
     let latestChoiceContext = null;
@@ -2783,6 +2785,7 @@ export function recalculateAllStats(isNewMessage = false) {
                 if (!newStats[cName]) {
                     let base = chat_metadata['bb_vn_char_bases']?.[cName] ?? 0;
                     newStats[cName] = { affinity: base, history: [], status: coerceUserFacingStatus("", base, "", 0), memories: { soft: [], deep: [] }, core_traits: [] };
+                    rememberRelationshipStart(newStats[cName], scopeState, cName);
                 }
                 if (!newStats[cName].core_traits) newStats[cName].core_traits = [];
                 newStats[cName].core_traits.push(t);
@@ -2923,6 +2926,7 @@ export function recalculateAllStats(isNewMessage = false) {
                     if (chat_metadata['bb_vn_char_bases_romance']?.[charName] !== undefined) baseRomance = parseInt(chat_metadata['bb_vn_char_bases_romance'][charName]);
 
                     newStats[charName] = { affinity: base, romance: baseRomance, history: [], status: coerceUserFacingStatus(currentStatus, base, "", f_delta), memories: { soft: [], deep: [] }, core_traits: [] };
+                    rememberRelationshipStart(newStats[charName], scopeState, charName);
                     if (isBrandNew && shouldRecordJournal) {
                         const introMoment = maybeAddStoryMoment({ type: 'intro', char: charName, title: 'Новый контакт', text: `${charName} появился в трекере отношений.` });
                         if (idx === chat.length - 1) {

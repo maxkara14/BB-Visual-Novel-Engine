@@ -1,5 +1,15 @@
 // Static extension UI text only. Never apply this catalogue to stored story data.
 export const EN = {
+    "Из чего складываются отношения": "How relationships add up",
+    "Составляющая": "Component",
+    "Основа из снимка": "Snapshot baseline",
+    "Начальное значение": "Starting value",
+    "Поправка базового значения": "Base value adjustment",
+    "Поправка при расчёте основы": "Starting calculation adjustment",
+    "Изменения в чате (фактически)": "Chat changes (effective)",
+    "Итого": "Total",
+    "Показан суммарный эффект событий активных свайпов с учётом пределов шкал −100…+100. После импорта учитываются только события, допущенные к пересчёту поверх снимка.": "Shows the net effect of active-swipe events within the −100…+100 scale limits. After import, only events eligible for replay on top of the snapshot are counted.",
+    "Нулевой итог не означает отсутствие событий: положительные и отрицательные изменения могут компенсировать друг друга. Стрелка у балла показывает последнее изменение, а не сумму.": "A zero total does not mean there were no events: positive and negative changes can cancel out. The arrow beside the score shows the latest change, not the sum.",
     "Лимит токенов ответа (своё API)": "Response token limit (Custom API)",
     "0 — автоматически, как раньше. Вручную: 256–131072 токена на запрос. Рассуждения могут входить в этот бюджет. Предел зависит от модели и провайдера; настройка общая для вариантов, описаний и черт и не меняет лимиты основного подключения или профиля.": "0 keeps the previous automatic budget. Manual: 256–131072 tokens per request. Reasoning may share this budget. Model and provider limits apply; this setting covers options, descriptions, and traits without changing the main connection or profile limits.",
     "API сообщил об ограничении длины ответа. Для своего API увеличьте «Лимит токенов ответа» в «Дополнительно» или сократите запрос. Рассуждения могут расходовать тот же бюджет; возможен также предел контекста модели.": "The API reported a length limit. For Custom API, increase the Response token limit under Advanced or shorten the request. Reasoning may share the same budget; the model context limit may also be responsible.",

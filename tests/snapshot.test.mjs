@@ -22,7 +22,7 @@ async function harness() {
         cache.set(name,mod);return mod;
     }
     const social=load('./social.js');await social.link(load);await social.evaluate();
-    return {api:social.namespace,snapshot:cache.get('./snapshot.js').namespace,state:cache.get('./state.js').namespace,context,metadata,settings,get saves(){return saves;}};
+    return {breakdown:cache.get('./relationship-breakdown.js').namespace,api:social.namespace,snapshot:cache.get('./snapshot.js').namespace,state:cache.get('./state.js').namespace,context,metadata,settings,get saves(){return saves;}};
 }
 const fixture = () => ({schema_version:1,module:'BB-Visual-Novel',persona_label:'Original persona',data:{characters:{Alex:{affinity:25,romance:0,status:'Friend',history:[],memories:{soft:[],deep:[],archive:[]},core_traits:[]}},char_bases:{Alex:3},char_bases_romance:{},global_log:[{time:'12:00',type:'system',text:'Saved log'}],story_moments:[]}});
 
@@ -120,4 +120,46 @@ test('live parser diagnostics follow UI language without translating message tex
  h.settings['BB-Visual-Novel'].uiLanguage='ru';
  h.api.scanAndCleanMessage(message,undefined,true);
  assert.equal(h.state.socialParseDebug.details,'В текущем ответе нет social_updates');
+});
+
+test('relationship explanation follows live totals, imports, limits, swipes and clear',async()=>{
+ const h=await harness();const {scopeState}=h.api.bindActivePersonaState();scopeState.char_bases={Alex:99};
+ const scope=h.api.getCurrentPersonaScopeKey();
+ const event={name:'Alex',friendship_impact:'minor_positive',romance_impact:'none',reason:'A thoughtful present',scope};
+ const msg={name:'Alex',mes:'Alex opens the gift',swipe_id:0,swipes:['Alex opens the gift','Alex is disappointed'],extra:{bb_social_swipes:{0:[event],1:[{...event,friendship_impact:'minor_negative',reason:'An unwelcome interruption'}]}}};
+ h.context.chat.push(msg);h.api.recalculateAllStats(false);
+ const get=()=>h.breakdown.getRelationshipBreakdown(h.state.currentCalculatedStats.Alex,scopeState,'Alex');
+ assert.equal(get().affinity.origin,99);assert.equal(get().affinity.change,1);assert.equal(get().affinity.total,100);
+ msg.swipe_id=1;h.api.recalculateAllStats(false);assert.equal(get().affinity.change,-2);assert.equal(get().affinity.total,97);
+ h.api.importActivePersonaSnapshot(fixture());h.api.recalculateAllStats(false);
+ assert.equal(get().imported,true);assert.equal(get().affinity.origin,25);assert.equal(get().affinity.change,0);
+ scopeState.char_bases.Alex=8;h.api.recalculateAllStats(false);assert.equal(get().affinity.adjustment,5);assert.equal(get().affinity.total,30);
+ h.api.markSnapshotReplayMessage(0,1,'test');h.api.recalculateAllStats(false);assert.equal(get().affinity.change,-2);assert.equal(get().affinity.total,28);
+ h.api.clearActivePersonaSnapshot();h.api.recalculateAllStats(false);assert.equal(get().imported,false);assert.equal(get().affinity.total,97);
+ const exported=JSON.stringify(h.api.exportActivePersonaSnapshot()),metadata=JSON.stringify(h.metadata);
+ h.settings['BB-Visual-Novel'].uiLanguage='en';
+ const html=h.breakdown.buildRelationshipBreakdownHtml(h.state.currentCalculatedStats.Alex,scopeState,'Alex');
+ assert.match(html,/How relationships add up/);assert.match(html,/Chat changes \(effective\)/);assert.match(html,/97/);
+ assert.equal(JSON.stringify(h.metadata),metadata);assert.equal(JSON.stringify(h.api.exportActivePersonaSnapshot().data),JSON.stringify(JSON.parse(exported).data));
+});
+test('breakdown accounts for imported base clamping and zero net history',async()=>{
+ const h=await harness();const data=fixture();data.data.characters.Alex.affinity=99;
+ h.api.importActivePersonaSnapshot(data);const {scopeState}=h.api.bindActivePersonaState();scopeState.char_bases.Alex=13;
+ h.api.recalculateAllStats(false);const d=h.breakdown.getRelationshipBreakdown(h.state.currentCalculatedStats.Alex,scopeState,'Alex');
+ assert.equal(d.affinity.origin,99);assert.equal(d.affinity.adjustment,10);assert.equal(d.affinity.initialLimit,-9);assert.equal(d.affinity.change,0);assert.equal(d.affinity.total,100);
+ const stats={affinity:0,romance:0,history:[{affinityDelta:-2},{affinityDelta:2}]};
+ const neutral=h.breakdown.getRelationshipBreakdown(stats,{},'Alex');assert.equal(neutral.affinity.change,0);
+ assert.equal(neutral.affinity.total,0);
+});
+
+test('romance breakdown uses effective negative limit and platonic filtering',async()=>{
+ const h=await harness();const {scopeState}=h.api.bindActivePersonaState();scopeState.char_bases_romance={Alex:-99};
+ const scope=h.api.getCurrentPersonaScopeKey();
+ h.context.chat.push({name:'Alex',mes:'Alex refuses',swipe_id:0,extra:{bb_social_swipes:{0:[{name:'Alex',friendship_impact:'none',romance_impact:'minor_negative',reason:'Rejected a romantic invitation',scope}]}}});
+ h.api.recalculateAllStats(false);
+ let d=h.breakdown.getRelationshipBreakdown(h.state.currentCalculatedStats.Alex,scopeState,'Alex');
+ assert.equal(d.romance.origin,-99);assert.equal(d.romance.change,-1);assert.equal(d.romance.total,-100);
+ scopeState.platonic_chars=['Alex'];h.api.recalculateAllStats(false);
+ d=h.breakdown.getRelationshipBreakdown(h.state.currentCalculatedStats.Alex,scopeState,'Alex');
+ assert.equal(d.romance.change,0);assert.equal(d.romance.total,-99);
 });

@@ -36,6 +36,8 @@ You can reroll, add a preference through **Guidance**, show options automaticall
 
 You can disable relationship tracking while keeping action generation. The `{{bb_vn}}` macro allows manual placement of the tracker instructions.
 
+Expand a character card and open **How relationships add up** to see the starting chat or snapshot value, adjustments, effective changes, and totals for trust and romance. Net changes respect scale limits and active swipes; zero can mean that opposite events cancelled out.
+
 ## Connections and languages
 
 | Setting | Behavior |
