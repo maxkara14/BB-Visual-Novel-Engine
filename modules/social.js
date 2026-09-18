@@ -1,4 +1,5 @@
 import { ui } from './i18n.js';
+import { parseSnapshot } from './snapshot.js';
 import { buildOutputLanguageDirective } from './language.js';
 /* global SillyTavern */
 import { setExtensionPrompt, chat_metadata, saveChatDebounced, extension_prompt_roles, extension_prompt_types, callPopup } from '../../../../../script.js';
@@ -1159,10 +1160,7 @@ export function exportActivePersonaSnapshot() {
 }
 
 export function importActivePersonaSnapshot(rawSnapshot = '') {
-    const parsedSnapshot = typeof rawSnapshot === 'string' ? JSON.parse(String(rawSnapshot || '')) : rawSnapshot;
-    const snapshotData = parsedSnapshot?.data && typeof parsedSnapshot.data === 'object' ? parsedSnapshot.data : parsedSnapshot;
-    if (!snapshotData || typeof snapshotData !== 'object') throw new Error('INVALID_SNAPSHOT');
-    if (!snapshotData.characters || typeof snapshotData.characters !== 'object') throw new Error('INVALID_SNAPSHOT_CHARACTERS');
+    const { snapshot: parsedSnapshot, data: snapshotData } = parseSnapshot(rawSnapshot);
 
     const { scopeState } = bindActivePersonaState();
     const chat = SillyTavern.getContext().chat || [];
@@ -1173,7 +1171,8 @@ export function importActivePersonaSnapshot(rawSnapshot = '') {
         normalizedCharacters[safeName] = normalizeImportedCharacterStats(stats);
     });
 
-    scopeState.snapshot_restore_state = {
+    // Replacing an imported baseline must not discard the pre-import recovery point.
+    if (!scopeState.snapshot_baseline || !scopeState.snapshot_restore_state) scopeState.snapshot_restore_state = {
         char_bases: cloneJsonData(scopeState.char_bases, {}),
         char_bases_romance: cloneJsonData(scopeState.char_bases_romance, {}),
         ignored_chars: cloneJsonData(scopeState.ignored_chars, []),

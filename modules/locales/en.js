@@ -1,5 +1,17 @@
 // Static extension UI text only. Never apply this catalogue to stored story data.
 export const EN = {
+    "Активная персона:": "Active persona:",
+    "Импорт снимка состояния": "Import state snapshot",
+    "Файл:": "File:", "Персона в файле:": "Persona in the file:", "Не указана": "Not specified", "Не указан": "Not specified", "Формат:": "Format:", "Экспорт:": "Exported:",
+    "Персонажей:": "Characters:", "Записей журнала:": "Log entries:", "Событий дневника:": "Diary events:",
+    "Будут заменены текущая база отношений, память, черты, профили, скрытые и платонические персонажи, журнал и дневник активной персоны. Это замена, а не объединение.": "The active persona's relationship baseline, memories, traits, profiles, hidden and platonic character lists, log, and diary will be replaced. This replaces data; it does not merge it.",
+    "Сообщения чата не меняются. Для возврата к состоянию до первого импорта используйте «Очистить snapshot-базу». Старые события до точки импорта повторно не учитываются; новые события продолжают считаться.": "Chat messages are unchanged. Use Clear snapshot baseline to return to the state before the first import. Earlier events are not counted twice; new events continue to count.",
+    "Продолжить импорт?": "Continue with import?",
+    "Снимок слишком большой. Максимальный размер — 20 МиБ.": "The snapshot is too large. Maximum size: 20 MiB.",
+    "Этот снимок создан не Visual Novel Engine.": "This snapshot was not created by Visual Novel Engine.",
+    "Версия снимка не поддерживается. Импорт отменён.": "Unsupported snapshot version. Import cancelled.",
+    "Чат или персона изменились во время импорта. Выберите файл заново.": "The chat or persona changed during import. Select the file again.",
+
     "Похожий персонаж найден": "Similar character found", "очень похож на": "looks very similar to", "Слить их сейчас в одного персонажа?": "Merge them into one character now?", "Перед слиянием лучше сделать бэкап снапшотом.": "Export a snapshot backup before merging.",
     "Возможный дубль: «": "Possible duplicate: «", "» похоже на «": "» resembles «", "». Проверь объединение.": "». Review the merge suggestion.",
     "Новая связь:": "New relationship:", "Этот персонаж впервые появился в трекере.": "This character has appeared in the tracker for the first time.", "Задайте базовое отношение к": "Set the initial attitude toward", "(от -100 до 100).": "(from -100 to 100).", "0 — незнакомец, 50 — друг, -50 — враг.": "0 — stranger, 50 — friend, -50 — enemy.",

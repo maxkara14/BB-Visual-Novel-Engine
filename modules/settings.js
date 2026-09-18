@@ -10,6 +10,7 @@ import { normalizeRequestTimeout, normalizeRequestError, getCustomApiIdentity } 
 import { escapeHtml, createTextOption } from './utils.js';
 import { resolveVnGenerationSource } from './connections.js';
 import { normalizeOutputLanguage } from './language.js';
+import { confirmSnapshotFile } from './snapshot.js';
 import { mountVnConnectionControls } from './connection-ui.js';
 import { normalizeJsonMode, normalizeAdditionalRequests } from './structured-output.js';
 
@@ -810,14 +811,34 @@ export function setupExtensionSettings() {
         const file = this.files?.[0];
         if (!file) return;
         try {
-            const raw = await file.text();
-            const result = importActivePersonaSnapshot(raw);
+            const result = await confirmSnapshotFile(file, {
+                getContext: () => SillyTavern.getContext(),
+                getPersonaKey: getCurrentPersonaScopeKey,
+                confirm: summary => SillyTavern.getContext().callPopup(ui`
+                    <h3>Импорт снимка состояния</h3>
+                    <p>Файл: <strong>${escapeHtml(file.name)}</strong></p>
+                    <p>Персона в файле: ${escapeHtml(summary.persona || t('Не указана'))}</p>
+                    <p>Активная персона: ${escapeHtml(SillyTavern.getContext().substituteParams('{{user}}'))}</p>
+                    <p>Формат: ${escapeHtml(summary.format)} · Экспорт: ${escapeHtml(summary.exportedAt || t('Не указан'))}</p>
+                    <p>Персонажей: ${summary.characters} · Записей журнала: ${summary.logs} · Событий дневника: ${summary.moments}</p>
+                    <p>Будут заменены текущая база отношений, память, черты, профили, скрытые и платонические персонажи, журнал и дневник активной персоны. Это замена, а не объединение.</p>
+                    <p>Сообщения чата не меняются. Для возврата к состоянию до первого импорта используйте «Очистить snapshot-базу». Старые события до точки импорта повторно не учитываются; новые события продолжают считаться.</p>
+                    <p>Продолжить импорт?</p>`, 'confirm'),
+                apply: importActivePersonaSnapshot,
+            });
+            if (!result) return;
             saveChatDebounced();
             recalculateAllStats(false);
             notifySuccess(ui`Snapshot импортирован: ${result.characters} персонажей. Старые события до точки импорта больше не наслаиваются повторно.`);
         } catch (error) {
             console.error('[BB VN] Snapshot import failed.');
-            notifyError(t("Не удалось импортировать snapshot. Проверьте JSON-файл."));
+            const messages = {
+                SNAPSHOT_TOO_LARGE: 'Снимок слишком большой. Максимальный размер — 20 МиБ.',
+                SNAPSHOT_WRONG_MODULE: 'Этот снимок создан не Visual Novel Engine.',
+                SNAPSHOT_UNSUPPORTED_VERSION: 'Версия снимка не поддерживается. Импорт отменён.',
+                SNAPSHOT_CONTEXT_CHANGED: 'Чат или персона изменились во время импорта. Выберите файл заново.',
+            };
+            notifyError(t(messages[error.message] || 'Не удалось импортировать snapshot. Проверьте JSON-файл.'));
         } finally {
             jQuery(this).val('');
         }
