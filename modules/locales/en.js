@@ -1,5 +1,14 @@
 // Static extension UI text only. Never apply this catalogue to stored story data.
 export const EN = {
+    "Режим макроса активен. Прямой {{bb_vn}} в generate_data не найден, возможно он уже был развёрнут пресетом ранее.": "Macro mode is active. No literal {{bb_vn}} was found in generate_data; the preset may have already expanded it.",
+    "Макрос {{bb_vn}} внедрён:": "Macro {{bb_vn}} injected:",
+    "Проверка текущего ответа": "Checking the current response",
+    "HTML-подобный блок найден, но не удалось распарсить": "An HTML-like block was found but could not be parsed",
+    "В текущем ответе нет social_updates": "No social_updates in the current response",
+    "Текущий ответ пуст или social_updates отсутствуют": "The current response is empty or has no social_updates",
+    "Ожидание ответа модели": "Waiting for the model response",
+    "Отброшено обновление на пользователя: VNE не создаёт карточку юзера": "Skipped an update targeting the user: VNE does not create a user card",
+    "Отброшены сомнительные обновления:": "Skipped questionable updates:",
     "Активная персона:": "Active persona:",
     "Импорт снимка состояния": "Import state snapshot",
     "Файл:": "File:", "Персона в файле:": "Persona in the file:", "Не указана": "Not specified", "Не указан": "Not specified", "Формат:": "Format:", "Экспорт:": "Exported:",

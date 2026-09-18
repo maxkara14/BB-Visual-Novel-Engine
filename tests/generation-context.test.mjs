@@ -1026,3 +1026,13 @@ test('Auto interface language follows the installed Tavern locale accessor', asy
     h.context.getCurrentLocale=()=> 'ru-RU';assert.equal(api.getUiLanguage({uiLanguage:'auto'}),'ru');
     assert.equal(api.getUiLanguage({uiLanguage:'en'}),'en');
 });
+
+test('social diagnostics translate system text while preserving macro and character names',async()=>{
+ const h=await harness();const api=await h.loadApi('./i18n.js');
+ h.settings['BB-Visual-Novel'].uiLanguage='en';
+ const message='Режим макроса активен. Прямой {{bb_vn}} в generate_data не найден, возможно он уже был развёрнут пресетом ранее.';
+ assert.equal(api.t(message),'Macro mode is active. No literal {{bb_vn}} was found in generate_data; the preset may have already expanded it.');
+ const name='Связь';
+ assert.equal(api.ui`Отброшены сомнительные обновления: ${name}`,'Skipped questionable updates: Связь');
+ h.settings['BB-Visual-Novel'].uiLanguage='ru';assert.equal(api.t(message),message);
+});

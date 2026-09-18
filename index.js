@@ -1,3 +1,4 @@
+import { t, ui } from './modules/i18n.js';
 /* global jQuery, SillyTavern */
 import { extension_settings } from '../../../extensions.js';
 import { MODULE_NAME, DEFAULT_SETTINGS, normalizeVnReplyLength, resolveImpactScaleSettings } from './modules/constants.js';
@@ -404,9 +405,9 @@ jQuery(async () => {
                 replacements += replaceMacroDeep(generate_data, promptText);
 
                 if (replacements > 0) {
-                    setSocialParseDebug('injecting', `Макрос {{bb_vn}} внедрён: ${replacements}`);
+                    setSocialParseDebug('injecting', ui`Макрос {{bb_vn}} внедрён: ${replacements}`);
                 } else {
-                    setSocialParseDebug('checking', 'Режим макроса активен. Прямой {{bb_vn}} в generate_data не найден, возможно он уже был развёрнут пресетом ранее.');
+                    setSocialParseDebug('checking', t('Режим макроса активен. Прямой {{bb_vn}} в generate_data не найден, возможно он уже был развёрнут пресетом ранее.'));
                 }
             }
         });

@@ -22,7 +22,7 @@ async function harness() {
         cache.set(name,mod);return mod;
     }
     const social=load('./social.js');await social.link(load);await social.evaluate();
-    return {api:social.namespace,snapshot:cache.get('./snapshot.js').namespace,state:cache.get('./state.js').namespace,context,metadata,get saves(){return saves;}};
+    return {api:social.namespace,snapshot:cache.get('./snapshot.js').namespace,state:cache.get('./state.js').namespace,context,metadata,settings,get saves(){return saves;}};
 }
 const fixture = () => ({schema_version:1,module:'BB-Visual-Novel',persona_label:'Original persona',data:{characters:{Alex:{affinity:25,romance:0,status:'Friend',history:[],memories:{soft:[],deep:[],archive:[]},core_traits:[]}},char_bases:{Alex:3},char_bases_romance:{},global_log:[{time:'12:00',type:'system',text:'Saved log'}],story_moments:[]}});
 
@@ -90,4 +90,34 @@ test('post-import events replay once while pre-import messages stay behind cutof
     h.api.recalculateAllStats(false);assert.equal(h.state.currentCalculatedStats.Alex.affinity,27);
     h.context.chat.push({name:'Alex',mes:'New scene',swipe_id:0,extra:{bb_social_swipes:{0:[{...event,reason:'Another concrete event'}]}}});
     h.api.recalculateAllStats(false);assert.equal(h.state.currentCalculatedStats.Alex.affinity,29);
+});
+
+test('clear after earned relationships, import, new events and export restores chat calculation',async()=>{
+    const h=await harness();const {scopeState}=h.api.bindActivePersonaState();
+    scopeState.char_bases={Alex:10};
+    const scope=h.api.getCurrentPersonaScopeKey();
+    const event={name:'Alex',friendship_impact:'minor_positive',romance_impact:'none',reason:'Helped with a difficult task',emotion:'happy',scope};
+    h.context.chat.push({name:'Alex',mes:'First scene',swipe_id:0,extra:{bb_social_swipes:{0:[event]}}});
+    h.api.recalculateAllStats(false);assert.equal(h.state.currentCalculatedStats.Alex.affinity,12);
+    h.api.importActivePersonaSnapshot(fixture());h.api.recalculateAllStats(false);
+    assert.equal(h.state.currentCalculatedStats.Alex.affinity,25);
+    h.context.chat.push({name:'Alex',mes:'Second scene',swipe_id:0,extra:{bb_social_swipes:{0:[{...event,reason:'Brought a thoughtful birthday present'}]}}});
+    h.api.recalculateAllStats(false);assert.equal(h.state.currentCalculatedStats.Alex.affinity,27);
+    const before=JSON.stringify(scopeState.snapshot_restore_state);
+    assert.equal(h.api.exportActivePersonaSnapshot().data.characters.Alex.affinity,27);
+    assert.equal(JSON.stringify(scopeState.snapshot_restore_state),before);
+    h.api.clearActivePersonaSnapshot();h.api.recalculateAllStats(false);
+    assert.equal(h.state.currentCalculatedStats.Alex.affinity,14);
+    h.api.recalculateAllStats(false);assert.equal(h.state.currentCalculatedStats.Alex.affinity,14);
+});
+
+test('live parser diagnostics follow UI language without translating message text',async()=>{
+ const h=await harness();const message={mes:'Текст сцены',extra:{}};
+ h.settings['BB-Visual-Novel'].uiLanguage='en';
+ h.api.scanAndCleanMessage(message,undefined,true);
+ assert.equal(h.state.socialParseDebug.details,'No social_updates in the current response');
+ assert.equal(message.mes,'Текст сцены');
+ h.settings['BB-Visual-Novel'].uiLanguage='ru';
+ h.api.scanAndCleanMessage(message,undefined,true);
+ assert.equal(h.state.socialParseDebug.details,'В текущем ответе нет social_updates');
 });

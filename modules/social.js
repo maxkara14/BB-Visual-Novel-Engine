@@ -1,4 +1,4 @@
-import { ui } from './i18n.js';
+import { t, ui } from './i18n.js';
 import { parseSnapshot } from './snapshot.js';
 import { buildOutputLanguageDirective } from './language.js';
 /* global SillyTavern */
@@ -2537,7 +2537,7 @@ export function scanAndCleanMessage(msg, messageId, trackDebug = false) {
     let currentMes = String(msg.mes || '').replace(/[\u200B-\u200D\uFEFF]/g, '');
 
     if (trackDebug) {
-        setSocialParseDebug('checking', 'Проверка текущего ответа');
+        setSocialParseDebug('checking', t('Проверка текущего ответа'));
     }
 
     const parsedPayload = tryParseSocialUpdates(currentMes);
@@ -2567,11 +2567,11 @@ export function scanAndCleanMessage(msg, messageId, trackDebug = false) {
         if (trackDebug) setSocialParseDebug('stored', `social_updates (saved): ${existingUpdates.length}`);
     } else if (trackDebug) {
         if (/(bb-social-update|bb-social-updates|bb-vn-data|&lt;bb-social-update|&lt;bb-social-updates)/i.test(currentMes)) {
-            setSocialParseDebug('error', 'HTML-подобный блок найден, но не удалось распарсить');
+            setSocialParseDebug('error', t('HTML-подобный блок найден, но не удалось распарсить'));
         } else if (String(currentMes || '').trim()) {
-            setSocialParseDebug('missing', 'В текущем ответе нет social_updates');
+            setSocialParseDebug('missing', t('В текущем ответе нет social_updates'));
         } else {
-            setSocialParseDebug('missing', 'Текущий ответ пуст или social_updates отсутствуют');
+            setSocialParseDebug('missing', t('Текущий ответ пуст или social_updates отсутствуют'));
         }
     }
     
@@ -2688,7 +2688,7 @@ export function recalculateAllStats(isNewMessage = false) {
     
     if (!chat_metadata['bb_vn_char_bases']) chat_metadata['bb_vn_char_bases'] = {};
     if (!chat_metadata['bb_vn_ignored_chars']) chat_metadata['bb_vn_ignored_chars'] = [];
-    setSocialParseDebug('idle', 'Ожидание ответа модели');
+    setSocialParseDebug('idle', t('Ожидание ответа модели'));
     const lastAssistantIndex = Array.isArray(chat)
         ? [...chat].map((msg, idx) => ({ msg, idx })).reverse().find(item => item.msg && !item.msg.is_user)?.idx ?? -1
         : -1;
@@ -2797,7 +2797,7 @@ export function recalculateAllStats(isNewMessage = false) {
                 activeUpdates.splice(0, activeUpdates.length, ...userFilteredActiveUpdates.updates);
                 needsSave = true;
                 if (idx === lastAssistantIndex && userFilteredActiveUpdates.dropped.length > 0) {
-                    setSocialParseDebug('filtered', 'Отброшено обновление на пользователя: VNE не создаёт карточку юзера');
+                    setSocialParseDebug('filtered', t('Отброшено обновление на пользователя: VNE не создаёт карточку юзера'));
                 }
             }
 
@@ -2813,7 +2813,7 @@ export function recalculateAllStats(isNewMessage = false) {
                 needsSave = true;
                 if (idx === lastAssistantIndex && filteredSceneUpdates.dropped.length > 0) {
                     const droppedNames = filteredSceneUpdates.dropped.map(item => item.rawName || item.canonical).filter(Boolean);
-                    setSocialParseDebug('filtered', `Отброшены сомнительные обновления: ${droppedNames.join(', ')}`);
+                    setSocialParseDebug('filtered', ui`Отброшены сомнительные обновления: ${droppedNames.join(', ')}`);
                 }
             }
 
