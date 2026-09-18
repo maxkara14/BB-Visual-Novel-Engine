@@ -136,6 +136,12 @@ An earlier version; the test branch may look different.
 
 VNE settings can store preferences for option style and content (up to 4000 characters). They apply to future option generations across all chats; existing options are unchanged. One-time guidance takes precedence in a conflict. Required output format, language and length still apply, and Scene Director context is passed as before. Preferences are not added to profile or trait generation. “Clear preferences” removes them from future requests.
 
+### Option context size
+
+Under “Language and replies”, “Messages in option context” selects the latest 1–100 messages (default: 10). This counts chat entries, not pairs of turns; shorter chats use all available entries. The latest reply also remains the immediate scene anchor. Changes apply to the next generation and do not delete history.
+
+This controls VNE’s history block, not total input tokens or the output limit. Persona, author’s note and summary still use macro substitution; Scene Director context is retained. Character profiles, memories and relationships are not separately copied into this block. The main connection may receive them through Tavern context, VNE injection or the {{bb_vn}} macro. Connection profiles and Custom API receive the assembled prompt; they do not automatically inherit all Tavern context. This setting does not cap extra preset or macro content.
+
 ## Author
 
 [BruniikBron: Lo-Fi & Mods](https://bblofi.online/) · [Telegram](https://t.me/Brun11kBr0n)

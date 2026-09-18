@@ -1225,3 +1225,40 @@ test('reduced motion switches sections without starting an animation', async () 
     click({preventDefault(){}}); assert.equal(section.open,true);
     click({preventDefault(){}}); assert.equal(section.open,false);
 });
+
+
+test('history count is normalized and settings handler persists the normalized value', async () => {
+    const h = await harness(); const {normalizeVnContextMessages: normalize} = await h.loadApi('./constants.js');
+    for (const [value,expected] of [[undefined,10],['',10],[null,10],['bad',10],[Infinity,10],[0,1],[-8,1],[1000,100],['12',12],[2.6,3]]) assert.equal(normalize(value),expected);
+    const source = await readFile(new URL('modules/settings.js',root),'utf8');
+    const body=source.split("jQuery('#bb-vn-cfg-context-messages').on('change', function() {")[1].split('    });')[0];
+    let value='999', saves=0;
+    const jq=()=>({val(next){if(arguments.length)value=next;return value;}});
+    new Function('jQuery','normalizeVnContextMessages','extension_settings','MODULE_NAME','saveSettingsDebounced',body)(jq,normalize,h.settings,'BB-Visual-Novel',()=>saves++);
+    assert.equal(value,100);assert.equal(h.settings['BB-Visual-Novel'].vnContextMessages,100);assert.equal(saves,1);
+});
+
+test('all option sources receive the selected history window while retaining scene and SD', async () => {
+    for (const source of ['main','custom','profile']) {
+        for (const count of [1,3,undefined,100]) {
+            const h = await harness();
+            Object.assign(h.settings['BB-Visual-Novel'],{vnGenerationSource:source,vnConnectionProfileId:'profile-a',vnContextMessages:count});
+            h.context.chat=Array.from({length:14},(_,i)=>({name:'Character',mes:'HISTORY_MARK_'+i+'_END',swipe_id:0}));
+            h.window.bbGetSceneDirectorPrompt=()=> 'SD_ANCHOR';
+            const run=h.api.bbVnGenerateOptionsFlow();await h.waitForCalls(1);
+            const call=h.calls[0];
+            const prompt=source==='custom'?call.body.messages[1].content:source==='profile'?call.prompt[1].content:call.args.quietPrompt;
+            const recent=prompt.split('[RECENT CONTEXT (For background)]:')[1].split('[IMMEDIATE TRIGGER')[0];
+            const n=Math.min(count??10,14);
+            for(let i=0;i<14;i++) assert.equal(recent.includes('HISTORY_MARK_'+i+'_END'),i>=14-n);
+            assert.match(prompt,/SD_ANCHOR/);assert.match(prompt.split('[IMMEDIATE TRIGGER')[1],/HISTORY_MARK_13_END/);
+            h.respond(0);await run;assert.equal(h.rendered.length,1);
+        }
+    }
+});
+
+test('short history is retained in full and empty chat makes no request', async () => {
+    const h=await harness();h.settings['BB-Visual-Novel'].vnContextMessages=100;
+    let run=h.api.bbVnGenerateOptionsFlow();assert.match(h.calls[0].args.quietPrompt,/Initial scene/);h.respond(0);await run;
+    h.context.chat=[];await h.api.bbVnGenerateOptionsFlow();assert.equal(h.calls.length,1);assert.equal(h.loading,false);
+});

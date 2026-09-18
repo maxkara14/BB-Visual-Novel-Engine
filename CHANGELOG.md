@@ -6,6 +6,8 @@
 
 ### Unreleased — VNE-TEST
 
+- Добавлен выбор 1–100 последних сообщений для контекста вариантов; по умолчанию 10.
+
 - Настройки собраны в шесть компактных раскрывающихся разделов по примеру Enhance Gen.
 
 - Добавлены сохраняемые пожелания к вариантам, очистка и приоритет разовой подсказки; интерфейс RU/EN.
@@ -50,6 +52,8 @@
 ## English
 
 ### Unreleased — VNE-TEST
+
+- Added a choice of 1–100 recent messages for option context; defaults to 10.
 
 - Organized settings into six compact collapsible sections, following Enhance Gen.
 

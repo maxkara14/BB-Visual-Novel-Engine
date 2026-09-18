@@ -3,7 +3,7 @@ import { buildOutputLanguageDirective } from './language.js';
 /* global SillyTavern */
 import { chat_metadata, saveChatDebounced, generateQuietPrompt } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
-import { MODULE_NAME, OPTIONS_PROMPT, normalizeVnReplyLength } from './constants.js';
+import { MODULE_NAME, OPTIONS_PROMPT, normalizeVnReplyLength, normalizeVnContextMessages } from './constants.js';
 import { 
     normalizeOptionData, 
     dedupeOptions, 
@@ -1202,7 +1202,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
             controller: new AbortController(),
         };
         
-        const recentMessages = chat.slice(-10).map(message => `${message.name}: ${message.mes}`).join('\\n\\n');
+        const recentMessages = chat.slice(-normalizeVnContextMessages(activeVnOptionsOperation.settings.vnContextMessages)).map(message => `${message.name}: ${message.mes}`).join('\\n\\n');
         const lastMessageText = chat[chat.length - 1]?.mes || '';
         const replyLength = getActiveVnReplyLength();
         const useEmotionalChoiceFraming = !!extension_settings[MODULE_NAME]?.emotionalChoiceFraming;

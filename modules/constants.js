@@ -32,9 +32,16 @@ export const DEFAULT_SETTINGS = {
     disableRelationshipTracker: false,
     vnReplyLength: 'medium',
     vnUserInstructions: '',
+    vnContextMessages: 10,
     friendshipImpactValues: { ...DEFAULT_IMPACT_VALUES },
     romanceImpactValues: { ...DEFAULT_IMPACT_VALUES },
 };
+
+export function normalizeVnContextMessages(value) {
+    if (value === '' || value === null || value === undefined) return DEFAULT_SETTINGS.vnContextMessages;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(1, Math.min(100, Math.round(parsed))) : DEFAULT_SETTINGS.vnContextMessages;
+}
 
 export function normalizeVnReplyLength(value = '') {
     const normalized = String(value || '').trim().toLowerCase();

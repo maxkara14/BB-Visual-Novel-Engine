@@ -4,7 +4,7 @@ import { t, ui, normalizeUiLanguage } from './i18n.js';
  /* global SillyTavern */
 import { chat_metadata, saveChatDebounced, saveSettingsDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
-import { MODULE_NAME, normalizeImpactSettings, normalizeImpactValue, normalizeVnReplyLength, resolveImpactScaleSettings } from './constants.js';
+import { MODULE_NAME, normalizeVnContextMessages, normalizeImpactSettings, normalizeImpactValue, normalizeVnReplyLength, resolveImpactScaleSettings } from './constants.js';
 import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog, bindActivePersonaState, getCurrentPersonaScopeKey, mergeCharacterRecords, resolveCharacterIdentity, exportActivePersonaSnapshot, importActivePersonaSnapshot, clearActivePersonaSnapshot, markSnapshotReplayMessage, getLatestAssistantMessageEntry } from './social.js';
 import { notifySuccess, notifyInfo, notifyError, showHudToast } from './toasts.js';
 import { restoreVNOptions, clearSavedVNOptions, invalidateVnOptionsGeneration } from './generator.js';
@@ -281,6 +281,9 @@ export function setupExtensionSettings() {
                             <label for="bb-vn-cfg-output-language">Язык новых ответов</label>
                             <select id="bb-vn-cfg-output-language" class="text_pole"><option value="chat">Как в чате</option><option value="ru">Русский</option><option value="en">English</option></select>
                             <span class="bb-vn-settings-note">Для новых вариантов, профилей, черт и записей об отношениях. Сохранённые данные не переводятся.</span>
+                            <label for="bb-vn-cfg-context-messages">Сообщений в контексте вариантов</label>
+                            <input type="number" id="bb-vn-cfg-context-messages" class="text_pole" min="1" max="100" step="1" value="${normalizeVnContextMessages(s.vnContextMessages)}">
+                            <span class="bb-vn-settings-note">Последние 1–100 сообщений, по умолчанию 10. Последний ответ остаётся ориентиром сцены. Это объём истории для вариантов, а не лимит токенов ответа; основное подключение может добавлять контекст SillyTavern.</span>
                             <label for="bb-vn-cfg-instructions">Постоянные пожелания к вариантам</label>
                             <textarea id="bb-vn-cfg-instructions" class="text_pole" rows="4" maxlength="4000"></textarea>
                             <span class="bb-vn-settings-note">Для вариантов во всех чатах, до 4000 символов. Разовая подсказка уточняет пожелания; язык и формат ответа сохраняются. Не применяется к профилям и чертам.</span>
@@ -413,6 +416,12 @@ export function setupExtensionSettings() {
         const event = snapshotContext.event_types?.[name];
         if (event) snapshotContext.eventSource?.on(event, () => refreshSnapshotControls(bindActivePersonaState().scopeState));
     }
+    jQuery('#bb-vn-cfg-context-messages').on('change', function() {
+        const value = normalizeVnContextMessages(jQuery(this).val());
+        extension_settings[MODULE_NAME].vnContextMessages = value;
+        jQuery(this).val(value);
+        saveSettingsDebounced();
+    });
     jQuery('#bb-vn-cfg-instructions').val(s.vnUserInstructions || '');
     jQuery('#bb-vn-cfg-instructions').on('input', function() {
         extension_settings[MODULE_NAME].vnUserInstructions = String(jQuery(this).val() || '').slice(0, 4000);
