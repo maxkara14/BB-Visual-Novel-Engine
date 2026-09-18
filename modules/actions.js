@@ -1,3 +1,4 @@
+import { t, ui } from './i18n.js';
 /* global SillyTavern */
 import { callPopup, chat_metadata, saveChatDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
@@ -25,12 +26,12 @@ const VN_PANEL_CLOSE_MS = 220;
 
 function buildUtilityRow({ hasOptions = false, hasSavedOptions = false } = {}) {
     const primaryButtonId = hasOptions ? 'bb-vn-btn-reroll' : 'bb-vn-btn-generate-now';
-    const primaryButtonTitle = hasOptions ? 'Обычный реролл' : 'Сгенерировать варианты';
+    const primaryButtonTitle = hasOptions ? t('Обычный реролл') : t('Сгенерировать варианты');
     const primaryButtonIcon = hasOptions ? 'fa-rotate-right' : 'fa-clapperboard';
-    const primaryButtonLabel = hasOptions ? 'Реролл' : 'Генерация';
+    const primaryButtonLabel = hasOptions ? t('Реролл') : t('Генерация');
     const clearDisabledAttr = hasSavedOptions ? '' : ' disabled';
 
-    return `
+    return ui`
         <div class="bb-vn-utility-row">
             <button type="button" class="bb-vn-utility-panel" id="${primaryButtonId}" title="${primaryButtonTitle}">
                 <i class="fa-solid ${primaryButtonIcon}"></i>
@@ -53,7 +54,7 @@ function buildUtilityRow({ hasOptions = false, hasSavedOptions = false } = {}) {
 }
 
 function buildEmptyPanelHtml() {
-    return `
+    return ui`
         <div class="bb-vn-empty-state">
             <div class="bb-vn-empty-state-title">
                 <i class="fa-solid fa-film"></i>
@@ -132,16 +133,16 @@ function getCurrentRerollState() {
 
 async function requestGuidedGeneration({ hasOptions = false } = {}) {
     const rerollState = hasOptions ? getCurrentRerollState() : { intents: [], tones: [] };
-    const popupTitle = hasOptions ? 'Запрос к новым вариантам' : 'Запрос к первой генерации';
+    const popupTitle = hasOptions ? t('Запрос к новым вариантам') : t('Запрос к первой генерации');
     const popupCopy = hasOptions
-        ? 'Напиши короткое пожелание к следующим вариантам.<br>Примеры: <code>больше нежности</code>, <code>резче двигай конфликт</code>, <code>меньше повторов по тону</code>, <code>больше инициативы</code>.'
-        : 'Напиши короткое пожелание к первой подборке вариантов.<br>Примеры: <code>больше нежности</code>, <code>резче двигай конфликт</code>, <code>меньше повторов по тону</code>, <code>больше инициативы</code>.';
+        ? t('Напиши короткое пожелание к следующим вариантам.<br>Примеры: <code>больше нежности</code>, <code>резче двигай конфликт</code>, <code>меньше повторов по тону</code>, <code>больше инициативы</code>.')
+        : t('Напиши короткое пожелание к первой подборке вариантов.<br>Примеры: <code>больше нежности</code>, <code>резче двигай конфликт</code>, <code>меньше повторов по тону</code>, <code>больше инициативы</code>.');
 
     const guidanceResult = await callPopup(
         `<h3>${popupTitle}</h3><p>${popupCopy}</p>`,
         'input',
         '',
-        { okButton: 'Сгенерировать', rows: 3, wide: true },
+        { okButton: t('Сгенерировать'), rows: 3, wide: true },
     );
 
     if (guidanceResult === false || guidanceResult === null || guidanceResult === undefined) {
@@ -151,8 +152,8 @@ async function requestGuidedGeneration({ hasOptions = false } = {}) {
     const guidance = String(guidanceResult || '').trim();
     if (!guidance) {
         notifyInfo(hasOptions
-            ? 'Пожелание пустое, запрос к новым вариантам не запущен.'
-            : 'Пожелание пустое, запрос к первой генерации не запущен.');
+            ? t('Пожелание пустое, запрос к новым вариантам не запущен.')
+            : t('Пожелание пустое, запрос к первой генерации не запущен.'));
         return;
     }
 
@@ -223,24 +224,24 @@ export function renderVNOptionsFromData(parsedOptions, autoOpen = false) {
         if (riskValue.includes('высокий') || riskValue.includes('high')) riskClass = 'risk-high';
         const toneClass = getToneClass(opt.tone);
         const metaLabel = useEmotionalChoiceFraming
-            ? (opt.tone || opt.risk || 'Нейтрально')
-            : (opt.risk || opt.tone || 'Средний');
+            ? (opt.tone || opt.risk || t('Нейтрально'))
+            : (opt.risk || opt.tone || t('Средний'));
         const targetsText = opt.targets.length > 0
             ? opt.targets.map(target => `<span class="bb-vn-target">${escapeHtml(target)}</span>`).join('')
-            : '<span class="bb-vn-target muted">Сцена в целом</span>';
+            : t('<span class="bb-vn-target muted">Сцена в целом</span>');
 
         const forecastHtml = useEmotionalChoiceFraming && opt.forecast
-            ? `<div class="bb-vn-forecast-hover" title="${escapeHtml(opt.forecast)}"><div class="bb-vn-forecast-title">Прогноз</div><div class="bb-vn-forecast-text">${escapeHtml(opt.forecast)}</div></div>`
+            ? ui`<div class="bb-vn-forecast-hover" title="${escapeHtml(opt.forecast)}"><div class="bb-vn-forecast-title">Прогноз</div><div class="bb-vn-forecast-text">${escapeHtml(opt.forecast)}</div></div>`
             : '';
 
-        optionsHtml += `
+        optionsHtml += ui`
             <div class="bb-vn-option ${riskClass} ${toneClass}" data-intent="${escapeHtml(opt.intent)}" data-message="${encodeURIComponent(opt.message || '')}" data-tone="${escapeHtml(opt.tone || '')}" data-forecast="${escapeHtml(opt.forecast || '')}" data-targets="${encodeURIComponent(JSON.stringify(opt.targets || []))}">
                 <div class="bb-vn-op-topline">
                     <div class="bb-vn-op-badges">
                         <span class="bb-vn-op-index">Сцена</span>
-                        <div class="bb-vn-op-risk">${useEmotionalChoiceFraming ? 'Тон' : 'Риск'}: ${escapeHtml(metaLabel)}</div>
+                        <div class="bb-vn-op-risk">${useEmotionalChoiceFraming ? t('Тон') : t('Риск')}: ${escapeHtml(metaLabel)}</div>
                     </div>
-                    <div class="bb-vn-op-info-btn" title="${escapeHtml(opt.forecast || 'Подробнее')}"><i class="fa-solid fa-info"></i></div>
+                    <div class="bb-vn-op-info-btn" title="${escapeHtml(opt.forecast || t('Подробнее'))}"><i class="fa-solid fa-info"></i></div>
                 </div>
                 <div class="bb-vn-op-head" title="${escapeHtml(opt.intent)}">${escapeHtml(opt.intent)}</div>
                 ${useEmotionalChoiceFraming ? `<div class="bb-vn-targets">${targetsText}</div>` : ''}
@@ -319,7 +320,7 @@ window['renderVNOptionsFromData'] = renderVNOptionsFromData;
 
 export function injectVNActionsUI() {
     if (document.getElementById('bb-vn-action-bar')) return;
-    const barHtml = '<div id="bb-vn-action-bar" style="display: flex;"><div id="bb-vn-btn-generate" class="bb-vn-main-btn" title="Открыть панель действий VN"></div><div id="bb-vn-options-container"></div></div>';
+    const barHtml = t('<div id="bb-vn-action-bar" style="display: flex;"><div id="bb-vn-btn-generate" class="bb-vn-main-btn" title="Открыть панель действий VN"></div><div id="bb-vn-options-container"></div></div>');
     jQuery('#send_form').prepend(barHtml);
     setVnGenerateButtonIdle();
 

@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 const ERROR_MESSAGES = {
     cancelled: 'Отменено пользователем',
     timeout: 'Время ожидания ответа истекло. Повторите запрос или увеличьте тайм-аут.',
@@ -35,7 +36,7 @@ export function getCustomApiIdentity(url = '', key = '') {
 
 export class VnRequestError extends Error {
     constructor(code) {
-        super(ERROR_MESSAGES[code] || ERROR_MESSAGES.provider);
+        super(t(ERROR_MESSAGES[code] || ERROR_MESSAGES.provider));
         this.name = 'VnRequestError';
         this.code = code;
     }

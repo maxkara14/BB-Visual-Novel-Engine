@@ -1,3 +1,4 @@
+import { t, ui, templateText, template } from './i18n.js';
 /* global SillyTavern */
 import { chat_metadata, saveChatDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
@@ -47,10 +48,10 @@ function resetDescriptionGenerationUi(editor) {
 
     const generateButton = scopedEditor.find('.bb-btn-generate-description');
     const cancelButton = scopedEditor.find('.bb-btn-cancel-description-generation');
-    const originalHtml = String(generateButton.attr('data-original-html') || '<i class="fa-solid fa-wand-magic-sparkles"></i>&ensp;По шаблону');
+    const originalHtml = String(generateButton.attr('data-original-html') || t('<i class="fa-solid fa-wand-magic-sparkles"></i>&ensp;По шаблону'));
 
     generateButton.prop('disabled', false).html(originalHtml).removeAttr('data-original-html');
-    cancelButton.prop('disabled', true).hide().html('<i class="fa-solid fa-xmark"></i>&ensp;Отмена');
+    cancelButton.prop('disabled', true).hide().html(t('<i class="fa-solid fa-xmark"></i>&ensp;Отмена'));
     scopedEditor.removeData('bbDescriptionGenerationRequestId');
     scopedEditor.removeData('bbDescriptionGenerationCancelled');
 }
@@ -114,7 +115,7 @@ function renderDeepMemoryPill(memory = {}) {
     const tone = String(memory?.tone || '');
     if (!text) return '';
     if (tone === 'dual') {
-        return `<div class="bb-memory-pill deep dual-tone" title="Противоречивое незабываемое событие"><span>${text}</span></div>`;
+        return ui`<div class="bb-memory-pill deep dual-tone" title="Противоречивое незабываемое событие"><span>${text}</span></div>`;
     }
     return `<div class="bb-memory-pill deep ${tone}"><span>${text}</span></div>`;
 }
@@ -181,11 +182,13 @@ function renderScoreDeltaBadge(delta = 0, kind = 'affinity') {
     if (!Number.isFinite(numeric) || numeric === 0) return '';
     const toneClass = numeric > 0 ? 'positive' : 'negative';
     const iconClass = numeric > 0 ? 'fa-solid fa-arrow-up' : 'fa-solid fa-arrow-down';
-    const ariaLabel = `${kind === 'romance' ? 'Романтика' : 'Доверие'} ${numeric > 0 ? 'выросла' : 'снизилась'} на ${Math.abs(numeric)}`;
+    const ariaLabel = ui`${kind === 'romance' ? t('Романтика') : t('Доверие')} ${numeric > 0 ? t('выросла') : t('снизилась')} на ${Math.abs(numeric)}`;
     return `<span class="bb-char-score-delta ${kind} ${toneClass}" title="${escapeHtml(ariaLabel)}" aria-label="${escapeHtml(ariaLabel)}"><i class="${iconClass}"></i></span>`;
 }
 
 function buildCharacterDescriptionTemplateStructured({ charName = '', stats = {}, displayStatus = '' } = {}) {
+    const t = templateText;
+    const ui = template;
     const affinity = parseInt(stats?.affinity, 10) || 0;
     const romance = parseInt(stats?.romance, 10) || 0;
     const traits = Array.isArray(stats?.core_traits)
@@ -202,19 +205,19 @@ function buildCharacterDescriptionTemplateStructured({ charName = '', stats = {}
         .map(memory => String(memory?.text || '').trim())
         .filter(Boolean)
         .slice(0, 4);
-    const trend = getTrendNarrative(stats?.history || []);
+    const trend = t(getTrendNarrative(stats?.history || []));
 
     return [
-        `Имя: ${charName}.`,
-        'Возраст / этап жизни: взрослость или актуальный жизненный этап уточняется по сценам без жёсткой привязки.',
-        `Роль и положение: ${displayStatus || 'значимый участник текущей истории'}, связанный с маршрутом пользователя.`,
-        'Внешность: конкретные черты пока лучше брать из карточки и сцены; при генерации нужно закрепить лицо, телосложение, волосы, глаза, голос и заметные привычки.',
-        'Одежда и узнаваемые детали: держать визуальные якоря из карточки, текущей сцены и загруженного аватара, не менять стиль без причины.',
-        `Характер и внутренняя опора: ${traits.length > 0 ? traits.join('; ') : 'устойчивые черты ещё формируются через память и реакции'}.`,
-        `Манера речи и поведения: ориентироваться на тон последних сцен; динамика отношений сейчас — ${trend.toLowerCase()}.`,
-        `Прошлое и личный контекст: ${notableMemories.length > 0 ? notableMemories.join('; ') : 'крупные биографические факты ещё не закреплены, их нужно достраивать осторожно'}.`,
-        `Отношение к пользователю: доверие ${affinity > 0 ? '+' : ''}${affinity}${romance !== 0 ? `, романтическая линия ${romance > 0 ? '+' : ''}${romance}` : ''}; воспринимает пользователя как "${displayStatus || 'неопределённый фактор'}".`,
-        'Сценический гайд: сохранять уже закреплённые факты, усиливать личные реакции через память, не сбрасывать тон отношений между сценами.',
+        ui`Имя: ${charName}.`,
+        t('Возраст / этап жизни: взрослость или актуальный жизненный этап уточняется по сценам без жёсткой привязки.'),
+        ui`Роль и положение: ${displayStatus || t('значимый участник текущей истории')}, связанный с маршрутом пользователя.`,
+        t('Внешность: конкретные черты пока лучше брать из карточки и сцены; при генерации нужно закрепить лицо, телосложение, волосы, глаза, голос и заметные привычки.'),
+        t('Одежда и узнаваемые детали: держать визуальные якоря из карточки, текущей сцены и загруженного аватара, не менять стиль без причины.'),
+        ui`Характер и внутренняя опора: ${traits.length > 0 ? traits.join('; ') : t('устойчивые черты ещё формируются через память и реакции')}.`,
+        ui`Манера речи и поведения: ориентироваться на тон последних сцен; динамика отношений сейчас — ${trend.toLowerCase()}.`,
+        ui`Прошлое и личный контекст: ${notableMemories.length > 0 ? notableMemories.join('; ') : t('крупные биографические факты ещё не закреплены, их нужно достраивать осторожно')}.`,
+        ui`Отношение к пользователю: доверие ${affinity > 0 ? '+' : ''}${affinity}${romance !== 0 ? ui`, романтическая линия ${romance > 0 ? '+' : ''}${romance}` : ''}; воспринимает пользователя как "${displayStatus || t('неопределённый фактор')}".`,
+        t('Сценический гайд: сохранять уже закреплённые факты, усиливать личные реакции через память, не сбрасывать тон отношений между сценами.'),
     ].join('\n');
 }
 
@@ -401,6 +404,8 @@ function setCharacterEditorOpen(card, shouldOpen, options = {}) {
 }
 
 function buildCharacterDescriptionTemplate({ charName = '', stats = {}, displayStatus = '' } = {}) {
+    const t = templateText;
+    const ui = template;
     const affinity = parseInt(stats?.affinity, 10) || 0;
     const romance = parseInt(stats?.romance, 10) || 0;
     const traits = Array.isArray(stats?.core_traits)
@@ -417,23 +422,23 @@ function buildCharacterDescriptionTemplate({ charName = '', stats = {}, displayS
         .map(memory => String(memory?.text || '').trim())
         .filter(Boolean)
         .slice(0, 3);
-    const trend = getTrendNarrative(stats?.history || []);
+    const trend = t(getTrendNarrative(stats?.history || []));
 
     const personalityLine = traits.length > 0
-        ? `Характер и манера: ${traits.join(', ')}.`
-        : 'Характер и манера: явных устойчивых черт пока мало, образ ещё достраивается по сценам.';
+        ? ui`Характер и манера: ${traits.join(', ')}.`
+        : t('Характер и манера: явных устойчивых черт пока мало, образ ещё достраивается по сценам.');
     const biographyLine = notableMemories.length > 0
-        ? `Биография и контекст: ${notableMemories.join('; ')}.`
-        : 'Биография и контекст: в чате пока мало надёжно подтверждённых фактов.';
-    const relationshipLine = `Отношение к пользователю: ${trend.toLowerCase()}, доверие ${affinity > 0 ? '+' : ''}${affinity}${romance !== 0 ? `, романтическая линия ${romance > 0 ? '+' : ''}${romance}` : ''}.`;
+        ? ui`Биография и контекст: ${notableMemories.join('; ')}.`
+        : t('Биография и контекст: в чате пока мало надёжно подтверждённых фактов.');
+    const relationshipLine = ui`Отношение к пользователю: ${trend.toLowerCase()}, доверие ${affinity > 0 ? '+' : ''}${affinity}${romance !== 0 ? ui`, романтическая линия ${romance > 0 ? '+' : ''}${romance}` : ''}.`;
     const memoryLine = notableMemories.length > 0
-        ? `Что важно учитывать в сценах: ${notableMemories.join('; ')}.`
-        : 'Что важно учитывать в сценах: персонажу пока не хватает крупных закреплённых событий и биографических якорей.';
+        ? ui`Что важно учитывать в сценах: ${notableMemories.join('; ')}.`
+        : t('Что важно учитывать в сценах: персонажу пока не хватает крупных закреплённых событий и биографических якорей.');
 
     return [
-        `Имя: ${charName}.`,
-        'Возраст / этап жизни: не указан напрямую, без жёстких уточнений.',
-        `Статус и роль: ${displayStatus || 'неопределённый фактор'}.`,
+        ui`Имя: ${charName}.`,
+        t('Возраст / этап жизни: не указан напрямую, без жёстких уточнений.'),
+        ui`Статус и роль: ${displayStatus || t('неопределённый фактор')}.`,
         personalityLine,
         biographyLine,
         relationshipLine,
@@ -449,7 +454,7 @@ function buildCharacterCardHtml(charName = '') {
     const romance = stats.romance || 0;
     const tier = getTierInfo(affinity);
     const memories = stats.memories || { soft: [], deep: [], archive: [] };
-    const displayStatus = stats.status || getUnforgettableRoleStatus(memories.deep) || tier.label;
+    const displayStatus = stats.status || getUnforgettableRoleStatus(memories.deep) || t(tier.label);
     const unforgettableImpact = getUnforgettableImpact(memories.deep);
     const latestDeltas = getLatestRelationshipDeltas(stats.history || []);
     const lastHistory = [...(stats.history || [])].reverse().find(item => item.delta !== 0);
@@ -476,7 +481,7 @@ function buildCharacterCardHtml(charName = '') {
         romanceBarStyle = `right: 50%; width: ${Math.min(100, Math.abs(romance)) / 2}%; background: linear-gradient(270deg, rgba(255,255,255,0.0), #ec4899); box-shadow: 0 0 18px #ec4899;`;
     }
 
-    const romanceHtml = romance !== 0 ? `
+    const romanceHtml = romance !== 0 ? ui`
         <div class="bb-progress-wrapper bb-progress-wrapper-romance">
             <div class="bb-progress-labels" style="color:#f472b6; position: relative; display: flex; justify-content: space-between; align-items: center;">
                 <span>Неприязнь</span>
@@ -495,10 +500,10 @@ function buildCharacterCardHtml(charName = '') {
     const allDeepMemories = [...(memories.archive || []), ...(memories.deep || [])];
     const softMemoriesHtml = (memories.soft || []).length > 0
         ? [...memories.soft].reverse().map(memory => `<div class="bb-memory-pill ${memory.tone}"><span>${escapeHtml(memory.text)}</span></div>`).join('')
-        : '<i style="color:#64748b; font-size: 11px;">Пока нет мягких следов</i>';
+        : t('<i style="color:#64748b; font-size: 11px;">Пока нет мягких следов</i>');
     const deepMemoriesHtml = allDeepMemories.length > 0
         ? buildDeepMemoryDisplayItems(allDeepMemories).map(renderDeepMemoryPill).join('')
-        : '<i style="color:#64748b; font-size: 11px;">Ничего незабываемого</i>';
+        : t('<i style="color:#64748b; font-size: 11px;">Ничего незабываемого</i>');
 
     const coreTraits = stats.core_traits || [];
     let posTraitsCount = 0;
@@ -540,7 +545,7 @@ function buildCharacterCardHtml(charName = '') {
             }
 
             return count >= 5
-                ? `<button type="button" class="bb-crystal-row-btn ${type} bb-btn-crystallize-${isPositive ? 'pos' : 'neg'}" data-char="${escapeHtml(charName)}"><div class="bb-cr-gems">${gems}</div><span class="bb-cr-text"><i class="fa-solid fa-wand-magic-sparkles"></i> Создать ${isPositive ? 'светлую' : 'мрачную'} черту</span></button>`
+                ? ui`<button type="button" class="bb-crystal-row-btn ${type} bb-btn-crystallize-${isPositive ? 'pos' : 'neg'}" data-char="${escapeHtml(charName)}"><div class="bb-cr-gems">${gems}</div><span class="bb-cr-text"><i class="fa-solid fa-wand-magic-sparkles"></i> Создать ${isPositive ? t('светлую') : t('мрачную')} черту</span></button>`
                 : `<div class="bb-crystal-row-static ${type}"><div class="bb-cr-gems">${gems}</div><span class="bb-cr-text">${count} / 5</span></div>`;
         };
 
@@ -565,7 +570,7 @@ function buildCharacterCardHtml(charName = '') {
         isNeutralScoreline ? 'is-neutral' : '',
     ].filter(Boolean).join(' ');
 
-    return `
+    return ui`
         <div class="bb-char-card" data-char="${escapeHtml(charName)}">
             <div class="bb-char-card-shell">
                 <div class="bb-char-summary">
@@ -581,7 +586,7 @@ function buildCharacterCardHtml(charName = '') {
                         <div class="bb-char-summary-status-row">
                             <span class="bb-char-direction bb-char-direction-compact"><i class="fa-solid fa-eye"></i> отношение к вам</span>
                             <span class="bb-char-tier ${tier.class}" title="${escapeHtml(displayStatus)}">${escapeHtml(displayStatus)}</span>
-                            ${memories.deep.length > 0 ? `<span class="bb-unforgettable-impact compact">${escapeHtml(unforgettableImpact.label)}</span>` : ''}
+                            ${memories.deep.length > 0 ? `<span class="bb-unforgettable-impact compact">${escapeHtml(t(unforgettableImpact.label))}</span>` : ''}
                         </div>
                         <div class="${scorelineClass}">
                             ${showAffinityMetric ? `
@@ -599,7 +604,7 @@ function buildCharacterCardHtml(charName = '') {
                             <div class="bb-char-scoreline-ornament" aria-hidden="true"><span></span></div>
                         </div>
                         <div class="bb-char-summary-footer">
-                            ${profile.description ? `<span class="bb-char-mini-chip info"><i class="fa-solid fa-scroll"></i> профиль</span>` : ''}
+                            ${profile.description ? ui`<span class="bb-char-mini-chip info"><i class="fa-solid fa-scroll"></i> профиль</span>` : ''}
                             <span class="bb-char-expand-indicator"><i class="fa-solid fa-chevron-down"></i></span>
                         </div>
                         ${crystalTrackerHtml}
@@ -608,8 +613,8 @@ function buildCharacterCardHtml(charName = '') {
             </div>
             <div class="bb-char-body">
                 <div class="bb-char-route-meta">
-                    <div class="bb-char-meta-card"><span class="bb-char-meta-label">Последний сдвиг</span><strong style="color: ${lastShift ? lastShift.color : '#f8fafc'};">${escapeHtml(lastShift ? lastShift.full : 'Без сдвига')}</strong></div>
-                    <div class="bb-char-meta-card"><span class="bb-char-meta-label">Динамика</span><strong style="color: #cbd5e1;">${escapeHtml(getTrendNarrative(stats.history || []))}</strong></div>
+                    <div class="bb-char-meta-card"><span class="bb-char-meta-label">Последний сдвиг</span><strong style="color: ${lastShift ? lastShift.color : '#f8fafc'};">${escapeHtml(lastShift ? lastShift.full : t('Без сдвига'))}</strong></div>
+                    <div class="bb-char-meta-card"><span class="bb-char-meta-label">Динамика</span><strong style="color: #cbd5e1;">${escapeHtml(t(getTrendNarrative(stats.history || [])))}</strong></div>
                 </div>
                 <div class="bb-char-detail-block">
                     <div class="bb-progress-wrapper"><div class="bb-progress-labels" style="position: relative; display: flex; justify-content: space-between; align-items: center;"><span>Ненависть</span><span style="position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap;">Равнодушие</span><span>Семья</span></div><div class="bb-progress-bg"><div class="bb-progress-center-line"></div><div class="bb-progress-fill" style="${barStyle}"></div></div></div>
@@ -620,9 +625,9 @@ function buildCharacterCardHtml(charName = '') {
                     <div class="bb-char-insight-tile"><span class="bb-char-insight-label">Глубокие следы</span><strong>${allDeepMemories.length}</strong></div>
                 </div>
                 ${(memories.soft.length > 0 || allDeepMemories.length > 0 || coreTraits.length > 0) ? `<div class="bb-char-log">
-                    ${coreTraits.length > 0 ? `<div class="bb-memory-section" style="padding-top: 4px; margin-bottom: 8px;"><div class="bb-memory-title" style="color:#fbbf24;">Черты характера</div><div class="bb-memory-list bb-memory-list-deep">${traitsHtml}</div></div>` : ''}
-                    ${memories.soft.length > 0 ? `<div class="bb-memory-section" style="padding-top: 4px;"><div class="bb-memory-title">Мягкие следы</div><div class="bb-memory-list">${softMemoriesHtml}</div></div>` : ''}
-                    ${allDeepMemories.length > 0 ? `<div class="bb-memory-section"><div class="bb-memory-title">Незабываемые события</div><div class="bb-memory-list bb-memory-list-deep">${deepMemoriesHtml}</div></div>` : ''}
+                    ${coreTraits.length > 0 ? ui`<div class="bb-memory-section" style="padding-top: 4px; margin-bottom: 8px;"><div class="bb-memory-title" style="color:#fbbf24;">Черты характера</div><div class="bb-memory-list bb-memory-list-deep">${traitsHtml}</div></div>` : ''}
+                    ${memories.soft.length > 0 ? ui`<div class="bb-memory-section" style="padding-top: 4px;"><div class="bb-memory-title">Мягкие следы</div><div class="bb-memory-list">${softMemoriesHtml}</div></div>` : ''}
+                    ${allDeepMemories.length > 0 ? ui`<div class="bb-memory-section"><div class="bb-memory-title">Незабываемые события</div><div class="bb-memory-list bb-memory-list-deep">${deepMemoriesHtml}</div></div>` : ''}
                 </div>` : ''}
             </div>
             <div class="bb-char-editor" style="cursor: default; border-top: 1px solid rgba(255,255,255,0.06); border-radius: 0 0 22px 22px; margin: 0; background: rgba(0,0,0,0.2);">
@@ -675,8 +680,8 @@ export function renderSocialHud() {
     if (extension_settings[MODULE_NAME]?.disableRelationshipTracker === true) {
         const charsBox = document.getElementById('bb-hud-chars');
         const momentsBox = document.getElementById('bb-hud-moments');
-        if (charsBox) charsBox.innerHTML = '<div class="bb-empty-hud">Трекер отношений отключён.</div>';
-        if (momentsBox) momentsBox.innerHTML = '<div class="bb-empty-hud">Трекер отношений отключён.</div>';
+        if (charsBox) charsBox.innerHTML = t('<div class="bb-empty-hud">Трекер отношений отключён.</div>');
+        if (momentsBox) momentsBox.innerHTML = t('<div class="bb-empty-hud">Трекер отношений отключён.</div>');
         syncToastContainerWithHud();
         return;
     }
@@ -693,29 +698,29 @@ export function renderSocialHud() {
     const activeChoiceTone = extension_settings[MODULE_NAME].emotionalChoiceFraming
         ? ((shouldShowLastUsedTone
             ? chat_metadata['bb_vn_last_used_choice_context']?.tone
-            : chat_metadata['bb_vn_choice_context']?.tone) || 'не активен')
-        : 'выключен';
+            : chat_metadata['bb_vn_choice_context']?.tone) || t('не активен'))
+        : t('выключен');
     const latestMoment = currentStoryMoments.length > 0 ? currentStoryMoments[currentStoryMoments.length - 1] : null;
     const socialDebugStatus = socialParseDebug?.status || 'idle';
-    const socialDebugText = socialParseDebug?.details || 'Нет данных';
+    const socialDebugText = socialParseDebug?.details || t('Нет данных');
     const socialDebugLabel = socialDebugStatus === 'parsed'
-        ? 'HTML найден'
+        ? t('HTML найден')
         : socialDebugStatus === 'injecting'
-            ? 'Макрос внедрён'
+            ? t('Макрос внедрён')
         : socialDebugStatus === 'stored'
-            ? 'HTML сохранён'
+            ? t('HTML сохранён')
         : socialDebugStatus === 'checking'
-            ? 'Проверка'
+            ? t('Проверка')
         : socialDebugStatus === 'error'
-            ? 'HTML не распознан'
+            ? t('HTML не распознан')
         : socialDebugStatus === 'missing'
-            ? 'HTML не найден'
-            : 'Ожидание';
+            ? t('HTML не найден')
+            : t('Ожидание');
 
     const charsBox = document.getElementById('bb-hud-chars');
     if (charsBox) {
         if (visibleCharacters === 0) {
-            charsBox.innerHTML = `
+            charsBox.innerHTML = ui`
                 <div class="bb-panel-hero bb-panel-hero-route">
                     <div class="bb-panel-kicker">Связи</div>
                     <div class="bb-panel-headline">Пока нет активных связей</div>
@@ -732,7 +737,7 @@ export function renderSocialHud() {
                 const tier = getTierInfo(affinity);
                 const baseAffinity = chat_metadata['bb_vn_char_bases']?.[charName] ?? 0;
                 const memories = stats.memories || { soft: [], deep: [] };
-                const displayStatus = stats.status || getUnforgettableRoleStatus(memories.deep) || tier.label;
+                const displayStatus = stats.status || getUnforgettableRoleStatus(memories.deep) || t(tier.label);
                 const unforgettableImpact = getUnforgettableImpact(memories.deep);
                 const lastHistory = [...(stats.history || [])].reverse().find(h => h.delta !== 0);
                 const lastShift = lastHistory ? getShiftDescriptor(lastHistory.delta, lastHistory.moodlet || '') : null;
@@ -755,7 +760,7 @@ export function renderSocialHud() {
                     romanceBarStyle = `right: 50%; width: ${Math.min(100, Math.abs(romance)) / 2}%; background: linear-gradient(270deg, rgba(255,255,255,0.0), #ec4899); box-shadow: 0 0 18px #ec4899;`;
                 }
 
-                const romanceHtml = romance !== 0 ? `
+                const romanceHtml = romance !== 0 ? ui`
     <div class="bb-progress-wrapper bb-progress-wrapper-romance">
         <div class="bb-progress-labels" style="color:#f472b6; position: relative; display: flex; justify-content: space-between; align-items: center;">
             <span>Неприязнь</span>
@@ -777,11 +782,11 @@ export function renderSocialHud() {
                 const allDeepMemories = [...(memories.archive || []), ...memories.deep];
                 const softMemoriesHtml = memories.soft.length > 0
                     ? [...memories.soft].reverse().map(memory => `<div class="bb-memory-pill ${memory.tone}">${escapeHtml(memory.text)}</div>`).join('')
-                    : '<i style="color:#64748b; font-size: 11px;">Пока нет мягких следов</i>';
+                    : t('<i style="color:#64748b; font-size: 11px;">Пока нет мягких следов</i>');
 
                 const deepMemoriesHtml = allDeepMemories.length > 0
                     ? buildDeepMemoryDisplayItems(allDeepMemories).map(renderDeepMemoryPill).join('')
-                    : '<i style="color:#64748b; font-size: 11px;">Ничего незабываемого</i>';
+                    : t('<i style="color:#64748b; font-size: 11px;">Ничего незабываемого</i>');
 
                 const coreTraits = stats.core_traits || [];
                 let posTraitsCount = 0, negTraitsCount = 0;
@@ -812,13 +817,13 @@ export function renderSocialHud() {
                         let gems = '';
                         for(let i=0; i<5; i++) gems += `<i class="${i < Math.min(5, count) ? 'fa-solid' : 'fa-regular'} fa-gem"></i>`;
                         return count >= 5 
-                            ? `<button type="button" class="bb-crystal-row-btn ${type} bb-btn-crystallize-${isPos ? 'pos' : 'neg'}" data-char="${escapeHtml(charName)}"><div class="bb-cr-gems">${gems}</div><span class="bb-cr-text"><i class="fa-solid fa-wand-magic-sparkles"></i> Создать ${isPos ? 'светлую' : 'мрачную'} черту</span></button>`
+                            ? ui`<button type="button" class="bb-crystal-row-btn ${type} bb-btn-crystallize-${isPos ? 'pos' : 'neg'}" data-char="${escapeHtml(charName)}"><div class="bb-cr-gems">${gems}</div><span class="bb-cr-text"><i class="fa-solid fa-wand-magic-sparkles"></i> Создать ${isPos ? t('светлую') : t('мрачную')} черту</span></button>`
                             : `<div class="bb-crystal-row-static ${type}"><div class="bb-cr-gems">${gems}</div><span class="bb-cr-text">${count} / 5</span></div>`;
                     };
                     crystalTrackerHtml = `<div class="bb-crystal-tracker">${(deepPosCount > 0 || posTraitsCount > 0) ? buildRow(deepPosCount, 'positive') : ''}${(deepNegCount > 0 || negTraitsCount > 0) ? buildRow(deepNegCount, 'negative') : ''}</div>`;
                 }
 
-                cardsHtml += `
+                cardsHtml += ui`
                     <div class="bb-char-card" data-char="${escapeHtml(charName)}">
                         <div class="bb-char-card-shell">
                             <div class="bb-char-hero">
@@ -835,7 +840,7 @@ export function renderSocialHud() {
                                             <span class="bb-char-direction" style="margin-bottom: 0;"><i class="fa-solid fa-eye"></i> отношение к вам:</span>
                                             <div class="bb-char-signals" style="display: flex; flex-direction: column; align-items: flex-end; gap: 5px;">
                                                 <span class="bb-char-tier ${tier.class}" style="text-align: center; max-width: 130px; line-height: 1.3;" title="${escapeHtml(displayStatus)}">${escapeHtml(displayStatus)}</span>
-                                                ${memories.deep.length > 0 ? `<span class="bb-unforgettable-impact" style="text-align: center; max-width: 130px; line-height: 1.3;">${escapeHtml(unforgettableImpact.label)}</span>` : ''}
+                                                ${memories.deep.length > 0 ? `<span class="bb-unforgettable-impact" style="text-align: center; max-width: 130px; line-height: 1.3;">${escapeHtml(t(unforgettableImpact.label))}</span>` : ''}
                                             </div>
                                         </div>
                                         <button type="button" class="bb-char-edit-btn" data-char="${escapeHtml(charName)}" title="Настройки персонажа" style="background: none; border: none; color: #64748b; cursor: pointer; padding: 0; font-size: 14px; min-width: auto; margin-top: -2px;"><i class="fa-solid fa-sliders"></i></button>
@@ -843,7 +848,7 @@ export function renderSocialHud() {
                                 </div>
                                 <div class="bb-char-route-meta">
                                     <div class="bb-char-meta-card"><span class="bb-char-meta-label">Последний сдвиг</span><strong style="color: ${lastShift ? lastShift.color : '#f8fafc'};">${escapeHtml(lastShiftPoints)}</strong></div>
-                                    <div class="bb-char-meta-card"><span class="bb-char-meta-label">Динамика</span><strong style="color: #cbd5e1;">${escapeHtml(getTrendNarrative(stats.history || []))}</strong></div>
+                                    <div class="bb-char-meta-card"><span class="bb-char-meta-label">Динамика</span><strong style="color: #cbd5e1;">${escapeHtml(t(getTrendNarrative(stats.history || [])))}</strong></div>
                                 </div>
                             </div>
                             <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 6px; min-height: 30px;">
@@ -858,9 +863,9 @@ export function renderSocialHud() {
                         </div>
                         ${(memories.soft.length > 0 || allDeepMemories.length > 0) ? `
                         <div class="bb-char-log" style="border-radius: 0;">
-                            ${coreTraits.length > 0 ? `<div class="bb-memory-section" style="padding-top: 4px; margin-bottom: 8px;"><div class="bb-memory-title" style="color:#fbbf24;">Черты Характера</div><div class="bb-memory-list bb-memory-list-deep">${traitsHtml}</div></div>` : ''}
-                            ${memories.soft.length > 0 ? `<div class="bb-memory-section" style="padding-top: 4px;"><div class="bb-memory-title">Мягкие следы</div><div class="bb-memory-list">${softMemoriesHtml}</div></div>` : ''}
-                            ${allDeepMemories.length > 0 ? `<div class="bb-memory-section"><div class="bb-memory-title">Незабываемые события</div><div class="bb-memory-list bb-memory-list-deep">${deepMemoriesHtml}</div></div>` : ''}
+                            ${coreTraits.length > 0 ? ui`<div class="bb-memory-section" style="padding-top: 4px; margin-bottom: 8px;"><div class="bb-memory-title" style="color:#fbbf24;">Черты Характера</div><div class="bb-memory-list bb-memory-list-deep">${traitsHtml}</div></div>` : ''}
+                            ${memories.soft.length > 0 ? ui`<div class="bb-memory-section" style="padding-top: 4px;"><div class="bb-memory-title">Мягкие следы</div><div class="bb-memory-list">${softMemoriesHtml}</div></div>` : ''}
+                            ${allDeepMemories.length > 0 ? ui`<div class="bb-memory-section"><div class="bb-memory-title">Незабываемые события</div><div class="bb-memory-list bb-memory-list-deep">${deepMemoriesHtml}</div></div>` : ''}
                         </div>` : ''}
                         <div class="bb-char-editor" style="display:none; cursor: default; border-top: 1px solid rgba(255,255,255,0.06); border-radius: 0 0 22px 22px; margin: 0; background: rgba(0,0,0,0.2);">
                             <div class="bb-editor-title">Настройки связи</div><div class="bb-editor-hint">Измените стартовые очки или заблокируйте романтику.</div>
@@ -873,7 +878,7 @@ export function renderSocialHud() {
             });
             }
 
-            charsBox.innerHTML = `
+            charsBox.innerHTML = ui`
                 <div class="bb-panel-hero bb-panel-hero-route">
                     <div class="bb-panel-kicker">Связи</div><div class="bb-panel-headline">Состояние отношений</div><div class="bb-panel-subtitle">Здесь показаны текущие связи, изменения и важные воспоминания по персонажам.</div>
                     <div class="bb-panel-stat-grid"><div class="bb-panel-stat"><span class="bb-panel-stat-label">Связей</span><strong>${visibleCharacters}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Главный фокус</span><strong>${escapeHtml(topCharacterName || '—')}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Макс. значение</span><strong>${topCharacterName ? (topAffinity > 0 ? '+' : '') + topAffinity : '—'}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Глубоких следов</span><strong>${deepMomentsCount}</strong></div></div>
@@ -916,7 +921,7 @@ export function renderSocialHud() {
                 const file = this.files?.[0];
                 if (!file) return;
                 if (!String(file.type || '').startsWith('image/')) {
-                    notifyError('Нужен именно файл изображения.');
+                    notifyError(t('Нужен именно файл изображения.'));
                     jQuery(this).val('');
                     return;
                 }
@@ -930,10 +935,10 @@ export function renderSocialHud() {
                     editor.find('.bb-avatar-focus-y').val('50');
                     editor.find('.bb-avatar-focus-zoom').val('100');
                     queueCharacterEditorAvatarPreview(editor, true);
-                    notifyInfo('Аватар загружен. При необходимости подстройте кадр перед сохранением.');
+                    notifyInfo(t('Аватар загружен. При необходимости подстройте кадр перед сохранением.'));
                 } catch (error) {
                     console.error('[BB VN] Avatar upload failed:', error);
-                    notifyError('Не удалось обработать изображение.');
+                    notifyError(t('Не удалось обработать изображение.'));
                 } finally {
                     jQuery(this).val('');
                 }
@@ -971,8 +976,8 @@ export function renderSocialHud() {
                 editor.data('bbDescriptionGenerationRequestId', requestId);
                 editor.data('bbDescriptionGenerationCancelled', false);
                 button.attr('data-original-html', originalHtml);
-                button.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i>&ensp;Генерация...');
-                cancelButton.prop('disabled', false).show().html('<i class="fa-solid fa-xmark"></i>&ensp;Отмена');
+                button.prop('disabled', true).html(t('<i class="fa-solid fa-spinner fa-spin"></i>&ensp;Генерация...'));
+                cancelButton.prop('disabled', false).show().html(t('<i class="fa-solid fa-xmark"></i>&ensp;Отмена'));
                 generateCharacterDescription({
                     signal: controller.signal,
                     charName,
@@ -984,23 +989,23 @@ export function renderSocialHud() {
 
                     const finalText = String(generated || '').trim() || generatedFallback;
                     if (!finalText) {
-                        notifyError('Не удалось собрать описание персонажа.');
+                        notifyError(t('Не удалось собрать описание персонажа.'));
                         return;
                     }
                     editor.find('.bb-edit-description-input').val(finalText);
-                    notifyInfo('Описание персонажа обновлено. При желании его можно подправить вручную.');
+                    notifyInfo(t('Описание персонажа обновлено. При желании его можно подправить вручную.'));
                 }).catch((error) => {
                     if (String(editor.data('bbDescriptionGenerationRequestId') || '') !== requestId) return;
                     console.error('[BB VN] Character description generation failed:', normalizeRequestError(error).code);
                     if (editor.data('bbDescriptionGenerationCancelled') === true || isVnGenerationAbortError(error)) {
-                        notifyInfo('Генерация описания отменена.');
+                        notifyInfo(t('Генерация описания отменена.'));
                         return;
                     }
                     if (generatedFallback) {
                         editor.find('.bb-edit-description-input').val(generatedFallback);
-                        notifyInfo(`${error.message || 'Не удалось сгенерировать описание.'} Подставлен локальный шаблон описания.`);
+                        notifyInfo(ui`${error.message || t('Не удалось сгенерировать описание.')} Подставлен локальный шаблон описания.`);
                     } else {
-                        notifyError(error.message || 'Не удалось сгенерировать описание персонажа.');
+                        notifyError(error.message || t('Не удалось сгенерировать описание персонажа.'));
                     }
                 }).finally(() => {
                     if (String(editor.data('bbDescriptionGenerationRequestId') || '') !== requestId) return;
@@ -1018,10 +1023,10 @@ export function renderSocialHud() {
                 editor.data('bbDescriptionGenerationCancelled', true);
                 editor.find('.bb-btn-generate-description')
                     .prop('disabled', true)
-                    .html('<i class="fa-solid fa-spinner fa-spin"></i>&ensp;Останавливаем...');
+                    .html(t('<i class="fa-solid fa-spinner fa-spin"></i>&ensp;Останавливаем...'));
                 jQuery(this)
                     .prop('disabled', true)
-                    .html('<i class="fa-solid fa-spinner fa-spin"></i>&ensp;Отмена...');
+                    .html(t('<i class="fa-solid fa-spinner fa-spin"></i>&ensp;Отмена...'));
 
                 editor.data('bbDescriptionGenerationController')?.abort();
             });
@@ -1049,7 +1054,7 @@ export function renderSocialHud() {
                 };
 
                 if (!requestedCharName) {
-                    notifyError('Имя персонажа не может быть пустым.');
+                    notifyError(t('Имя персонажа не может быть пустым.'));
                     return;
                 }
 
@@ -1065,25 +1070,25 @@ export function renderSocialHud() {
                         setHudPopupPriority(true);
                         try {
                             confirmed = await SillyTavern.getContext().callPopup(
-                                `<h3>Имя уже занято</h3><p><strong>${escapeHtml(requestedCharName)}</strong> уже есть в трекере.</p><p>Слить <strong>${escapeHtml(originalCharName)}</strong> в эту запись?</p>`,
+                                ui`<h3>Имя уже занято</h3><p><strong>${escapeHtml(requestedCharName)}</strong> уже есть в трекере.</p><p>Слить <strong>${escapeHtml(originalCharName)}</strong> в эту запись?</p>`,
                                 'confirm'
                             );
                         } finally {
                             setHudPopupPriority(false);
                         }
                         if (!confirmed) {
-                            notifyInfo('Переименование отменено.');
+                            notifyInfo(t('Переименование отменено.'));
                             return;
                         }
                         const mergeResult = mergeCharacterRecords(originalCharName, requestedCharName);
                         if (!mergeResult?.ok) {
-                            notifyError('Не удалось слить записи персонажа.');
+                            notifyError(t('Не удалось слить записи персонажа.'));
                             return;
                         }
                         charName = mergeResult.targetName || requestedCharName;
                         renamed = !mergeResult.same;
                     } else {
-                        notifyError('Не удалось переименовать персонажа.');
+                        notifyError(t('Не удалось переименовать персонажа.'));
                         return;
                     }
                 }
@@ -1108,8 +1113,8 @@ export function renderSocialHud() {
                 saveChatDebounced();
                 recalculateAllStats();
                 notifySuccess(renamed
-                    ? `Персонаж переименован в «${charName}».`
-                    : (finalAvatar ? 'Карточка и аватар персонажа сохранены!' : 'Настройки персонажа сохранены!'));
+                    ? ui`Персонаж переименован в «${charName}».`
+                    : (finalAvatar ? t('Карточка и аватар персонажа сохранены!') : t('Настройки персонажа сохранены!')));
             });
 
             jQuery('.bb-btn-crystallize-pos, .bb-btn-crystallize-neg').off('click').on('click', async function(e) {
@@ -1121,7 +1126,7 @@ export function renderSocialHud() {
                 const targetMemories = stats.memories.deep.filter(m => m.tone === (isPositive ? 'positive' : 'negative'));
                 if (targetMemories.length < 5) return;
                 const btn = jQuery(this); const originalHtml = btn.html();
-                btn.html('<i class="fa-solid fa-spinner fa-spin"></i> Анализ воспоминаний...').css('pointer-events', 'none');
+                btn.html(t('<i class="fa-solid fa-spinner fa-spin"></i> Анализ воспоминаний...')).css('pointer-events', 'none');
                 const userName = SillyTavern.getContext().substituteParams('{{user}}');
                 try {
                     const result = normalizeTraitResponse(await crystallizeTraitFromMemories({
@@ -1150,7 +1155,7 @@ export function renderSocialHud() {
                     });
                 } catch (e) {
                     console.warn('[BB VN] Trait crystallization failed:', normalizeRequestError(e).code);
-                    notifyError(e.message || 'Не удалось сформировать черту персонажа.');
+                    notifyError(e.message || t('Не удалось сформировать черту персонажа.'));
                 } finally {
                     btn.html(originalHtml).css('pointer-events', 'auto');
                 }
@@ -1162,14 +1167,14 @@ export function renderSocialHud() {
                 let confirmed = false;
                 setHudPopupPriority(true);
                 try {
-                    confirmed = await SillyTavern.getContext().callPopup(`<h3>Скрыть персонажа?</h3><p>Персонаж <strong>${charName}</strong> пропадёт из трекера.</p>`, 'confirm');
+                    confirmed = await SillyTavern.getContext().callPopup(ui`<h3>Скрыть персонажа?</h3><p>Персонаж <strong>${charName}</strong> пропадёт из трекера.</p>`, 'confirm');
                 } finally {
                     setHudPopupPriority(false);
                 }
                 if (!confirmed) return;
                 if (!chat_metadata['bb_vn_ignored_chars']) chat_metadata['bb_vn_ignored_chars'] = [];
                 if (!chat_metadata['bb_vn_ignored_chars'].includes(charName)) chat_metadata['bb_vn_ignored_chars'].push(charName);
-                saveChatDebounced(); recalculateAllStats(); notifyInfo(`${charName} скрыт.`);
+                saveChatDebounced(); recalculateAllStats(); notifyInfo(ui`${charName} скрыт.`);
             });
         }
     }
@@ -1177,27 +1182,27 @@ export function renderSocialHud() {
     const logBox = document.getElementById('bb-hud-log');
     if (logBox) {
         const logs = chat_metadata['bb_vn_global_log'] || [];
-        const promptPreviewHtml = `
+        const promptPreviewHtml = ui`
             <div class="bb-panel-hero bb-panel-hero-system"><div class="bb-panel-kicker">Журнал</div><div class="bb-panel-headline">Системный журнал</div><div class="bb-panel-subtitle">Здесь показаны изменения отношений и текущий инжектируемый промпт.</div>
             <div class="bb-panel-stat-grid"><div class="bb-panel-stat"><span class="bb-panel-stat-label">Событий</span><strong>${logs.length}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Активный тон</span><strong>${escapeHtml(activeChoiceTone)}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Последнее событие</span><strong>${escapeHtml(latestMoment?.title || '—')}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Social HTML</span><strong>${escapeHtml(socialDebugLabel)}</strong></div></div><div class="bb-panel-subtitle" style="margin-top:8px;">${escapeHtml(socialDebugText)}</div></div>
             <details class="bb-prompt-card"><summary class="bb-prompt-summary"><span>🧠 Inject Prompt</span><button type="button" class="menu_button bb-copy-prompt-btn"><i class="fa-solid fa-copy"></i>&nbsp; Копировать</button></summary><div class="bb-prompt-hint">Это текущий инжект, собранный из актуального состояния чата. После нового выбора VN или следующего хода он может измениться.</div><pre class="bb-prompt-pre">${escapeHtml(getCombinedSocial())}</pre></details>
         `;
-        if (logs.length === 0) logBox.innerHTML = `${promptPreviewHtml}<div class="bb-empty-hud">Журнал событий пуст.</div>`;
+        if (logs.length === 0) logBox.innerHTML = ui`${promptPreviewHtml}<div class="bb-empty-hud">Журнал событий пуст.</div>`;
         else {
             let logHtml = '<div class="bb-system-log-list">';
             [...logs].reverse().forEach(log => { logHtml += `<div class="bb-glog-item ${log.type}"><span class="bb-glog-time">[${log.time}]</span><span class="bb-glog-text">${log.text}</span></div>`; });
             logHtml += '</div>'; logBox.innerHTML = promptPreviewHtml + logHtml;
         }
         const copyBtn = logBox.querySelector('.bb-copy-prompt-btn');
-        if (copyBtn) copyBtn.addEventListener('click', async () => { try { await navigator.clipboard.writeText(getCombinedSocial()); notifySuccess("Prompt скопирован!"); } catch (e) { notifyError("Ошибка копирования."); } });
+        if (copyBtn) copyBtn.addEventListener('click', async () => { try { await navigator.clipboard.writeText(getCombinedSocial()); notifySuccess(t("Prompt скопирован!")); } catch (e) { notifyError(t("Ошибка копирования.")); } });
     }
 
     const momentsBox = document.getElementById('bb-hud-moments');
     if (momentsBox) {
-        if (currentStoryMoments.length === 0) momentsBox.innerHTML = `<div class="bb-panel-hero bb-panel-hero-diary"><div class="bb-panel-kicker">Дневник событий</div><div class="bb-panel-headline">Дневник ещё пуст</div><div class="bb-panel-subtitle">Здесь будут сохраняться важные изменения.</div></div><div class="bb-empty-hud">Памятные моменты пока не накопились.</div>`;
+        if (currentStoryMoments.length === 0) momentsBox.innerHTML = ui`<div class="bb-panel-hero bb-panel-hero-diary"><div class="bb-panel-kicker">Дневник событий</div><div class="bb-panel-headline">Дневник ещё пуст</div><div class="bb-panel-subtitle">Здесь будут сохраняться важные изменения.</div></div><div class="bb-empty-hud">Памятные моменты пока не накопились.</div>`;
         else {
-            let momentsHtml = `<div class="bb-panel-hero bb-panel-hero-diary"><div class="bb-panel-kicker">Дневник событий</div><div class="bb-panel-headline">События</div><div class="bb-panel-subtitle">Важные события, зафиксированные по ходу чата.</div><div class="bb-panel-stat-grid"><div class="bb-panel-stat"><span class="bb-panel-stat-label">Записей</span><strong>${currentStoryMoments.length}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Последняя</span><strong>${escapeHtml(currentStoryMoments[currentStoryMoments.length - 1]?.title || '—')}</strong></div></div></div><div class="bb-diary-stack">`;
-            [...currentStoryMoments].reverse().forEach((moment, index) => { momentsHtml += `<div class="bb-moment-card ${escapeHtml(moment.type || 'neutral')}"><div class="bb-moment-pin"></div><div class="bb-moment-header"><div class="bb-moment-meta"><span class="bb-moment-stamp">Запись ${currentStoryMoments.length - index}</span><span class="bb-moment-char">${escapeHtml(moment.char || 'Сцена')}</span></div><span class="bb-moment-title">${escapeHtml(moment.title)}</span></div><div class="bb-moment-divider"></div><div class="bb-moment-body"><div class="bb-moment-text">${escapeHtml(moment.text)}</div></div></div>`; });
+            let momentsHtml = ui`<div class="bb-panel-hero bb-panel-hero-diary"><div class="bb-panel-kicker">Дневник событий</div><div class="bb-panel-headline">События</div><div class="bb-panel-subtitle">Важные события, зафиксированные по ходу чата.</div><div class="bb-panel-stat-grid"><div class="bb-panel-stat"><span class="bb-panel-stat-label">Записей</span><strong>${currentStoryMoments.length}</strong></div><div class="bb-panel-stat"><span class="bb-panel-stat-label">Последняя</span><strong>${escapeHtml(currentStoryMoments[currentStoryMoments.length - 1]?.title || '—')}</strong></div></div></div><div class="bb-diary-stack">`;
+            [...currentStoryMoments].reverse().forEach((moment, index) => { momentsHtml += ui`<div class="bb-moment-card ${escapeHtml(moment.type || 'neutral')}"><div class="bb-moment-pin"></div><div class="bb-moment-header"><div class="bb-moment-meta"><span class="bb-moment-stamp">Запись ${currentStoryMoments.length - index}</span><span class="bb-moment-char">${escapeHtml(moment.char || t('Сцена'))}</span></div><span class="bb-moment-title">${escapeHtml(moment.title)}</span></div><div class="bb-moment-divider"></div><div class="bb-moment-body"><div class="bb-moment-text">${escapeHtml(moment.text)}</div></div></div>`; });
             momentsHtml += '</div>'; momentsBox.innerHTML = momentsHtml;
         }
     }
@@ -1276,7 +1281,7 @@ export function closeSocialHud() {
 
 export function ensureHudContainer() {
     if (document.getElementById('bb-social-hud')) return;
-    const hudHtml = `
+    const hudHtml = ui`
         <button type="button" id="bb-social-hud-backdrop" aria-label="Закрыть HUD"></button>
         <button type="button" id="bb-social-hud-mobile-launcher" aria-label="Открыть HUD"><i class="fa-solid fa-users-viewfinder"></i><span>VNE</span></button>
         <div id="bb-social-hud">

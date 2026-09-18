@@ -1,3 +1,4 @@
+import { ui } from './i18n.js';
 import { buildOutputLanguageDirective } from './language.js';
 /* global SillyTavern */
 import { setExtensionPrompt, chat_metadata, saveChatDebounced, extension_prompt_roles, extension_prompt_types, callPopup } from '../../../../../script.js';
@@ -96,7 +97,7 @@ async function processMergeSuggestionQueue() {
             let confirmed = false;
             try {
                 confirmed = await SillyTavern.getContext().callPopup(
-                    `<h3>Похожий персонаж найден</h3><p><strong>${escapeHtml(suggestion.source)}</strong> очень похож на <strong>${escapeHtml(suggestion.target)}</strong>.</p><p>Слить их сейчас в одного персонажа?</p><p><span style="font-size:12px; color:#94a3b8;">Перед слиянием лучше сделать бэкап снапшотом.</span></p>`,
+                    ui`<h3>Похожий персонаж найден</h3><p><strong>${escapeHtml(suggestion.source)}</strong> очень похож на <strong>${escapeHtml(suggestion.target)}</strong>.</p><p>Слить их сейчас в одного персонажа?</p><p><span style="font-size:12px; color:#94a3b8;">Перед слиянием лучше сделать бэкап снапшотом.</span></p>`,
                     'confirm'
                 );
             } catch (error) {
@@ -113,7 +114,7 @@ async function processMergeSuggestionQueue() {
                 if (typeof window['bbRenderMergeSuggestionsList'] === 'function') {
                     window['bbRenderMergeSuggestionsList']();
                 }
-                notifySuccess(result.same ? `Это уже один и тот же персонаж: ${result.targetName}` : `Слито записей: ${result.count}`);
+                notifySuccess(result.same ? ui`Это уже один и тот же персонаж: ${result.targetName}` : ui`Слито записей: ${result.count}`);
             }
         }
     } finally {
@@ -1599,7 +1600,7 @@ function rememberMergeSuggestion(scopeState, sourceName, targetEntry, score) {
     };
     scopeState.merge_suggestions.push(suggestion);
     if (scopeState.merge_suggestions.length > 20) scopeState.merge_suggestions.shift();
-    notifyInfo(`Возможный дубль: «${suggestion.source}» похоже на «${suggestion.target}». Проверь объединение.`);
+    notifyInfo(ui`Возможный дубль: «${suggestion.source}» похоже на «${suggestion.target}». Проверь объединение.`);
     saveChatDebounced();
     if (typeof window['bbRenderMergeSuggestionsList'] === 'function') {
         window['bbRenderMergeSuggestionsList']();
@@ -2614,7 +2615,7 @@ export async function handleNewCharacterInterviews(chars) {
     const userName = SillyTavern.getContext().substituteParams('{{user}}');
 
     for (const charName of chars.filter(name => !isUserPersonaCharacterName(name))) {
-        const result = await callPopup(`<h3>Новая связь: ${escapeHtml(charName)}</h3><p>Этот персонаж впервые появился в трекере.<br>Задайте базовое отношение к <strong>${escapeHtml(userName)}</strong> (от -100 до 100).<br><br><span style="font-size:12px; color:#94a3b8;">0 — незнакомец, 50 — друг, -50 — враг.</span></p>`, 'input', '0');
+        const result = await callPopup(ui`<h3>Новая связь: ${escapeHtml(charName)}</h3><p>Этот персонаж впервые появился в трекере.<br>Задайте базовое отношение к <strong>${escapeHtml(userName)}</strong> (от -100 до 100).<br><br><span style="font-size:12px; color:#94a3b8;">0 — незнакомец, 50 — друг, -50 — враг.</span></p>`, 'input', '0');
         
         if (result !== undefined && result !== null && result !== false) {
             const parsed = parseInt(String(result).trim(), 10);

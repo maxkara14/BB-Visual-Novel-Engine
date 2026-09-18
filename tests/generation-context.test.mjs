@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { SourceTextModule, SyntheticModule, createContext } from 'node:vm';
 
@@ -112,7 +113,7 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
         }],
     ]);
     const cache = new Map();
-    async function load(specifier) {
+    function getModule(specifier) {
         specifier = specifier.replace('./modules/', './');
         if (specifier === '../../../extensions.js') specifier = '../../../../extensions.js';
         if (cache.has(specifier)) return cache.get(specifier);
@@ -123,7 +124,7 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
                 for (const [key, value] of Object.entries(values)) this.setExport(key, value);
             }, { context: sandbox });
         } else {
-            const source = await readFile(new URL(`modules/${specifier}`, root), 'utf8');
+            const source = readFileSync(new URL(`modules/${specifier}`, root), 'utf8');
             module = new SourceTextModule(source, {
                 context: sandbox, identifier: specifier,
                 importModuleDynamically: async name => {
@@ -134,7 +135,11 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
             });
         }
         cache.set(specifier, module);
-        await module.link(load);
+        return module;
+    }
+    async function load(specifier) {
+        const module = getModule(specifier);
+        if (module.status === 'unlinked') await module.link(getModule);
         return module;
     }
     const generator = await load('./generator.js');
@@ -941,4 +946,83 @@ test('VN repair keeps the language captured at operation start', async () => {
     assert.match(h.calls[1].args.quietPrompt,/text in English/);
     assert.doesNotMatch(h.calls[1].args.quietPrompt,/original Russian/);
     h.respond(1);await run;assert.equal(h.saves,1);
+});
+
+test('UI language resolves independently from output language and has a predictable Auto mode', async () => {
+    const h = await harness(); const api = await h.loadApi('./i18n.js');
+    assert.equal(api.getUiLanguage({uiLanguage:'auto'},'ru-RU'),'ru');
+    assert.equal(api.getUiLanguage({uiLanguage:'auto'},'en-US'),'en');
+    assert.equal(api.getUiLanguage({uiLanguage:'auto'},'de-DE'),'en');
+    assert.equal(api.getUiLanguage({uiLanguage:'ru',outputLanguage:'en'},'en-US'),'ru');
+    assert.equal(api.getUiLanguage({uiLanguage:'en',outputLanguage:'ru'},'ru-RU'),'en');
+});
+test('localization translates static markup without touching dynamic names or escaping', async () => {
+    const h=await harness();const api=await h.loadApi('./i18n.js');
+    const stored={name:'Связь',memory:'Память',trait:'Светлая черта',reply:'Открыть дверь'};
+    const before=JSON.stringify(stored);
+    h.settings['BB-Visual-Novel'].uiLanguage='en';
+    assert.equal(api.ui`<b>Персонаж</b>: ${stored.name}; ${stored.memory}; ${stored.trait}; ${stored.reply}`,'<b>Character</b>: Связь; Память; Светлая черта; Открыть дверь');
+    const unsafe='Связь <img src=x onerror=alert(1)>';
+    const safe=h.utils.escapeHtml(unsafe);
+    assert.equal(api.ui`<span title="${safe}">Сцена: ${safe}</span>`,`<span title="${safe}">Scene: ${safe}</span>`);
+    assert.equal(JSON.stringify(stored),before);
+    h.settings['BB-Visual-Novel'].uiLanguage='ru';
+    assert.equal(api.ui`<b>Персонаж</b>: ${stored.name}`,'<b>Персонаж</b>: Связь');
+});
+test('English UI profile control keeps Russian profile names and saves the same IDs', async () => {
+    const h=await harness();h.settings['BB-Visual-Novel'].uiLanguage='en';selectProfile(h);
+    h.profileState.profiles[0].name='Связь';
+    const api=await h.loadApi('./connection-ui.js');const root=h.createNode('div');
+    const controls=api.mountVnConnectionControls(root,h.settings['BB-Visual-Novel'],()=>{});
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(root.children[0].textContent,'Generation connection');
+    const block=root.children[2];
+    assert.equal(block.children[0].textContent,'Connection profile');
+    assert.ok(block.children[1].children.some(option=>option.textContent.includes('Связь')));
+    assert.equal(block.children[1].value,'profile-a');
+    assert.equal(typeof controls.sync,'function');
+});
+test('English error messages retain codes and cancellation remains recognizable', async () => {
+    const h=await harness();h.settings['BB-Visual-Novel'].uiLanguage='en';
+    const error=new h.requests.VnRequestError('cancelled');
+    assert.equal(error.code,'cancelled');assert.equal(error.message,'Cancelled by user');
+    assert.equal(h.api.isVnGenerationAbortError(error),true);
+    assert.match(new h.requests.VnRequestError('timeout').message,/timed out/);
+});
+test('local profile templates follow output language rather than interface language', async () => {
+    const h=await harness();const api=await h.loadApi('./i18n.js');
+    Object.assign(h.settings['BB-Visual-Novel'],{uiLanguage:'ru',outputLanguage:'en'});
+    assert.equal(api.template`Имя: ${'Память'}.`,'Name: Память.');
+    Object.assign(h.settings['BB-Visual-Novel'],{uiLanguage:'en',outputLanguage:'ru'});
+    assert.equal(api.template`Имя: ${'Memory'}.`,'Имя: Memory.');
+    assert.equal(api.getTemplateLanguage({outputLanguage:'chat'},[{mes:'Я жду.'}]),'ru');
+    assert.equal(api.getTemplateLanguage({outputLanguage:'chat'},[{mes:'I wait.'}]),'en');
+});
+test('English catalogue preserves interpolation tokens and distinct full messages', async () => {
+    const h=await harness();const {EN}=await h.loadApi('./locales/en.js');const api=await h.loadApi('./i18n.js');
+    for(const [key,value] of Object.entries(EN)) {
+        assert.deepEqual((key.match(/\{\w+\}/g)||[]).sort(),(value.match(/\{\w+\}/g)||[]).sort(),key);
+        assert.equal(api.t(key,'en'),value,key);
+        assert.equal(api.t(key,'ru'),key,key);
+    }
+    assert.equal(api.t('Непереводимое слово','en'),'Непереводимое слово');
+});
+test('opposite UI and generation languages work through request, validation, and saving', async () => {
+    for(const [uiLanguage,outputLanguage,intents,languageName] of [
+        ['ru','en',['Open the door','Ask a question','Wait'],'English'],
+        ['en','ru',['Открыть дверь','Задать вопрос','Подождать'],'Russian'],
+    ]) {
+        const h=await harness();Object.assign(h.settings['BB-Visual-Novel'],{uiLanguage,outputLanguage});
+        const run=h.api.bbVnGenerateOptionsFlow();
+        assert.match(h.calls[0].args.quietPrompt,new RegExp('text in '+languageName));
+        h.respond(0,JSON.stringify(options.map((option,i)=>({...option,intent:intents[i]}))));
+        await run;assert.equal(h.saves,1);assert.equal(h.rendered[0].data[0].intent,intents[0]);
+    }
+});
+
+test('Auto interface language follows the installed Tavern locale accessor', async () => {
+    const h=await harness();const api=await h.loadApi('./i18n.js');
+    h.context.getCurrentLocale=()=> 'en-US';assert.equal(api.getUiLanguage({uiLanguage:'auto'}),'en');
+    h.context.getCurrentLocale=()=> 'ru-RU';assert.equal(api.getUiLanguage({uiLanguage:'auto'}),'ru');
+    assert.equal(api.getUiLanguage({uiLanguage:'en'}),'en');
 });

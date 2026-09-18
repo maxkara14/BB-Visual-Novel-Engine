@@ -1,10 +1,11 @@
+import { t, ui } from './i18n.js';
 function getVnGenerateButton() {
     return jQuery('#bb-vn-btn-generate');
 }
 
 function buildVnGenerateButtonContent({ loading = false } = {}) {
     if (loading) {
-        return `
+        return ui`
             <span class="bb-vn-main-btn__content">
                 <i class="fa-solid fa-spinner fa-spin"></i>
                 <span class="bb-vn-main-btn__label">Сценарий в обработке...</span>
@@ -15,7 +16,7 @@ function buildVnGenerateButtonContent({ loading = false } = {}) {
         `;
     }
 
-    return `
+    return ui`
         <span class="bb-vn-main-btn__content">
             <i class="fa-solid fa-clapperboard"></i>
             <span class="bb-vn-main-btn__label">Действия VN</span>
@@ -52,7 +53,7 @@ export function setVnGenerateButtonIdle({ hasSaved = false } = {}) {
     button
         .removeClass('loading')
         .toggleClass('has-saved', !!hasSaved)
-        .attr('title', hasSaved ? 'Есть сохранённые варианты VN' : 'Открыть панель действий VN')
+        .attr('title', hasSaved ? t('Есть сохранённые варианты VN') : t('Открыть панель действий VN'))
         .html(buildVnGenerateButtonContent());
 }
 
@@ -63,7 +64,7 @@ export function setVnGenerateButtonLoading() {
     button
         .removeClass('has-saved')
         .addClass('loading')
-        .attr('title', 'Нажмите, чтобы отменить генерацию')
+        .attr('title', t('Нажмите, чтобы отменить генерацию'))
         .html(buildVnGenerateButtonContent({ loading: true }))
         .show();
 }

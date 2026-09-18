@@ -23,6 +23,7 @@ export const DEFAULT_SETTINGS = {
     vnJsonMode: 'auto',
     vnMaxAdditionalRequests: 3,
     outputLanguage: 'chat',
+    uiLanguage: 'auto',
     useMacro: false,
     emotionalChoiceFraming: true,
     disableRelationshipTracker: false,

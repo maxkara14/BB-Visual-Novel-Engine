@@ -1,3 +1,4 @@
+import { t, ui } from './i18n.js';
 import { buildOutputLanguageDirective } from './language.js';
 /* global SillyTavern */
 import { chat_metadata, saveChatDebounced, generateQuietPrompt } from '../../../../../script.js';
@@ -56,7 +57,7 @@ function maybeNotifyCustomApiFallback() {
     const now = Date.now();
     if (now - lastCustomApiFallbackNoticeAt < 8000) return;
     lastCustomApiFallbackNoticeAt = now;
-    notifyInfo('Кастомная модель не ответила. Генерация продолжена на основной модели.');
+    notifyInfo(t('Кастомная модель не ответила. Генерация продолжена на основной модели.'));
 }
 function getActiveVnReplyLength() {
     return normalizeVnReplyLength(extension_settings[MODULE_NAME]?.vnReplyLength);
@@ -202,7 +203,7 @@ export function invalidateVnOptionsGeneration() {
     activeVnOptionsOperation = null;
     createVnOptionsGenerationToken();
     operation.controller?.abort();
-    reportOptionsStage('Отменено', operation.requestsMade || 0);
+    reportOptionsStage(t('Отменено'), operation.requestsMade || 0);
     restoreVNOptions(false);
 }
 
@@ -324,7 +325,7 @@ export async function generateFastPrompt(promptText, options = {}) {
         ensureActiveVnOptionsGeneration(token);
         if (!hasOptionsRequestBudget(token)) throw new VnRequestError('request_budget');
         operation.requestsMade++;
-        reportOptionsStage(options.stage || 'Генерация вариантов', operation.requestsMade);
+        reportOptionsStage(options.stage || t('Генерация вариантов'), operation.requestsMade);
         try {
             return await generateFastPromptOnce(promptText, { ...options, jsonMode: operation.jsonMode });
         } catch (error) {
@@ -369,7 +370,7 @@ async function generateFastPromptOnce(promptText, options = {}) {
             signal, responseLength, jsonSchema, assertCurrent: token ? () => ensureActiveVnOptionsGeneration(token) : undefined,
         });
         if (token) ensureActiveVnOptionsGeneration(token);
-        reportGenerationSource(`профиль ${result.profileName}${result.model ? ` · ${result.model}` : ''}`);
+        reportGenerationSource(ui`профиль ${result.profileName}${result.model ? ` · ${result.model}` : ''}`);
         return includeMeta ? {
             content: result.content,
             meta: { provider: 'connection-profile', finishReason: '', usage: null },
@@ -430,8 +431,8 @@ async function generateFastPromptOnce(promptText, options = {}) {
                 connectionId,
                 model: s.customApiModel || '',
                 message: s.customApiModel
-                    ? `Кастомная модель ${s.customApiModel} ответила успешно.`
-                    : 'Кастомная модель ответила успешно.',
+                    ? ui`Кастомная модель ${s.customApiModel} ответила успешно.`
+                    : t('Кастомная модель ответила успешно.'),
             });
             if (includeMeta) {
                 return {
@@ -454,18 +455,18 @@ async function generateFastPromptOnce(promptText, options = {}) {
                 state: 'error',
                 connectionId,
                 model: s.customApiModel || '',
-                message: error.message + (canFallback ? ' Используется резервная основная модель.' : ''),
+                message: error.message + (canFallback ? t(' Используется резервная основная модель.') : ''),
             });
             if (!canFallback) throw error;
             if (token) {
                 if (!hasOptionsRequestBudget(token)) throw new VnRequestError('request_budget');
                 activeVnOptionsOperation.requestsMade++;
-                reportOptionsStage('Резервная основная модель', activeVnOptionsOperation.requestsMade);
+                reportOptionsStage(t('Резервная основная модель'), activeVnOptionsOperation.requestsMade);
             }
             maybeNotifyCustomApiFallback();
             const fallbackSchema = token && normalizeJsonMode(s.vnJsonMode) === 'auto' ? null : jsonSchema;
             const fallbackContent = await runMainGen(promptText, { responseLength, jsonSchema: fallbackSchema, vnOptionsToken: token, signal });
-            reportGenerationSource('основная модель (резервная после сбоя Custom API)');
+            reportGenerationSource(t('основная модель (резервная после сбоя Custom API)'));
             if (includeMeta) {
                 return {
                     content: fallbackContent,
@@ -483,7 +484,7 @@ async function generateFastPromptOnce(promptText, options = {}) {
         }
     } else {
         const content = await runMainGen(promptText, { responseLength, jsonSchema, vnOptionsToken: token, signal });
-        reportGenerationSource('основная модель SillyTavern');
+        reportGenerationSource(t('основная модель SillyTavern'));
         if (includeMeta) {
             return {
                 content,
@@ -524,7 +525,7 @@ BROKEN INPUT:
 ${String(rawText || '').trim()}`;
 
     const generationResult = await generateFastPrompt(repairPrompt, {
-        stage: 'Исправление JSON',
+        stage: t('Исправление JSON'),
         vnOptionsToken,
         responseFormat: 'json',
         includeMeta: true,
@@ -538,23 +539,23 @@ ${String(rawText || '').trim()}`;
 
 function buildOptionsCountError(rawCount = 0, uniqueCount = 0) {
     if (rawCount <= 0 && uniqueCount <= 0) {
-        return 'Модель не вернула ни одного корректного варианта.';
+        return t('Модель не вернула ни одного корректного варианта.');
     }
     if (uniqueCount >= MIN_RENDERABLE_OPTIONS) {
         return '';
     }
     if (rawCount > 0 && rawCount < 3) {
-        return `Модель вернула только ${rawCount} варианта вместо 3.`;
+        return ui`Модель вернула только ${rawCount} варианта вместо 3.`;
     }
     if (uniqueCount > 0 && uniqueCount < 3) {
-        return `Удалось собрать только ${uniqueCount} различимых варианта. Остальные были пустыми или слишком похожими.`;
+        return ui`Удалось собрать только ${uniqueCount} различимых варианта. Остальные были пустыми или слишком похожими.`;
     }
-    return 'Не удалось собрать 3 корректных варианта ответа.';
+    return t('Не удалось собрать 3 корректных варианта ответа.');
 }
 
 function maybeNotifyPartialOptions(count = 0) {
     if (count >= 3 || count < MIN_RENDERABLE_OPTIONS) return;
-    notifyInfo(`Модель собрала ${count} варианта из 3. Показываю то, что удалось получить.`);
+    notifyInfo(ui`Модель собрала ${count} варианта из 3. Показываю то, что удалось получить.`);
 }
 
 async function fillMissingOptions(basePrompt = '', existingOptions =[], vnOptionsToken) {
@@ -584,7 +585,7 @@ Return ONLY a valid JSON object containing an "options" array with the same sche
 ${existingSummary}`;
 
         const recoveryResult = await generateFastPrompt(recoveryPrompt, {
-            stage: 'Дополнение вариантов',
+            stage: t('Дополнение вариантов'),
             vnOptionsToken,
             responseFormat: 'json',
             includeMeta: true,
@@ -629,7 +630,7 @@ Hard rules:
 ${summarizeOptionsForPrompt(normalizedOptions)}`;
 
     const diversifiedResult = await generateFastPrompt(diversifyPrompt, {
-        stage: 'Разнообразие тонов',
+        stage: t('Разнообразие тонов'),
         vnOptionsToken,
         responseFormat: 'json',
         includeMeta: true,
@@ -1168,7 +1169,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
     
     if (activeVnOptionsOperation) {
         invalidateVnOptionsGeneration();
-        notifyInfo("Генерация вариантов отменена");
+        notifyInfo(t("Генерация вариантов отменена"));
         return;
     }
 
@@ -1182,10 +1183,10 @@ export async function bbVnGenerateOptionsFlow(request = []) {
     try {
         const context = SillyTavern.getContext();
         const chat = context.chat;
-        if (!chat || chat.length === 0) throw new Error("Чат пуст");
+        if (!chat || chat.length === 0) throw new Error(t("Чат пуст"));
         const messageIndex = chat.length - 1;
         const message = chat[messageIndex];
-        if (message.is_user) throw new Error('Дождитесь ответа персонажа.');
+        if (message.is_user) throw new Error(t('Дождитесь ответа персонажа.'));
         activeVnOptionsOperation = {
             token: requestToken,
             chat,
@@ -1277,7 +1278,7 @@ export async function bbVnGenerateOptionsFlow(request = []) {
         console.debug('[BB VN] Options response received', { length: String(result || '').length, provider });
 
         if (provider === 'custom-api' && finishReason === 'length') {
-            throw new Error('Кастомный API обрезал ответ по лимиту токенов (finish_reason=length). Уменьшите объём запроса, переключите длину на более короткую или сделайте реролл.');
+            throw new Error(t('Кастомный API обрезал ответ по лимиту токенов (finish_reason=length). Уменьшите объём запроса, переключите длину на более короткую или сделайте реролл.'));
         }
 
         ensureActiveVnOptionsGeneration(requestToken);
@@ -1313,18 +1314,18 @@ export async function bbVnGenerateOptionsFlow(request = []) {
             return;
         }
 
-        throw new Error('Модель вернула некорректные варианты. Сделайте реролл.');
+        throw new Error(t('Модель вернула некорректные варианты. Сделайте реролл.'));
 
     } catch (e) {
         if (!isActiveVnOptionsGenerationToken(requestToken)) return;
         if (activeVnOptionsOperation && !isCurrentOptionsOperation(requestToken)) return;
-        if (e.message !== VN_GENERATION_CANCELLED_MESSAGE) {
+        if (e.code !== 'cancelled' && e.message !== VN_GENERATION_CANCELLED_MESSAGE) {
             console.error('[BB VN] Generation failed:', normalizeRequestError(e).code);
-            notifyError(e.message || 'Не удалось сгенерировать варианты');
+            notifyError(e.message || t('Не удалось сгенерировать варианты'));
         }
     } finally {
         if (!isActiveVnOptionsGenerationToken(requestToken)) return;
-        reportOptionsStage(completed ? 'Готово' : 'Завершено без новых вариантов', activeVnOptionsOperation?.requestsMade || 0);
+        reportOptionsStage(completed ? t('Готово') : t('Завершено без новых вариантов'), activeVnOptionsOperation?.requestsMade || 0);
         activeVnOptionsOperation = null;
 
         if (!completed && btn.hasClass('loading')) {

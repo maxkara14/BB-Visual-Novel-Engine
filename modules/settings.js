@@ -1,3 +1,4 @@
+import { t, ui, normalizeUiLanguage } from './i18n.js';
  /* global SillyTavern */
 import { chat_metadata, saveChatDebounced, saveSettingsDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
@@ -13,23 +14,23 @@ import { mountVnConnectionControls } from './connection-ui.js';
 import { normalizeJsonMode, normalizeAdditionalRequests } from './structured-output.js';
 
 const IMPACT_SETTING_FIELDS = [
-    { key: 'unforgivable', token: 'unforgivable', title: 'Критический минус', hint: 'Тяжёлый удар по доверию или влечению' },
-    { key: 'major_negative', token: 'major_negative', title: 'Сильный минус', hint: 'Заметное ухудшение за один ход' },
-    { key: 'minor_negative', token: 'minor_negative', title: 'Слабый минус', hint: 'Небольшая негативная реакция' },
-    { key: 'minor_positive', token: 'minor_positive', title: 'Слабый плюс', hint: 'Лёгкое улучшение отношения' },
-    { key: 'major_positive', token: 'major_positive', title: 'Сильный плюс', hint: 'Хорошо заметный рост' },
-    { key: 'life_changing', token: 'life_changing', title: 'Судьбоносный плюс', hint: 'Крупный переломный сдвиг' },
+    { key: 'unforgivable', token: 'unforgivable', title: t('Критический минус'), hint: t('Тяжёлый удар по доверию или влечению') },
+    { key: 'major_negative', token: 'major_negative', title: t('Сильный минус'), hint: t('Заметное ухудшение за один ход') },
+    { key: 'minor_negative', token: 'minor_negative', title: t('Слабый минус'), hint: t('Небольшая негативная реакция') },
+    { key: 'minor_positive', token: 'minor_positive', title: t('Слабый плюс'), hint: t('Лёгкое улучшение отношения') },
+    { key: 'major_positive', token: 'major_positive', title: t('Сильный плюс'), hint: t('Хорошо заметный рост') },
+    { key: 'life_changing', token: 'life_changing', title: t('Судьбоносный плюс'), hint: t('Крупный переломный сдвиг') },
 ];
 const IMPACT_SCALE_GROUPS = [
     {
         key: 'friendshipImpactValues',
-        title: '🤝 Шкала дружбы',
-        note: 'Меняет только доверие, лояльность, тепло и социальную дистанцию.',
+        title: t('🤝 Шкала дружбы'),
+        note: t('Меняет только доверие, лояльность, тепло и социальную дистанцию.'),
     },
     {
         key: 'romanceImpactValues',
-        title: '💖 Шкала романтики',
-        note: 'Меняет только влечение, искру, личную тягу и романтическое охлаждение.',
+        title: t('💖 Шкала романтики'),
+        note: t('Меняет только влечение, искру, личную тягу и романтическое охлаждение.'),
     },
 ];
 
@@ -43,13 +44,13 @@ function renderMergeSuggestionsList() {
         : [];
 
     if (suggestions.length === 0) {
-        container.html('<div style="font-size: 11px; color: #64748b;">Пока подозрительных дублей не найдено.</div>');
+        container.html(t('<div style="font-size: 11px; color: #64748b;">Пока подозрительных дублей не найдено.</div>'));
         return;
     }
 
     container.html(suggestions.map(item => {
         const score = Math.round(Number(item.score || 0) * 100);
-        return `<button type="button" class="menu_button bb-dbg-merge-suggestion" data-from="${escapeHtml(item.source)}" data-to="${escapeHtml(item.target)}" style="text-align:left; width:100%; margin-top:6px; border-color: rgba(192, 132, 252, 0.22); color: #ddd6fe;">
+        return ui`<button type="button" class="menu_button bb-dbg-merge-suggestion" data-from="${escapeHtml(item.source)}" data-to="${escapeHtml(item.target)}" style="text-align:left; width:100%; margin-top:6px; border-color: rgba(192, 132, 252, 0.22); color: #ddd6fe;">
             <span style="display:block; font-size:11px; color:#c4b5fd;">Кандидат на объединение · ${score}%</span>
             <strong style="display:block; color:#f8fafc;">${escapeHtml(item.source)}</strong>
             <span style="display:block; font-size:12px; color:#94a3b8;">→ ${escapeHtml(item.target)}</span>
@@ -59,13 +60,13 @@ function renderMergeSuggestionsList() {
     jQuery('.bb-dbg-merge-suggestion').off('click').on('click', function() {
         jQuery('#bb-dbg-merge-from').val(jQuery(this).attr('data-from') || '');
         jQuery('#bb-dbg-merge-to').val(jQuery(this).attr('data-to') || '');
-        notifyInfo('Кандидат на объединение подставлен в поля слияния.');
+        notifyInfo(t('Кандидат на объединение подставлен в поля слияния.'));
     });
 }
 
 window['bbRenderMergeSuggestionsList'] = renderMergeSuggestionsList;
 
-function normalizeDebugTraitText(raw = '', fallbackLabel = 'Черта') {
+function normalizeDebugTraitText(raw = '', fallbackLabel = t('Черта')) {
     const text = String(raw || '').trim();
     if (!text) return '';
     return text.includes(':') ? text : `${fallbackLabel}: ${text}`;
@@ -101,30 +102,30 @@ function downloadSnapshotFile(snapshot) {
 export function injectDebugData(impact, isRomance = false) {
     bindActivePersonaState();
     const charName = String(jQuery('#bb-debug-char-name').val()).trim();
-    if(!charName) return notifyError("Укажите имя!");
+    if(!charName) return notifyError(t("Укажите имя!"));
     const chat = SillyTavern.getContext().chat;
     if (!chat?.length) return;
     const targetMessage = getLatestAssistantMessageEntry(chat);
-    if (!targetMessage) return notifyError("Нет сообщения персонажа для привязки debug-события.");
+    if (!targetMessage) return notifyError(t("Нет сообщения персонажа для привязки debug-события."));
     const lastMsg = targetMessage.message;
     if (!lastMsg.extra) lastMsg.extra = {};
     if (!lastMsg.extra.bb_social_swipes) lastMsg.extra.bb_social_swipes = {};
     const sId = lastMsg.swipe_id || 0;
     if (!lastMsg.extra.bb_social_swipes[sId]) lastMsg.extra.bb_social_swipes[sId] = [];
-    const reason = String(jQuery('#bb-debug-reason').val() || '').trim() || (isRomance ? 'Дебаг-романтика' : 'Дебаг-доверие');
-    lastMsg.extra.bb_social_swipes[sId].push({ name: charName, friendship_impact: isRomance ? "none" : impact, romance_impact: isRomance ? impact : "none", role_dynamic: "", reason, emotion: "тест", debug_event: true, debug_id: makeDebugEventId('impact'), event_created_at: makeDebugEventTimestamp(), scope: getCurrentPersonaScopeKey() });
+    const reason = String(jQuery('#bb-debug-reason').val() || '').trim() || (isRomance ? t('Дебаг-романтика') : t('Дебаг-доверие'));
+    lastMsg.extra.bb_social_swipes[sId].push({ name: charName, friendship_impact: isRomance ? "none" : impact, romance_impact: isRomance ? impact : "none", role_dynamic: "", reason, emotion: t("тест"), debug_event: true, debug_id: makeDebugEventId('impact'), event_created_at: makeDebugEventTimestamp(), scope: getCurrentPersonaScopeKey() });
     markSnapshotReplayMessage(targetMessage.messageId, sId, 'debug-impact');
-    saveChatDebounced(); recalculateAllStats(false); notifySuccess("Данные внедрены.");
+    saveChatDebounced(); recalculateAllStats(false); notifySuccess(t("Данные внедрены."));
 }
 
 export function injectMixedDeepDebugData() {
     bindActivePersonaState();
     const charName = String(jQuery('#bb-debug-char-name').val()).trim();
-    if(!charName) return notifyError("Укажите имя!");
+    if(!charName) return notifyError(t("Укажите имя!"));
     const chat = SillyTavern.getContext().chat;
     if (!chat?.length) return;
     const targetMessage = getLatestAssistantMessageEntry(chat);
-    if (!targetMessage) return notifyError("Нет сообщения персонажа для привязки debug-события.");
+    if (!targetMessage) return notifyError(t("Нет сообщения персонажа для привязки debug-события."));
     const lastMsg = targetMessage.message;
     if (!lastMsg.extra) lastMsg.extra = {};
     if (!lastMsg.extra.bb_social_swipes) lastMsg.extra.bb_social_swipes = {};
@@ -136,8 +137,8 @@ export function injectMixedDeepDebugData() {
         friendship_impact: "unforgivable",
         romance_impact: "life_changing",
         role_dynamic: "",
-        reason: customReason || "Тянет вопреки опасности",
-        emotion: "опасное влечение",
+        reason: customReason || t("Тянет вопреки опасности"),
+        emotion: t("опасное влечение"),
         debug_event: true,
         debug_id: makeDebugEventId('mixed'),
         event_created_at: makeDebugEventTimestamp(),
@@ -146,7 +147,7 @@ export function injectMixedDeepDebugData() {
     markSnapshotReplayMessage(targetMessage.messageId, sId, 'debug-mixed');
     saveChatDebounced();
     recalculateAllStats(false);
-    notifySuccess("Смешанное незабываемое событие внедрено.");
+    notifySuccess(t("Смешанное незабываемое событие внедрено."));
 }
 
 export function wipeGlobalLog() {
@@ -157,7 +158,7 @@ export function wipeGlobalLog() {
     chat_metadata['bb_vn_log_cutoff_index'] = chat.length;
     saveChatDebounced();
     recalculateAllStats();
-    notifySuccess("Журнал событий очищен!");
+    notifySuccess(t("Журнал событий очищен!"));
 }
 
 export function wipeAllSocialData() {
@@ -204,10 +205,10 @@ export function wipeAllSocialData() {
     delete chat_metadata['bb_vn_choice_context'];
     delete chat_metadata['bb_vn_pending_choice_context'];
     delete chat_metadata['bb_vn_last_used_choice_context'];
-    addGlobalLog('system', 'Все отношения сброшены до нуля.');
+    addGlobalLog('system', t('Все отношения сброшены до нуля.'));
     saveChatDebounced();
     recalculateAllStats();
-    notifySuccess("История отношений в этом чате полностью сброшена!");
+    notifySuccess(t("История отношений в этом чате полностью сброшена!"));
 }
 
 export function setupExtensionSettings() {
@@ -251,7 +252,7 @@ export function setupExtensionSettings() {
             </div>
         </div>
     `).join('');
-    const settingsHtml = `
+    const settingsHtml = ui`
         <div id="bb-social-settings-wrapper" class="inline-drawer">
             <div class="inline-drawer-toggle inline-drawer-header"><b>💖 BB Visual Novel Engine</b><div class="inline-drawer-icon fa-solid fa-chevron-down down"></div></div>
             <div class="inline-drawer-content bb-vn-settings-shell">
@@ -264,6 +265,9 @@ export function setupExtensionSettings() {
                         <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-disable-tracker" ${s.disableRelationshipTracker ? 'checked' : ''}><span>Отключить трекер отношений</span></label>
                     </div>
                     <div class="bb-vn-settings-panel">
+                        <label for="bb-vn-cfg-ui-language">Язык интерфейса</label>
+                        <select id="bb-vn-cfg-ui-language" class="text_pole"><option value="auto">Auto</option><option value="ru">Русский</option><option value="en">English</option></select>
+                        <span class="bb-vn-settings-note">Auto использует язык SillyTavern или браузера. После смены языка интерфейса обновите страницу.</span>
                         <label for="bb-vn-cfg-output-language">Язык новых ответов</label>
                         <select id="bb-vn-cfg-output-language" class="text_pole"><option value="chat">Как в чате</option><option value="ru">Русский</option><option value="en">English</option></select>
                         <span class="bb-vn-settings-note">Для новых вариантов, профилей, черт и записей об отношениях. Сохранённые данные не переводятся.</span>
@@ -383,7 +387,7 @@ export function setupExtensionSettings() {
     if (target) target.insertAdjacentHTML('beforeend', settingsHtml);
     jQuery('#bb-vn-cfg-url').val(s.customApiUrl || '');
     jQuery('#bb-vn-cfg-key').val(s.customApiKey || '');
-    jQuery('#bb-vn-cfg-model').append(createTextOption(s.customApiModel || 'Модели не загружены', s.customApiModel || ''));
+    jQuery('#bb-vn-cfg-model').append(createTextOption(s.customApiModel || t('Модели не загружены'), s.customApiModel || ''));
 
     let lastVerifiedCustomApiFingerprint = '';
     let customApiRuntimeState = '';
@@ -403,7 +407,7 @@ export function setupExtensionSettings() {
         status.find('.bb-custom-api-status-text').text(text);
     };
 
-    const setCustomApiModelPlaceholder = (label = 'Модели не загружены', value = '') => {
+    const setCustomApiModelPlaceholder = (label = t('Модели не загружены'), value = '') => {
         const select = jQuery('#bb-vn-cfg-model').empty();
         select.append(createTextOption(label, value));
         select.prop('disabled', true);
@@ -417,39 +421,39 @@ export function setupExtensionSettings() {
         const currentFingerprint = buildCustomApiFingerprint(rawUrl, rawKey);
 
         if (!useCustomApi) {
-            setCustomApiStatus('disabled', 'Кастомное подключение выключено.');
+            setCustomApiStatus('disabled', t('Кастомное подключение выключено.'));
             return;
         }
         if (!rawUrl) {
             clearCustomApiRuntimeState();
-            setCustomApiStatus('idle', 'Укажите URL для проверки подключения.');
-            setCustomApiModelPlaceholder('Сначала укажите URL');
+            setCustomApiStatus('idle', t('Укажите URL для проверки подключения.'));
+            setCustomApiModelPlaceholder(t('Сначала укажите URL'));
             return;
         }
         if (!rawKey) {
             clearCustomApiRuntimeState();
-            setCustomApiStatus('idle', 'Добавьте API-ключ для проверки подключения.');
-            setCustomApiModelPlaceholder('Нужен API-ключ');
+            setCustomApiStatus('idle', t('Добавьте API-ключ для проверки подключения.'));
+            setCustomApiModelPlaceholder(t('Нужен API-ключ'));
             return;
         }
         if (currentFingerprint && currentFingerprint === lastVerifiedCustomApiFingerprint) {
             if (customApiRuntimeState === 'error') {
-                setCustomApiStatus('error', customApiRuntimeMessage || 'Последний запрос к кастомной модели сорвался. Генерация ушла на основную модель.');
+                setCustomApiStatus('error', customApiRuntimeMessage || t('Последний запрос к кастомной модели сорвался. Генерация ушла на основную модель.'));
                 return;
             }
-            setCustomApiStatus('connected', selectedModel ? `Подключено: ${selectedModel}` : 'Подключение подтверждено.');
+            setCustomApiStatus('connected', selectedModel ? ui`Подключено: ${selectedModel}` : t('Подключение подтверждено.'));
             return;
         }
 
         clearCustomApiRuntimeState();
         if (selectedModel) {
-            setCustomApiModelPlaceholder(`${selectedModel} · требуется переподключение`, selectedModel);
-            setCustomApiStatus('saved', `Сохранена модель ${selectedModel}. Нажмите «Подключиться», чтобы проверить соединение.`);
+            setCustomApiModelPlaceholder(ui`${selectedModel} · требуется переподключение`, selectedModel);
+            setCustomApiStatus('saved', ui`Сохранена модель ${selectedModel}. Нажмите «Подключиться», чтобы проверить соединение.`);
             return;
         }
 
-        setCustomApiModelPlaceholder('Подключение не проверено');
-        setCustomApiStatus('idle', 'Подключение не проверено. Нажмите «Подключиться».');
+        setCustomApiModelPlaceholder(t('Подключение не проверено'));
+        setCustomApiStatus('idle', t('Подключение не проверено. Нажмите «Подключиться».'));
     };
 
     const customApiHealthHandler = (event) => {
@@ -474,7 +478,7 @@ export function setupExtensionSettings() {
             : [];
 
         if (safeModels.length === 0) {
-            select.append('<option value="">Модели не загружены</option>');
+            select.append(t('<option value="">Модели не загружены</option>'));
             select.prop('disabled', true);
             extension_settings[MODULE_NAME].customApiModel = '';
             return;
@@ -535,6 +539,11 @@ export function setupExtensionSettings() {
         extension_settings[MODULE_NAME].debugGeneration = jQuery(this).is(':checked');
         saveSettingsDebounced();
     });
+    jQuery('#bb-vn-cfg-ui-language').val(normalizeUiLanguage(s.uiLanguage)).on('change', function () {
+        extension_settings[MODULE_NAME].uiLanguage = normalizeUiLanguage(jQuery(this).val());
+        saveSettingsDebounced();
+        notifyInfo(t('Язык интерфейса сохранён. Обновите страницу, чтобы применить его ко всем панелям.'));
+    });
     jQuery('#bb-vn-cfg-output-language').val(normalizeOutputLanguage(s.outputLanguage)).on('change', function () {
         extension_settings[MODULE_NAME].outputLanguage = normalizeOutputLanguage(jQuery(this).val());
         invalidateVnOptionsGeneration();
@@ -555,12 +564,12 @@ export function setupExtensionSettings() {
     });
     if (window.bbVnGenerationStageHandler) window.removeEventListener('bb-vn-generation-stage', window.bbVnGenerationStageHandler);
     window.bbVnGenerationStageHandler = event => {
-        jQuery('#bb-vn-generation-stage').text(`${event.detail.stage} · запросов: ${event.detail.requestNumber}`);
+        jQuery('#bb-vn-generation-stage').text(ui`${event.detail.stage} · запросов: ${event.detail.requestNumber}`);
     };
     window.addEventListener('bb-vn-generation-stage', window.bbVnGenerationStageHandler);
     if (window.bbVnGenerationSourceHandler) window.removeEventListener('bb-vn-generation-source', window.bbVnGenerationSourceHandler);
     window.bbVnGenerationSourceHandler = event => {
-        jQuery('#bb-vn-generation-source').text(`Источник последнего результата: ${String(event.detail?.source || '')}`);
+        jQuery('#bb-vn-generation-source').text(ui`Источник последнего результата: ${String(event.detail?.source || '')}`);
     };
     window.addEventListener('bb-vn-generation-source', window.bbVnGenerationSourceHandler);
     const syncConnectionVisibility = () => {
@@ -615,17 +624,17 @@ export function setupExtensionSettings() {
         });
         saveSettingsDebounced();
         recalculateAllStats(false);
-        notifySuccess("Обе шкалы сброшены.");
+        notifySuccess(t("Обе шкалы сброшены."));
     });
 
     jQuery('#bb-vn-btn-connect').on('click', async function() {
         const btn = jQuery(this); btn.html('...');
         clearCustomApiRuntimeState();
-        setCustomApiStatus('pending', 'Проверяем подключение и загружаем модели...');
+        setCustomApiStatus('pending', t('Проверяем подключение и загружаем модели...'));
         try {
             const rawUrl = String(jQuery('#bb-vn-cfg-url').val() || '').trim();
             const rawKey = String(jQuery('#bb-vn-cfg-key').val() || '').trim();
-            if (!rawUrl) throw new Error('URL пустой');
+            if (!rawUrl) throw new Error(t('URL пустой'));
 
             extension_settings[MODULE_NAME].customApiUrl = rawUrl;
             extension_settings[MODULE_NAME].customApiKey = rawKey;
@@ -641,23 +650,23 @@ export function setupExtensionSettings() {
                 clearCustomApiRuntimeState();
                 const activeModel = String(extension_settings[MODULE_NAME].customApiModel || jQuery('#bb-vn-cfg-model').val() || '').trim();
                 setCustomApiStatus('connected', activeModel
-                    ? `Подключено: ${activeModel}. Найдено моделей: ${modelIds.length}.`
-                    : `Подключено. Найдено моделей: ${modelIds.length}.`);
+                    ? ui`Подключено: ${activeModel}. Найдено моделей: ${modelIds.length}.`
+                    : ui`Подключено. Найдено моделей: ${modelIds.length}.`);
                 saveSettingsDebounced();
-                notifySuccess("Модели загружены!");
+                notifySuccess(t("Модели загружены!"));
             } else {
-                throw new Error('Список моделей пустой');
+                throw new Error(t('Список моделей пустой'));
             }
         } catch (e) {
             lastVerifiedCustomApiFingerprint = '';
             clearCustomApiRuntimeState();
             const savedModel = String(extension_settings[MODULE_NAME].customApiModel || '').trim();
-            if (savedModel) setCustomApiModelPlaceholder(`${savedModel} · подключение не подтверждено`, savedModel);
-            else setCustomApiModelPlaceholder('Подключение не удалось');
-            setCustomApiStatus('error', 'Ошибка подключения. Проверьте URL, ключ и доступность API.');
+            if (savedModel) setCustomApiModelPlaceholder(ui`${savedModel} · подключение не подтверждено`, savedModel);
+            else setCustomApiModelPlaceholder(t('Подключение не удалось'));
+            setCustomApiStatus('error', t('Ошибка подключения. Проверьте URL, ключ и доступность API.'));
             console.error('[BB VN] Custom API connection failed:', normalizeRequestError(e).code);
-            notifyError("Ошибка подключения или пустой список моделей.");
-        } finally { btn.html('Подключиться'); }
+            notifyError(t("Ошибка подключения или пустой список моделей."));
+        } finally { btn.html(t('Подключиться')); }
     });
 
     syncCustomApiVisualState();
@@ -672,58 +681,58 @@ export function setupExtensionSettings() {
 
     jQuery('#bb-dbg-add-trait-pos').on('click', function() {
         const charName = String(jQuery('#bb-debug-char-name').val()).trim();
-        const trait = normalizeDebugTraitText(jQuery('#bb-debug-reason').val(), 'Светлая черта');
-        if(!charName || !trait) return notifyError("Укажите имя и текст черты!");
+        const trait = normalizeDebugTraitText(jQuery('#bb-debug-reason').val(), t('Светлая черта'));
+        if(!charName || !trait) return notifyError(t("Укажите имя и текст черты!"));
         const chat = SillyTavern.getContext().chat; if (!chat?.length) return;
         const targetMessage = getLatestAssistantMessageEntry(chat);
-        if (!targetMessage) return notifyError("Нет сообщения персонажа для привязки черты.");
+        if (!targetMessage) return notifyError(t("Нет сообщения персонажа для привязки черты."));
         const lastMsg = targetMessage.message; const sId = lastMsg.swipe_id || 0;
         if (!lastMsg.extra) lastMsg.extra = {}; if (!lastMsg.extra.bb_vn_char_traits_swipes) lastMsg.extra.bb_vn_char_traits_swipes = {};
         if (!lastMsg.extra.bb_vn_char_traits_swipes[sId]) lastMsg.extra.bb_vn_char_traits_swipes[sId] = [];
         lastMsg.extra.bb_vn_char_traits_swipes[sId].push({ charName, trait, type: 'positive', scope: getCurrentPersonaScopeKey() });
         markSnapshotReplayMessage(targetMessage.messageId, sId, 'debug-trait');
-        saveChatDebounced(); recalculateAllStats(false); notifySuccess("Черта внедрена.");
+        saveChatDebounced(); recalculateAllStats(false); notifySuccess(t("Черта внедрена."));
     });
 
     jQuery('#bb-dbg-add-trait-neg').on('click', function() {
         const charName = String(jQuery('#bb-debug-char-name').val()).trim();
-        const trait = normalizeDebugTraitText(jQuery('#bb-debug-reason').val(), 'Мрачная черта');
-        if(!charName || !trait) return notifyError("Укажите имя и текст черты!");
+        const trait = normalizeDebugTraitText(jQuery('#bb-debug-reason').val(), t('Мрачная черта'));
+        if(!charName || !trait) return notifyError(t("Укажите имя и текст черты!"));
         const chat = SillyTavern.getContext().chat; if (!chat?.length) return;
         const targetMessage = getLatestAssistantMessageEntry(chat);
-        if (!targetMessage) return notifyError("Нет сообщения персонажа для привязки черты.");
+        if (!targetMessage) return notifyError(t("Нет сообщения персонажа для привязки черты."));
         const lastMsg = targetMessage.message; const sId = lastMsg.swipe_id || 0;
         if (!lastMsg.extra) lastMsg.extra = {}; if (!lastMsg.extra.bb_vn_char_traits_swipes) lastMsg.extra.bb_vn_char_traits_swipes = {};
         if (!lastMsg.extra.bb_vn_char_traits_swipes[sId]) lastMsg.extra.bb_vn_char_traits_swipes[sId] = [];
         lastMsg.extra.bb_vn_char_traits_swipes[sId].push({ charName, trait, type: 'negative', scope: getCurrentPersonaScopeKey() });
         markSnapshotReplayMessage(targetMessage.messageId, sId, 'debug-trait');
-        saveChatDebounced(); recalculateAllStats(false); notifySuccess("Черта внедрена.");
+        saveChatDebounced(); recalculateAllStats(false); notifySuccess(t("Черта внедрена."));
     });
 
     jQuery('#bb-dbg-set-status').on('click', function() {
         const charName = String(jQuery('#bb-debug-char-name').val()).trim();
         const status = String(jQuery('#bb-debug-reason').val()).trim();
-        if(!charName || !status) return notifyError("Укажите имя и статус!");
+        if(!charName || !status) return notifyError(t("Укажите имя и статус!"));
         const chat = SillyTavern.getContext().chat; if (!chat?.length) return;
         const targetMessage = getLatestAssistantMessageEntry(chat);
-        if (!targetMessage) return notifyError("Нет сообщения персонажа для привязки статуса.");
+        if (!targetMessage) return notifyError(t("Нет сообщения персонажа для привязки статуса."));
         const lastMsg = targetMessage.message; const sId = lastMsg.swipe_id || 0;
         if (!lastMsg.extra) lastMsg.extra = {}; if (!lastMsg.extra.bb_social_swipes) lastMsg.extra.bb_social_swipes = {};
         if (!lastMsg.extra.bb_social_swipes[sId]) lastMsg.extra.bb_social_swipes[sId] = [];
-        lastMsg.extra.bb_social_swipes[sId].push({ name: charName, friendship_impact: "none", romance_impact: "none", status, manual_status: true, reason: "Ручная смена статуса", emotion: "дебаг", event_created_at: makeDebugEventTimestamp(), scope: getCurrentPersonaScopeKey() });
+        lastMsg.extra.bb_social_swipes[sId].push({ name: charName, friendship_impact: "none", romance_impact: "none", status, manual_status: true, reason: t("Ручная смена статуса"), emotion: t("дебаг"), event_created_at: makeDebugEventTimestamp(), scope: getCurrentPersonaScopeKey() });
         markSnapshotReplayMessage(targetMessage.messageId, sId, 'debug-status');
-        saveChatDebounced(); recalculateAllStats(false); notifySuccess("Статус изменен.");
+        saveChatDebounced(); recalculateAllStats(false); notifySuccess(t("Статус изменен."));
     });
 
     jQuery('#bb-dbg-btn-merge').on('click', async function() {
         bindActivePersonaState();
         const from = String(jQuery('#bb-dbg-merge-from').val()).trim(), to = String(jQuery('#bb-dbg-merge-to').val()).trim();
-        if(!from || !to || from === to) return notifyError("Некорректные имена!");
+        if(!from || !to || from === to) return notifyError(t("Некорректные имена!"));
 
         let confirmed = false;
         try {
             confirmed = await SillyTavern.getContext().callPopup(
-                `<h3>Подтвердить слияние?</h3><p><strong>${from}</strong> будет объединён с <strong>${to}</strong>.</p><p><span style="font-size:12px; color:#94a3b8;">Это затронет журнал, память, связи и алиасы. Перед слиянием лучше сделать снапшот.</span></p>`,
+                ui`<h3>Подтвердить слияние?</h3><p><strong>${from}</strong> будет объединён с <strong>${to}</strong>.</p><p><span style="font-size:12px; color:#94a3b8;">Это затронет журнал, память, связи и алиасы. Перед слиянием лучше сделать снапшот.</span></p>`,
                 'confirm'
             );
         } catch (error) {
@@ -732,18 +741,18 @@ export function setupExtensionSettings() {
         }
 
         if (!confirmed) {
-            notifyInfo('Слияние отменено.');
+            notifyInfo(t('Слияние отменено.'));
             return;
         }
 
         const result = mergeCharacterRecords(from, to);
-        if(result.ok) { saveChatDebounced(); recalculateAllStats(false); renderMergeSuggestionsList(); notifySuccess(result.same ? `Это уже один и тот же персонаж: ${result.targetName}` : `Слито записей: ${result.count}`); } else notifyError("Персонаж не найден.");
+        if(result.ok) { saveChatDebounced(); recalculateAllStats(false); renderMergeSuggestionsList(); notifySuccess(result.same ? ui`Это уже один и тот же персонаж: ${result.targetName}` : ui`Слито записей: ${result.count}`); } else notifyError(t("Персонаж не найден."));
     });
 
     jQuery('#bb-dbg-reset-char').on('click', () => {
         const { scopeState, aliasSet } = bindActivePersonaState();
         const name = String(jQuery('#bb-debug-char-name').val()).trim();
-        if(!name) return notifyError("Укажите имя!");
+        if(!name) return notifyError(t("Укажите имя!"));
         const resolved = resolveCharacterIdentity(name, { allowCreate: false, allowSuggestions: false });
         const canonicalName = resolved?.primaryName || name;
         if(chat_metadata['bb_vn_char_bases']) delete chat_metadata['bb_vn_char_bases'][canonicalName];
@@ -766,17 +775,17 @@ export function setupExtensionSettings() {
                 if(msg.extra?.bb_vn_char_traits_swipes) { for(const sId in msg.extra.bb_vn_char_traits_swipes) { if(Array.isArray(msg.extra.bb_vn_char_traits_swipes[sId])) msg.extra.bb_vn_char_traits_swipes[sId] = msg.extra.bb_vn_char_traits_swipes[sId].filter(t => (t?.scope && !aliasSet.has(t.scope)) || !matchesTargetCharacter(t.charName)); } }
             });
         }
-        saveChatDebounced(); recalculateAllStats(false); notifySuccess("Персонаж обнулен.");
+        saveChatDebounced(); recalculateAllStats(false); notifySuccess(t("Персонаж обнулен."));
     });
 
     jQuery('#bb-dbg-toast').on('click', () => {
         const sample = [
-            { title: 'Тестовый сигнал', text: 'Проверка системного уведомления.', badge: 'Дебаг', variant: 'system', icon: 'fa-solid fa-bug' },
-            { title: 'Память отозвалась', text: 'Так выглядит тематический toast памяти.', badge: 'Дебаг', variant: 'memory', icon: 'fa-solid fa-book-open-reader' },
-            { title: 'Связь потеплела', text: 'Так выглядит toast сближения.', badge: 'Дебаг', variant: 'bond', icon: 'fa-solid fa-handshake-angle' },
-            { title: 'Искра сработала', text: 'Так выглядит романтический toast.', badge: 'Дебаг', variant: 'romance', icon: 'fa-solid fa-heart' },
-            { title: 'Надлом маршрута', text: 'Так выглядит тревожный toast разлада.', badge: 'Дебаг', variant: 'fracture', icon: 'fa-solid fa-heart-crack' },
-            { title: 'Редкий момент', text: 'Так выглядит усиленный toast крупного события.', badge: 'Дебаг', variant: 'legendary', icon: 'fa-solid fa-gem' },
+            { title: t('Тестовый сигнал'), text: t('Проверка системного уведомления.'), badge: t('Дебаг'), variant: 'system', icon: 'fa-solid fa-bug' },
+            { title: t('Память отозвалась'), text: t('Так выглядит тематический toast памяти.'), badge: t('Дебаг'), variant: 'memory', icon: 'fa-solid fa-book-open-reader' },
+            { title: t('Связь потеплела'), text: t('Так выглядит toast сближения.'), badge: t('Дебаг'), variant: 'bond', icon: 'fa-solid fa-handshake-angle' },
+            { title: t('Искра сработала'), text: t('Так выглядит романтический toast.'), badge: t('Дебаг'), variant: 'romance', icon: 'fa-solid fa-heart' },
+            { title: t('Надлом маршрута'), text: t('Так выглядит тревожный toast разлада.'), badge: t('Дебаг'), variant: 'fracture', icon: 'fa-solid fa-heart-crack' },
+            { title: t('Редкий момент'), text: t('Так выглядит усиленный toast крупного события.'), badge: t('Дебаг'), variant: 'legendary', icon: 'fa-solid fa-gem' },
         ][Math.floor(Math.random() * 6)];
         const types = ['system', 'memory', 'bond', 'romance', 'fracture', 'legendary'];
         showHudToast(sample);
@@ -788,7 +797,7 @@ export function setupExtensionSettings() {
         const snapshot = exportActivePersonaSnapshot();
         downloadSnapshotFile(snapshot);
         const characterCount = Object.keys(snapshot?.data?.characters || {}).length;
-        notifySuccess(`Snapshot экспортирован: ${characterCount} персонажей.`);
+        notifySuccess(ui`Snapshot экспортирован: ${characterCount} персонажей.`);
     });
 
     jQuery('#bb-social-import-btn').on('click', () => {
@@ -805,10 +814,10 @@ export function setupExtensionSettings() {
             const result = importActivePersonaSnapshot(raw);
             saveChatDebounced();
             recalculateAllStats(false);
-            notifySuccess(`Snapshot импортирован: ${result.characters} персонажей. Старые события до точки импорта больше не наслаиваются повторно.`);
+            notifySuccess(ui`Snapshot импортирован: ${result.characters} персонажей. Старые события до точки импорта больше не наслаиваются повторно.`);
         } catch (error) {
             console.error('[BB VN] Snapshot import failed.');
-            notifyError("Не удалось импортировать snapshot. Проверьте JSON-файл.");
+            notifyError(t("Не удалось импортировать snapshot. Проверьте JSON-файл."));
         } finally {
             jQuery(this).val('');
         }
@@ -818,11 +827,11 @@ export function setupExtensionSettings() {
         const hadSnapshot = clearActivePersonaSnapshot();
         saveChatDebounced();
         recalculateAllStats(false);
-        if (hadSnapshot) notifyInfo("Snapshot-база очищена. Состояние до импорта восстановлено, расчёт снова идёт от данных чата.");
-        else notifyInfo("Активной snapshot-базы не было.");
+        if (hadSnapshot) notifyInfo(t("Snapshot-база очищена. Состояние до импорта восстановлено, расчёт снова идёт от данных чата."));
+        else notifyInfo(t("Активной snapshot-базы не было."));
     });
 
-    jQuery('#bb-social-restore-chars-btn').on('click', () => { const { scopeState } = bindActivePersonaState(); scopeState.ignored_chars = []; chat_metadata['bb_vn_ignored_chars'] = scopeState.ignored_chars; saveChatDebounced(); recalculateAllStats(); notifySuccess("Скрытые персонажи восстановлены!"); });
+    jQuery('#bb-social-restore-chars-btn').on('click', () => { const { scopeState } = bindActivePersonaState(); scopeState.ignored_chars = []; chat_metadata['bb_vn_ignored_chars'] = scopeState.ignored_chars; saveChatDebounced(); recalculateAllStats(); notifySuccess(t("Скрытые персонажи восстановлены!")); });
     jQuery('#bb-social-clear-log-btn').on('click', wipeGlobalLog);
     jQuery('#bb-social-wipe-btn').on('click', wipeAllSocialData);
     renderMergeSuggestionsList();

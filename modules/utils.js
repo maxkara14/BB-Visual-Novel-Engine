@@ -1,3 +1,4 @@
+import { t as translateUi, ui } from './i18n.js';
 /**
  * Экранирует HTML символы
  */
@@ -652,14 +653,14 @@ export function getShiftDescriptor(delta, moodlet = '') {
     if (normalizedMoodlet) {
         return {
             short: normalizedMoodlet,
-            full: `Эмоциональный сдвиг: ${normalizedMoodlet}`,
+            full: ui`Эмоциональный сдвиг: ${normalizedMoodlet}`,
             color,
             logType,
         };
     }
-    if (delta === 0) return { short: '0', full: 'Сдвиг отношения 0', color, logType };
+    if (delta === 0) return { short: '0', full: translateUi('Сдвиг отношения 0'), color, logType };
     const points = formatAffinityPoints(delta);
-    return { short: points, full: `Сдвиг отношения ${points}`, color, logType };
+    return { short: points, full: ui`Сдвиг отношения ${points}`, color, logType };
 }
 
 export function getAffinityNarrative(affinity) {
