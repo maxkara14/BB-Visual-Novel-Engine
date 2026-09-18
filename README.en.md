@@ -132,6 +132,10 @@ An earlier version; the test branch may look different.
 
 <img width="942" height="236" alt="BB VNE options" src="https://github.com/user-attachments/assets/90d3f105-93a5-4a94-8e5b-c1a4e1bd0c93" />
 
+### Persistent option preferences
+
+VNE settings can store preferences for option style and content (up to 4000 characters). They apply to future option generations across all chats; existing options are unchanged. One-time guidance takes precedence in a conflict. Required output format, language and length still apply, and Scene Director context is passed as before. Preferences are not added to profile or trait generation. “Clear preferences” removes them from future requests.
+
 ## Author
 
 [BruniikBron: Lo-Fi & Mods](https://bblofi.online/) · [Telegram](https://t.me/Brun11kBr0n)

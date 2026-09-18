@@ -31,6 +31,7 @@ export const DEFAULT_SETTINGS = {
     emotionalChoiceFraming: true,
     disableRelationshipTracker: false,
     vnReplyLength: 'medium',
+    vnUserInstructions: '',
     friendshipImpactValues: { ...DEFAULT_IMPACT_VALUES },
     romanceImpactValues: { ...DEFAULT_IMPACT_VALUES },
 };

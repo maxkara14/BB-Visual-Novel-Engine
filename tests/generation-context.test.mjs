@@ -151,7 +151,7 @@ async function harness({ custom = false, boot = false, fakeClock = false } = {})
     }
     const state = cache.get('./state.js').namespace;
     return {
-        api: generator.namespace, state, context, calls, rendered, errors, settings, events, logs, profileState, createNode,
+        window: sandbox.window, api: generator.namespace, state, context, calls, rendered, errors, settings, events, logs, profileState, createNode,
         connections: cache.get('./connections.js').namespace,
         async loadApi(name) {
             const module = await load(name);
@@ -1099,4 +1099,56 @@ test('toolbar reorders existing cards, preserves drafts, saves preferences and r
  context.chat=[];view=mount();assert.equal(view.search.value,'');
  const many=Object.fromEntries(Array.from({length:500},(_,i)=>['Character '+i,{affinity:i%100}]));
  assert.equal(api.selectCharacterNames(many,'','name','en').length,500);
+});
+
+
+test('persistent preferences reach all option sources with guidance, language and SD', async () => {
+    for (const source of ['main', 'custom', 'profile']) {
+        const h = await harness();
+        Object.assign(h.settings['BB-Visual-Novel'], {
+            vnGenerationSource: source, vnConnectionProfileId: 'profile-a',
+            vnUserInstructions: '  Prefer concise dialogue.  ', outputLanguage: 'ru',
+        });
+        h.window.bbGetSceneDirectorPrompt = () => 'SCENE_DIRECTOR_TEST_CONTEXT';
+        const run = h.api.bbVnGenerateOptionsFlow({ guidance: 'This time stay silent.', mode: 'guided' });
+        await h.waitForCalls(1);
+        const call = h.calls[0];
+        const prompt = source === 'custom' ? call.body.messages[1].content : source === 'profile' ? call.prompt : call.args.quietPrompt;
+        const text = typeof prompt === 'string' ? prompt : JSON.stringify(prompt);
+        assert.match(text, /Prefer concise dialogue/);
+        assert.match(text, /This time stay silent/);
+        assert.match(text, /takes precedence where they conflict/);
+        assert.match(text, /SCENE_DIRECTOR_TEST_CONTEXT/);
+        assert.match(text, /Write newly generated human-readable text in Russian/);
+        assert.match(text, /exactly 3 option objects/);
+        h.respond(0); await run;
+        assert.equal(h.rendered.length, 1);
+    }
+});
+
+test('empty preferences preserve default prompts and utility prompts remain unaffected', async () => {
+    const h = await harness();
+    h.settings['BB-Visual-Novel'].vnUserInstructions = '   ';
+    let run = h.api.bbVnGenerateOptionsFlow();
+    assert.doesNotMatch(h.calls[0].args.quietPrompt, /PERSISTENT USER PREFERENCES/);
+    h.respond(0); await run;
+    h.settings['BB-Visual-Novel'].vnUserInstructions = 'UNIQUE_OPTION_PREFERENCE';
+    run = h.api.generateFastPrompt('Utility request');
+    assert.doesNotMatch(h.calls[1].args.quietPrompt, /UNIQUE_OPTION_PREFERENCE/);
+    h.respond(1); await run;
+});
+
+test('preferences settings save plain text and clear via the same input handler', async () => {
+    const source = await readFile(new URL('modules/settings.js', root), 'utf8');
+    const extract = (id, event) => source.split("jQuery('#" + id + "').on('" + event + "', function() {")[1].split('    });')[0];
+    const settings = {'BB-Visual-Novel': {}};
+    let value = '</textarea><img onerror=alert(1)>'; let saves = 0;
+    const field = { val(next) { if (arguments.length) {value = next; return this;} return value; }, trigger() { input(); } };
+    const jq = () => field;
+    const input = () => new Function('jQuery','extension_settings','MODULE_NAME','saveSettingsDebounced', extract('bb-vn-cfg-instructions','input'))(jq,settings,'BB-Visual-Novel',()=>saves++);
+    input(); assert.equal(settings['BB-Visual-Novel'].vnUserInstructions,value);
+    new Function('jQuery',extract('bb-vn-cfg-instructions-clear','click'))(jq);
+    assert.equal(value,''); assert.equal(settings['BB-Visual-Novel'].vnUserInstructions,''); assert.equal(saves,2);
+    value = 'a'.repeat(5000); input(); assert.equal(settings['BB-Visual-Novel'].vnUserInstructions.length,4000);
+    assert.ok(source.includes("jQuery('#bb-vn-cfg-instructions').val(s.vnUserInstructions || '')"));
 });

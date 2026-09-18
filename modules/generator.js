@@ -1227,6 +1227,11 @@ export async function bbVnGenerateOptionsFlow(request = []) {
             prompt += `\n\n[AVOID REUSING THESE PREVIOUS TONES]\n${generationRequest.excludedTones.map((item, idx) => `${idx + 1}. ${item}`).join('\n')}\nChoose other emotional colors this time.`;
         }
 
+        const persistentInstructions = String(activeVnOptionsOperation.settings.vnUserInstructions || '').slice(0, 4000).trim();
+        if (persistentInstructions) {
+            prompt += `\n\n[PERSISTENT USER PREFERENCES]\n${persistentInstructions}\nThese preferences apply to option content and style. Guidance for this generation takes precedence where they conflict. Preserve the required output language, length, JSON structure, and three distinct options. Keep the current scene and Scene Director context consistent.`;
+        }
+
         if (generationRequest.guidance) {
             prompt += `\n\n[USER GUIDANCE FOR THIS GENERATION]\n${generationRequest.guidance}\nTreat this as a strong preference across intent, tone, forecast, and message while still keeping all 3 options clearly distinct.`;
         }

@@ -1,5 +1,8 @@
 // Static extension UI text only. Never apply this catalogue to stored story data.
 export const EN = {
+    "Постоянные пожелания к вариантам": "Persistent option preferences",
+    "Очистить пожелания": "Clear preferences",
+    "Для вариантов во всех чатах, до 4000 символов. Разовая подсказка уточняет пожелания; язык и формат ответа сохраняются. Не применяется к профилям и чертам.": "For options in all chats, up to 4000 characters. One-time guidance refines these preferences; output language and format still apply. Does not apply to profiles or traits.",
     "Поиск персонажа": "Find a character",
     "Сортировка персонажей": "Sort characters",
     "Доверие: сначала выше": "Trust: highest first",

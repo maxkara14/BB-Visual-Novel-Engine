@@ -274,6 +274,10 @@ export function setupExtensionSettings() {
                         <label for="bb-vn-cfg-output-language">Язык новых ответов</label>
                         <select id="bb-vn-cfg-output-language" class="text_pole"><option value="chat">Как в чате</option><option value="ru">Русский</option><option value="en">English</option></select>
                         <span class="bb-vn-settings-note">Для новых вариантов, профилей, черт и записей об отношениях. Сохранённые данные не переводятся.</span>
+                        <label for="bb-vn-cfg-instructions">Постоянные пожелания к вариантам</label>
+                        <textarea id="bb-vn-cfg-instructions" class="text_pole" rows="4" maxlength="4000"></textarea>
+                        <span class="bb-vn-settings-note">Для вариантов во всех чатах, до 4000 символов. Разовая подсказка уточняет пожелания; язык и формат ответа сохраняются. Не применяется к профилям и чертам.</span>
+                        <button type="button" id="bb-vn-cfg-instructions-clear" class="menu_button" style="width: 100%; white-space: normal;">Очистить пожелания</button>
                         <label for="bb-vn-cfg-reply-length" class="bb-vn-settings-panel-label">Длина VN-ответа</label>
                         <select id="bb-vn-cfg-reply-length" class="text_pole">
                             <option value="short" ${selectedReplyLength === 'short' ? 'selected' : ''}>Короткий - быстрый темп</option>
@@ -398,6 +402,14 @@ export function setupExtensionSettings() {
         const event = snapshotContext.event_types?.[name];
         if (event) snapshotContext.eventSource?.on(event, () => refreshSnapshotControls(bindActivePersonaState().scopeState));
     }
+    jQuery('#bb-vn-cfg-instructions').val(s.vnUserInstructions || '');
+    jQuery('#bb-vn-cfg-instructions').on('input', function() {
+        extension_settings[MODULE_NAME].vnUserInstructions = String(jQuery(this).val() || '').slice(0, 4000);
+        saveSettingsDebounced();
+    });
+    jQuery('#bb-vn-cfg-instructions-clear').on('click', function() {
+        jQuery('#bb-vn-cfg-instructions').val('').trigger('input');
+    });
     jQuery('#bb-vn-cfg-url').val(s.customApiUrl || '');
     jQuery('#bb-vn-cfg-key').val(s.customApiKey || '');
     jQuery('#bb-vn-cfg-model').append(createTextOption(s.customApiModel || t('Модели не загружены'), s.customApiModel || ''));
