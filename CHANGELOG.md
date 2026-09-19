@@ -6,6 +6,8 @@
 
 ### Unreleased — VNE-TEST (подготовка 3.2.0)
 
+- Переработана компоновка настроек изображений: компактное подключение, отдельные разделы профилей, параметров и стиля, короткая кнопка подключения и отмена только во время запроса.
+
 - Исправлено подключение портретов по примеру Comic Forge: проверка API с загрузкой моделей, выбор из списка, именованные профили. Проверена отправка референсов через `/images/edits`, добавлено сообщение о неподдерживаемом endpoint.
 
 [Черновик выпуска 3.2.0 RU/EN](docs/release-notes-3.2.0.md) · [Финальный чек-лист](docs/manual-testing.md). Релиз отложен до проверки портретов.
@@ -60,6 +62,8 @@
 ## English
 
 ### Unreleased — VNE-TEST (3.2.0 preparation)
+
+- Reworked image settings into a compact connection block and separate profile, image-option and style sections; cancellation is shown only while connecting.
 
 - Portrait connections now follow Comic Forge: API/model discovery, a model picker and named profiles. Verified reference uploads through `/images/edits` and added an explicit unsupported-endpoint error.
 

@@ -27,25 +27,34 @@ export function mountPortraitSettings(root) {
     if (!root || root.dataset.mounted) return;
     root.dataset.mounted = 'true';
     const s = settings();
+    const connection = node('div', '', 'bb-portrait-connection');
+    const advanced = node('details', '', 'bb-portrait-fold');
+    advanced.append(node('summary', t('Параметры изображения')));
+    const parameters = node('div', '', 'bb-portrait-parameters'); advanced.append(parameters);
+    const styleBox = node('details', '', 'bb-portrait-fold');
+    styleBox.append(node('summary', t('Стиль портретов')));
+    const styleBody = node('div', '', 'bb-portrait-fold-body'); styleBox.append(styleBody);
     const definitions = [
-        ['type', 'Протокол изображений', { choices: [['openai-images','OpenAI Images'],['openai-chat','OpenAI Chat'],['gemini','Gemini'],['naistera','Naistera']] }],
-        ['endpoint', 'Адрес API изображений', { type: 'url' }], ['key','Ключ API изображений',{type:'password'}],
-        ['model','Модель изображений',{choices:[]}], ['style','Общий стиль портретов',{rows:2,maxLength:2000}],
-        ['size','Размер OpenAI Images',{choices:[['1024x1024','1024×1024'],['1024x1536','1024×1536'],['1536x1024','1536×1024'],['1024x1792','1024×1792'],['1792x1024','1792×1024']]}],
-        ['quality','Качество OpenAI Images',{choices:[['','По умолчанию'],['standard','standard'],['hd','hd'],['low','low'],['medium','medium'],['high','high'],['auto','auto']]}],
+        ['type', 'Формат API', { choices: [['openai-images','OpenAI Images'],['openai-chat','OpenAI Chat'],['gemini','Gemini'],['naistera','Naistera']] }],
+        ['endpoint', 'Адрес сервиса', { type: 'url' }], ['key','API-ключ',{type:'password'}],
+        ['model','Модель',{choices:[]}], ['style','Общий стиль портретов',{rows:3,maxLength:2000}],
+        ['size','Размер',{choices:[['1024x1024','1024×1024'],['1024x1536','1024×1536'],['1536x1024','1536×1024'],['1024x1792','1024×1792'],['1792x1024','1792×1024']]}],
+        ['quality','Качество',{choices:[['','По умолчанию'],['standard','standard'],['hd','hd'],['low','low'],['medium','medium'],['high','high'],['auto','auto']]}],
         ['aspect','Пропорции портрета',{choices:[['1:1','1:1'],['3:4','3:4'],['2:3','2:3'],['4:3','4:3']]}],
         ['imageSize','Разрешение Gemini / Chat',{choices:[['1K','1K'],['2K','2K'],['4K','4K']]}],
-        ['preset','Пресет Naistera',{}], ['timeout','Тайм-аут изображения (секунды)',{type:'number'}],
+        ['preset','Пресет Naistera',{}], ['timeout','Ожидание, сек.',{type:'number'}],
     ];
     const controls = new Map();
     let discovery = null, availableModels = [], manual;
     const endpoints = { 'openai-images': 'https://api.openai.com/v1', 'openai-chat': 'https://api.openai.com/v1', gemini: 'https://generativelanguage.googleapis.com', naistera: 'https://naistera.org' };
     const status = node('small', t('Подключение не проверено'), 'bb-portrait-connection-status');
+    status.dataset.state = 'idle';
     status.setAttribute('role', 'status');
-    const connect = button('Подключиться / обновить модели', async () => {
+    const connect = button('Подключить', async () => {
         if (discovery) return;
         const operation = new AbortController(); discovery = operation;
-        connect.disabled = true; cancel.disabled = false;
+        connect.disabled = true; cancel.disabled = false; cancel.hidden = false;
+        status.dataset.state = 'loading';
         status.textContent = t('Проверка подключения…');
         try {
             extension_settings[MODULE_NAME].portrait = { ...settings(), endpoint: controls.get('endpoint').value.trim() || endpoints[settings().type] };
@@ -59,24 +68,29 @@ export function mountPortraitSettings(root) {
                 saveSettingsDebounced();
             }
             renderModels();
+            status.dataset.state = result.verified ? 'success' : 'idle';
             status.textContent = result.verified
                 ? (availableModels.length ? t('Подключено. Моделей: ') + availableModels.length : t('API доступен, но список моделей пуст. Можно указать ID вручную.'))
                 : t('Встроенный список Naistera. Доступ к API проверяется при генерации.');
         } catch (error) {
             if (discovery !== operation) return;
+            status.dataset.state = 'error';
             status.textContent = error?.name === 'VnRequestError' ? error.message : t('Не удалось получить модели. Проверьте адрес, ключ и CORS.');
         } finally {
-            if (discovery === operation) { discovery = null; connect.disabled = false; cancel.disabled = true; }
+            if (discovery === operation) { discovery = null; connect.disabled = false; cancel.disabled = true; cancel.hidden = true; }
         }
     });
-    const cancel = button('Отмена', () => invalidate()); cancel.disabled = true;
+    const cancel = button('Отмена', () => invalidate()); cancel.disabled = true; cancel.hidden = true;
+    connect.className += ' bb-portrait-connect-button';
+    connect.title = t('Проверить подключение и обновить список моделей');
     const connectionActions = node('div', '', 'bb-portrait-connection-actions');
     connectionActions.append(connect, cancel);
     function invalidate() {
         discovery?.abort(); discovery = null;
-        connect.disabled = false; cancel.disabled = true;
+        connect.disabled = false; cancel.disabled = true; cancel.hidden = true;
         availableModels = [];
         status.textContent = t('Подключение не проверено');
+        status.dataset.state = 'idle';
         if (controls.has('model')) renderModels();
     }
     function renderModels() {
@@ -89,10 +103,11 @@ export function mountPortraitSettings(root) {
         const custom = node('option', t('Указать ID вручную…')); custom.value = '__manual__'; input.append(custom);
         input.value = selected;
     }
-    const profileBox = node('details', '', 'bb-portrait-profiles');
-    profileBox.append(node('summary', t('Профили подключения'))); root.append(profileBox);
-    const profiles = field(profileBox, 'Сохранённое подключение', '', { choices: [] });
-    const profileName = field(profileBox, 'Имя профиля', '', { maxLength: 100 });
+    const profileBox = node('details', '', 'bb-portrait-profiles bb-portrait-fold');
+    profileBox.append(node('summary', t('Профили подключения')));
+    const profileBody = node('div', '', 'bb-portrait-fold-body'); profileBox.append(profileBody);
+    const profiles = field(profileBody, 'Сохранённое подключение', '', { choices: [] });
+    const profileName = field(profileBody, 'Имя профиля', '', { maxLength: 100 });
     const profileFields = ['type','endpoint','key','model','size','quality','aspect','imageSize','preset','timeout'];
     const savedProfiles = () => Array.isArray(settings().profiles) ? settings().profiles : [];
     function renderProfiles() {
@@ -122,7 +137,7 @@ export function mountPortraitSettings(root) {
         extension_settings[MODULE_NAME].portrait = { ...settings(), activeProfile: '' };
         saveSettingsDebounced(); renderProfiles(); profileName.focus();
     }));
-    profileBox.append(profileActions);
+    profileBody.append(profileActions);
     const sync = () => {
         const type = controls.get('type').value;
         controls.get('endpoint').placeholder = endpoints[type];
@@ -132,8 +147,9 @@ export function mountPortraitSettings(root) {
         controls.get('preset').parentElement.hidden = type !== 'naistera';
     };
     for (const [key, caption, options] of definitions) {
-        if (key === 'model') root.append(connectionActions, status);
-        const input = field(root, caption, s[key], options); controls.set(key,input);
+        if (key === 'model') connection.append(connectionActions, status);
+        const parent = ['type','endpoint','key','model'].includes(key) ? connection : key === 'style' ? styleBody : parameters;
+        const input = field(parent, caption, s[key], options); controls.set(key,input);
         input.dataset.portraitField = key;
         if (key === 'timeout') { input.min = '15'; input.max = '600'; }
         if (key === 'key') input.autocomplete = 'off';
@@ -153,14 +169,15 @@ export function mountPortraitSettings(root) {
         });
         if (['endpoint','key'].includes(key)) input.addEventListener('input', invalidate);
         if (key === 'model') {
-            manual = field(root, 'ID модели вручную', s.model); manual.parentElement.hidden = true;
+            manual = field(connection, 'ID модели вручную', s.model); manual.parentElement.hidden = true;
             manual.addEventListener('change', () => {
                 extension_settings[MODULE_NAME].portrait = { ...settings(), model: manual.value.trim() };
                 saveSettingsDebounced(); renderModels(); manual.parentElement.hidden = true;
             });
         }
     }
-    root.append(node('small', t('Список подтверждает доступ к API, но не поддержку генерации картинок каждой моделью. OpenAI Images отправляет референсы через /images/edits; при отказе они не отбрасываются.'), 'bb-vn-settings-note'));
+    parameters.append(node('small', t('Список подтверждает доступ к API, но не поддержку генерации картинок каждой моделью. OpenAI Images отправляет референсы через /images/edits; при отказе они не отбрасываются.'), 'bb-vn-settings-note'));
+    root.append(connection, profileBox, advanced, styleBox);
     renderModels(); renderProfiles();
     sync();
 }

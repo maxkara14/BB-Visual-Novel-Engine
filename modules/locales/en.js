@@ -1,5 +1,16 @@
 // Static extension UI text only. Never apply this catalogue to stored story data.
 export const EN = {
+    "Модель": "Model",
+    "Размер": "Size",
+    "Качество": "Quality",
+    "Параметры изображения": "Image options",
+    "Стиль портретов": "Portrait style",
+    "Формат API": "API format",
+    "Адрес сервиса": "Service URL",
+    "API-ключ": "API key",
+    "Ожидание, сек.": "Timeout, sec.",
+    "Подключить": "Connect",
+    "Проверить подключение и обновить список моделей": "Check connection and refresh models",
     "Подключение не проверено": "Connection not checked",
     "Подключиться / обновить модели": "Connect / refresh models",
     "Проверка подключения…": "Checking connection…",

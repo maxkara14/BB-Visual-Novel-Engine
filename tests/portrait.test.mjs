@@ -118,7 +118,9 @@ test('unavailable edits endpoint reports the reference limitation without a text
 test('connect loads provider models into the picker without an image generation request', async () => {
     const h = await harness({ fetch: async () => ({ ok: true, json: async () => ({ data: [{id:'portrait-b'}, {id:'portrait-a'}] }) }) });
     h.mountSettings();
-    await h.button('Подключиться / обновить модели').click();
+    assert.equal(h.button('Отмена').hidden, true);
+    await h.button('Подключить').click();
+    assert.equal(h.button('Отмена').hidden, true);
     const model = h.nodes().find(n => n.dataset.portraitField === 'model');
     assert.equal(model.tagName, 'select');
     assert.ok(model.children.some(n => n.value === 'portrait-a'));
@@ -131,16 +133,17 @@ test('connect loads provider models into the picker without an image generation 
 
 test('failed connection does not claim success or replace a saved model', async () => {
     const h = await harness({ fetch: async () => ({ok:false,status:401}) });
-    h.mountSettings(); await h.button('Подключиться / обновить модели').click();
+    h.mountSettings(); await h.button('Подключить').click();
     assert.equal(h.settings['BB-Visual-Novel'].portrait.model, 'test-image');
-    assert.equal(h.button('Подключиться / обновить модели').disabled, false);
+    assert.equal(h.button('Подключить').disabled, false);
     assert.doesNotMatch(h.nodes().find(n=>n.className==='bb-portrait-connection-status').textContent, /Подключено/);
 });
 
 test('editing connection invalidates an outstanding model discovery', async () => {
     let resolve;
     const h = await harness({ fetch: () => new Promise(r=>resolve=r) }); h.mountSettings();
-    const run = h.button('Подключиться / обновить модели').click();
+    const run = h.button('Подключить').click();
+    assert.equal(h.button('Отмена').hidden, false);
     const endpoint = h.nodes().find(n=>n.dataset.portraitField==='endpoint');
     endpoint.value = 'https://other.example'; endpoint.emit('input'); endpoint.emit('change');
     resolve({ok:true,json:async()=>({data:[{id:'stale-model'}]})}); await run;
@@ -302,6 +305,11 @@ test('bad reroll preserves the previous valid preview', async () => {
 test('image settings persist separately and show only relevant provider fields', async () => {
     const h=await harness();h.mountSettings();
     const input=key=>h.nodes().find(n=>n.dataset.portraitField===key);
+    assert.equal(input('model').parentElement.parentElement.className, 'bb-portrait-connection');
+    assert.equal(input('quality').parentElement.parentElement.className, 'bb-portrait-parameters');
+    assert.equal(input('timeout').parentElement.parentElement.parentElement.tagName, 'details');
+    assert.ok(!input('timeout').parentElement.parentElement.parentElement.open);
+    assert.equal(input('style').parentElement.parentElement.parentElement.tagName, 'details');
     input('type').value='gemini';input('type').emit('change');
     assert.equal(h.settings['BB-Visual-Novel'].portrait.type,'gemini');
     assert.equal(input('size').parentElement.hidden,true);
