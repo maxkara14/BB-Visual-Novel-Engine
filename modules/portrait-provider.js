@@ -29,6 +29,48 @@ function baseUrl(endpoint) {
     return base;
 }
 
+// Discovery follows Comic Forge's provider routes. Returned IDs are not a
+// guarantee that a model supports image generation or image edits.
+export async function fetchPortraitModels(settings, signal) {
+    const s = { ...PORTRAIT_DEFAULTS, ...settings };
+    let endpoint;
+    try { endpoint = new URL(s.endpoint.trim()); } catch { throw new VnRequestError('configuration'); }
+    if (!['https:', 'http:'].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) throw new VnRequestError('configuration');
+    if (s.type === 'naistera') return { models: ['nano banana', 'grok', 'grok-pro', 'novelai'], verified: false };
+    const headers = s.key ? { Authorization: 'Bearer ' + s.key } : {};
+    let url;
+    if (s.type === 'gemini') {
+        let base = s.endpoint.trim().replace(/\/+$/, '').replace(/\/v1beta\/models(?:\/[^/]+)?$/i, '');
+        url = base + (/\/v1beta$/i.test(base) ? '' : '/v1beta') + '/models';
+        if (endpoint.hostname === 'generativelanguage.googleapis.com') {
+            delete headers.Authorization;
+            headers['x-goog-api-key'] = s.key;
+        }
+    } else if (s.type === 'openai-images' || s.type === 'openai-chat') url = baseUrl(s.endpoint.trim()) + '/models';
+    else throw new VnRequestError('configuration');
+    return withRequestDeadline(async requestSignal => {
+        const names = new Set();
+        const pages = new Set();
+        for (let page = 0; page < 20; page++) {
+            const response = await fetch(url, { method: 'GET', headers, signal: requestSignal });
+            if (!response.ok) throw httpRequestError(response.status);
+            const payload = await response.json();
+            const rows = Array.isArray(payload) ? payload : payload?.data ?? payload?.models;
+            if (!Array.isArray(rows) || payload?.error) throw new VnRequestError('invalid_response');
+            for (const row of rows) {
+                const value = typeof row === 'string' ? row : row?.id || row?.name || row?.model;
+                if (typeof value === 'string' && value.trim() && value.length <= 256) names.add(value.replace(/^models\//, '').trim());
+            }
+            const next = s.type === 'gemini' ? payload.nextPageToken : null;
+            if (!next) return { models: [...names].sort(), verified: true };
+            if (typeof next !== 'string' || pages.has(next)) throw new VnRequestError('invalid_response');
+            pages.add(next);
+            const nextUrl = new URL(url); nextUrl.searchParams.set('pageToken', next); url = nextUrl.href;
+        }
+        throw new VnRequestError('invalid_response');
+    }, { signal, timeoutMs: 30000 });
+}
+
 export function buildPortraitRequest(settings, prompt, references = []) {
     const s = { ...PORTRAIT_DEFAULTS, ...settings };
     s.endpoint = s.endpoint.trim();
@@ -106,6 +148,7 @@ export async function generatePortrait(settings, prompt, references, signal) {
     const timeout = Math.max(15, Math.min(600, Number(settings.timeout) || 180));
     return withRequestDeadline(async requestSignal => {
         const response = await fetch(request.url, { ...request.init, signal: requestSignal });
+        if (!response.ok && settings.type !== 'openai-chat' && /\/images\/edits$/.test(request.url) && [404, 405, 501].includes(response.status)) throw new Error('portrait_edits_unavailable');
         if (!response.ok) throw httpRequestError(response.status);
         const value = extractPortraitImage(await response.json());
         let dataUrl = value;

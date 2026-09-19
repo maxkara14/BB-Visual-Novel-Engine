@@ -80,9 +80,9 @@
 
 ## Состояние проверки / Verification status
 
-164 автоматических тестов проходят с подменёнными API и границами интерфейса. Пользователь сообщил о прохождении предыдущего ручного списка, кроме раздела 7 «Форматы и ошибки». Живые сервисы изображений и визуальный вид мастерской ещё не проверены. Финальный проход ожидается; перечень проверенных моделей и пропусков нужно заполнить в [чек-листе](manual-testing.md). Интеграция сверена с установленным SillyTavern 1.18.0; универсальная совместимость не заявляется.
+172 автоматических тестов проходят с подменёнными API и границами интерфейса. Пользователь сообщил о прохождении предыдущего ручного списка, кроме раздела 7 «Форматы и ошибки». Живые сервисы изображений и визуальный вид мастерской ещё не проверены. Финальный проход ожидается; перечень проверенных моделей и пропусков нужно заполнить в [чек-листе](manual-testing.md). Интеграция сверена с установленным SillyTavern 1.18.0; универсальная совместимость не заявляется.
 
-164 automated tests pass using mocked APIs and UI boundaries. The user reported completing the previous manual checklist except section 7, Formats and errors. Live image providers and workshop layout have not yet been verified. Final manual verification is pending; tested models and skipped cases must be recorded in the [checklist](manual-testing.md). Integration was checked against the installed SillyTavern 1.18.0 source; universal compatibility is not claimed.
+172 automated tests pass using mocked APIs and UI boundaries. The user reported completing the previous manual checklist except section 7, Formats and errors. Live image providers and workshop layout have not yet been verified. Final manual verification is pending; tested models and skipped cases must be recorded in the [checklist](manual-testing.md). Integration was checked against the installed SillyTavern 1.18.0 source; universal compatibility is not claimed.
 
 ## Действия после финального подтверждения
 

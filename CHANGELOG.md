@@ -6,6 +6,8 @@
 
 ### Unreleased — VNE-TEST (подготовка 3.2.0)
 
+- Исправлено подключение портретов по примеру Comic Forge: проверка API с загрузкой моделей, выбор из списка, именованные профили. Проверена отправка референсов через `/images/edits`, добавлено сообщение о неподдерживаемом endpoint.
+
 [Черновик выпуска 3.2.0 RU/EN](docs/release-notes-3.2.0.md) · [Финальный чек-лист](docs/manual-testing.md). Релиз отложен до проверки портретов.
 
 - Добавлена [генерация портретов](docs/portraits.md): ручной промпт, сборка внешности, четыре транспорта изображений, референсы, общий стиль, предпросмотр и кадрирование. Живые провайдеры и внешний вид ожидают ручной проверки.
@@ -40,7 +42,7 @@
 - Названия моделей и данные API выводятся безопасно; подробные фрагменты ответов скрыты из диагностики по умолчанию.
 - Добавлены русское и английское руководства, история изменений и автоматические проверки. Изучение Extended-форка и выбранные идеи описаны в [отдельной заметке](docs/fork-review.md).
 
-Проверки: 164 автоматических тестов с подменёнными API и границами интерфейса. Интеграция сверена с исходниками SillyTavern 1.18.0. Пользователь подтвердил предыдущий ручной проход, кроме пункта 7 «Форматы и ошибки»; финальная проверка ещё ожидается.
+Проверки: 172 автоматических тестов с подменёнными API и границами интерфейса. Интеграция сверена с исходниками SillyTavern 1.18.0. Пользователь подтвердил предыдущий ручной проход, кроме пункта 7 «Форматы и ошибки»; финальная проверка ещё ожидается.
 
 ### 2026-07-23 — исправление снимков
 
@@ -58,6 +60,8 @@
 ## English
 
 ### Unreleased — VNE-TEST (3.2.0 preparation)
+
+- Portrait connections now follow Comic Forge: API/model discovery, a model picker and named profiles. Verified reference uploads through `/images/edits` and added an explicit unsupported-endpoint error.
 
 - Added the [portrait workshop](docs/portraits.md): manual and source-based prompts, four image transports, references, shared style, preview and crop. Release is deferred pending live-provider and visual verification.
 
@@ -93,7 +97,7 @@ Changes from September 17–18, 2026. Available on the test branch only, without
 - Model names and API data are rendered safely; detailed response excerpts are excluded from diagnostics by default.
 - Added Russian and English guides, a changelog, and automated checks. The Extended fork review and selected ideas are recorded in a [separate note](docs/fork-review.md) (Russian).
 
-Verification: 164 automated tests with mocked APIs and UI boundaries. Integration was checked against SillyTavern 1.18.0 source. The user confirmed the previous manual pass except section 7, Formats and errors; final verification is pending.
+Verification: 172 automated tests with mocked APIs and UI boundaries. Integration was checked against SillyTavern 1.18.0 source. The user confirmed the previous manual pass except section 7, Formats and errors; final verification is pending.
 
 ### 2026-07-23 — snapshot fix
 

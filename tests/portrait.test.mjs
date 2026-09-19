@@ -99,6 +99,88 @@ test('image transports carry prompt, style and actual references', async () => {
     }
 });
 
+test('OpenAI Images posts a single reference as a real file to edits, normalizing a generation URL', async () => {
+    const h = await harness();
+    const request = h.api.buildPortraitRequest({ ...connection, endpoint: connection.endpoint + '/images/generations' }, 'Alex', [{ dataUrl: png }]);
+    assert.equal(request.url, connection.endpoint + '/images/edits');
+    const file = request.init.body.get('image');
+    assert.equal(file.type, 'image/png');
+    assert.deepEqual(Buffer.from(await file.arrayBuffer()), Buffer.from(png.split(',')[1], 'base64'));
+    assert.equal(request.init.body.has('image[]'), false);
+});
+
+test('unavailable edits endpoint reports the reference limitation without a text-only retry', async () => {
+    const h = await harness({ fetch: async () => ({ ok: false, status: 404 }) });
+    await assert.rejects(h.api.generatePortrait(connection, 'Alex', [{ dataUrl: png }]), /portrait_edits_unavailable/);
+    assert.equal(h.requests.length, 1);
+});
+
+test('connect loads provider models into the picker without an image generation request', async () => {
+    const h = await harness({ fetch: async () => ({ ok: true, json: async () => ({ data: [{id:'portrait-b'}, {id:'portrait-a'}] }) }) });
+    h.mountSettings();
+    await h.button('Подключиться / обновить модели').click();
+    const model = h.nodes().find(n => n.dataset.portraitField === 'model');
+    assert.equal(model.tagName, 'select');
+    assert.ok(model.children.some(n => n.value === 'portrait-a'));
+    assert.equal(h.requests[0].url, connection.endpoint + '/models');
+    assert.equal(h.requests[0].init.method, 'GET');
+    assert.equal(h.requests[0].init.headers.Authorization, 'Bearer test-key');
+    model.value = 'portrait-a'; model.emit('change');
+    assert.equal(h.settings['BB-Visual-Novel'].portrait.model, 'portrait-a');
+});
+
+test('failed connection does not claim success or replace a saved model', async () => {
+    const h = await harness({ fetch: async () => ({ok:false,status:401}) });
+    h.mountSettings(); await h.button('Подключиться / обновить модели').click();
+    assert.equal(h.settings['BB-Visual-Novel'].portrait.model, 'test-image');
+    assert.equal(h.button('Подключиться / обновить модели').disabled, false);
+    assert.doesNotMatch(h.nodes().find(n=>n.className==='bb-portrait-connection-status').textContent, /Подключено/);
+});
+
+test('editing connection invalidates an outstanding model discovery', async () => {
+    let resolve;
+    const h = await harness({ fetch: () => new Promise(r=>resolve=r) }); h.mountSettings();
+    const run = h.button('Подключиться / обновить модели').click();
+    const endpoint = h.nodes().find(n=>n.dataset.portraitField==='endpoint');
+    endpoint.value = 'https://other.example'; endpoint.emit('input'); endpoint.emit('change');
+    resolve({ok:true,json:async()=>({data:[{id:'stale-model'}]})}); await run;
+    assert.ok(h.requests[0].init.signal.aborted);
+    const model = h.nodes().find(n=>n.dataset.portraitField==='model');
+    assert.ok(!model.children.some(n=>n.value==='stale-model'));
+});
+
+test('Gemini discovery handles full endpoints, native auth and pagination', async () => {
+    let page=0;
+    const h = await harness({ fetch: async () => ({ok:true,json:async()=> ++page===1
+        ? {models:[{name:'models/image-a'}],nextPageToken:'next'} : {models:[{name:'models/image-b'}]} }) });
+    const result = await h.api.fetchPortraitModels({...connection,type:'gemini',endpoint:'https://generativelanguage.googleapis.com/v1beta/models/example:generateContent'});
+    assert.deepEqual(Array.from(result.models), ['image-a','image-b']);
+    assert.equal(h.requests[0].url,'https://generativelanguage.googleapis.com/v1beta/models');
+    assert.equal(h.requests[0].init.headers['x-goog-api-key'],'test-key');
+    assert.match(h.requests[1].url,/pageToken=next/);
+});
+
+test('Naistera built-in models are not reported as a verified connection', async () => {
+    const h=await harness();
+    const result=await h.api.fetchPortraitModels({...connection,type:'naistera'});
+    assert.equal(result.verified,false);assert.ok(result.models.includes('nano banana'));
+    assert.equal(h.requests.length,0);
+});
+
+test('saved image profiles restore credentials and model but leave shared art style alone', async () => {
+    const h=await harness();h.mountSettings();
+    const field=caption=>h.nodes().find(n=>n.tagName==='label' && n.children[0]?.textContent===caption).children[1];
+    field('Имя профиля').value='Studio';h.button('Сохранить профиль').click();
+    const id=h.settings['BB-Visual-Novel'].portrait.activeProfile;
+    h.button('Новый профиль').click();
+    const key=h.nodes().find(n=>n.dataset.portraitField==='key');key.value='changed';key.emit('change');
+    h.settings['BB-Visual-Novel'].portrait.style='ink';
+    field('Сохранённое подключение').value=id;field('Сохранённое подключение').emit('change');
+    assert.equal(key.value,'test-key');
+    assert.equal(h.settings['BB-Visual-Novel'].portrait.style,'ink');
+    assert.equal(h.settings['BB-Visual-Novel'].portrait.model,'test-image');
+});
+
 test('Gemini auth is selected by exact hostname and full endpoint is preserved', async () => {
     const h = await harness();
     const s = { ...connection, type: 'gemini', endpoint: 'https://generativelanguage.googleapis.com/v1beta' };

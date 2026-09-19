@@ -2832,6 +2832,12 @@ body.bb-hud-popup-active #bb-social-toast-container {
 #bb-vn-enable-options:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
 #bb-vn-action-bar { box-sizing: border-box; }
 /* Portrait workshop: scoped native dialog, matching the VNE editor. */
+#bb-vn-portrait-settings .bb-portrait-connection-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin: 8px 0; }
+#bb-vn-portrait-settings .bb-portrait-connection-actions .menu_button { width: 100%; min-width: 0; white-space: normal; word-break: normal; }
+#bb-vn-portrait-settings .bb-portrait-profiles { border: 1px solid #344158; border-radius: 8px; padding: 10px; }
+#bb-vn-portrait-settings .bb-portrait-profiles summary { cursor: pointer; margin-bottom: 8px; }
+#bb-vn-portrait-settings .bb-portrait-profiles .bb-portrait-field + .bb-portrait-field { margin-top: 8px; }
+#bb-vn-portrait-settings .bb-portrait-connection-status { color: #a9c8e4; line-height: 1.5; }
 .bb-portrait-dialog {
     box-sizing: border-box;
     width: min(820px, calc(100vw - 24px));
