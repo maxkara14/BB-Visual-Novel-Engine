@@ -2831,3 +2831,55 @@ body.bb-hud-popup-active #bb-social-toast-container {
 #bb-vn-enable-options:hover { color: #e0f2fe; border-color: #7dd3fc; }
 #bb-vn-enable-options:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
 #bb-vn-action-bar { box-sizing: border-box; }
+/* Portrait workshop: scoped native dialog, matching the VNE editor. */
+.bb-portrait-dialog {
+    box-sizing: border-box;
+    width: min(820px, calc(100vw - 24px));
+    max-width: none;
+    max-height: calc(100dvh - 24px);
+    margin: auto;
+    padding: 20px;
+    overflow: auto;
+    border: 1px solid #39465e;
+    border-radius: 18px;
+    background: #101620;
+    color: #e2e8f0;
+    box-shadow: 0 24px 80px #0009;
+    text-align: left;
+    font: inherit;
+}
+.bb-portrait-dialog::backdrop { background: #060a12bb; }
+.bb-portrait-dialog *, #bb-vn-portrait-settings * { box-sizing: border-box; }
+.bb-portrait-dialog [hidden], #bb-vn-portrait-settings [hidden] { display: none !important; }
+.bb-portrait-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.bb-portrait-dialog h3 { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
+.bb-portrait-layout { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.bb-portrait-preview { display: grid; place-items: center; min-height: 280px; overflow: hidden; border: 1px solid #2b374c; border-radius: 12px; background: #0a1019; }
+.bb-portrait-preview p { padding: 20px; color: #94a3b8; font-size: 13px; line-height: 1.6; text-align: center; }
+.bb-portrait-preview img { width: 100%; max-height: 420px; object-fit: contain; }
+.bb-portrait-form { display: grid; gap: 12px; min-width: 0; }
+.bb-portrait-field { display: grid; gap: 6px; min-width: 0; margin: 0; font-size: 13px; color: #cbd5e1; }
+.bb-portrait-dialog .text_pole, #bb-vn-portrait-settings .text_pole { width: 100%; min-width: 0; margin: 0; text-align: left; }
+.bb-portrait-dialog textarea { resize: vertical; line-height: 1.5; }
+.bb-portrait-dialog small { color: #94a3b8; font-size: 12px; line-height: 1.5; }
+.bb-portrait-dialog details { border-top: 1px solid #283345; padding-top: 10px; }
+.bb-portrait-dialog summary { cursor: pointer; font-size: 13px; color: #b9c8e2; padding: 4px 0; }
+.bb-portrait-refs { display: grid; gap: 8px; margin: 8px 0; }
+.bb-portrait-ref { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.bb-portrait-ref img { width: 44px; height: 56px; object-fit: cover; border-radius: 6px; }
+.bb-portrait-dialog .menu_button { display: inline-flex; align-items: center; justify-content: center; width: auto; min-width: 0; height: auto; padding: 8px 12px; margin: 0; white-space: normal; word-break: normal; overflow-wrap: break-word; line-height: 1.35; font-size: 13px; border-radius: 8px; }
+.bb-portrait-dialog details > .menu_button { margin: 6px 6px 0 0; }
+.bb-portrait-dialog footer { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.bb-portrait-dialog footer .menu_button:nth-child(2), .bb-portrait-dialog footer .menu_button:last-child { border-color: #6286af; background: #20334b; }
+.bb-portrait-dialog .menu_button:disabled { opacity: .45; cursor: default; }
+.bb-portrait-dialog :focus-visible { outline: 2px solid #83b9e7; outline-offset: 2px; }
+.bb-portrait-status { min-height: 1.5em; margin: 14px 0; color: #a9c8e4; font-size: 12px; line-height: 1.5; }
+.bb-avatar-editor-panel .bb-editor-actions-tight { display: flex; flex-wrap: wrap; gap: 6px; }
+.bb-avatar-editor-panel .bb-editor-actions-tight .menu_button { flex: 1 1 90px; min-width: 0; white-space: normal; word-break: normal; }
+@media (max-width: 600px) {
+    .bb-portrait-dialog { padding: 14px; }
+    .bb-portrait-layout { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .bb-portrait-preview { min-height: 120px; }
+    .bb-portrait-preview img { max-height: 220px; }
+    .bb-portrait-dialog header .menu_button { flex-shrink: 0; }
+}

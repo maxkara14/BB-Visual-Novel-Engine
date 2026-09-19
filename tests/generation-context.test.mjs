@@ -911,6 +911,49 @@ test('Russian and English tone families match without rewriting stored tone text
     assert.equal(h.utils.sanitizeIntentLabel('Подождать'),'Подождать');
     assert.notEqual(h.utils.sanitizeIntentLabel('ACTION_LABEL'),'ACTION LABEL');
 });
+test('portrait prompt uses unsaved appearance, matching card and English without changing reply language', async () => {
+    const h = await harness();
+    h.settings['BB-Visual-Novel'].outputLanguage = 'ru';
+    h.context.characters = [{ name: 'Other' }, { name: 'Alex' }];
+    const cardReads = [];
+    h.context.getCharacterCardFields = ({ chid }) => {
+        cardReads.push(chid);
+        return { description: chid === 1 ? 'Green eyes' : 'WRONG_CHARACTER' };
+    };
+    const run = h.api.generatePortraitPrompt({ charName: 'Alex', currentDescription: 'Синие волосы' });
+    await h.waitForCalls(1);
+    const prompt = h.calls[0].args.quietPrompt;
+    assert.deepEqual(cardReads, [1]);
+    assert.match(prompt, /Синие волосы/);
+    assert.match(prompt, /Green eyes/);
+    assert.match(prompt, /text in English/);
+    assert.doesNotMatch(prompt, /WRONG_CHARACTER|text in Russian/);
+    h.respond(0, 'Blue hair, green eyes, head-and-shoulders portrait.');
+    assert.match(await run, /Blue hair/);
+    assert.equal(h.settings['BB-Visual-Novel'].outputLanguage, 'ru');
+});
+
+test('portrait prompt does not borrow the active unrelated card', async () => {
+    const h = await harness();
+    h.context.characters = [{ name: 'Other' }];
+    h.context.getCharacterCardFields = () => { throw new Error('Must not read this card'); };
+    const run = h.api.generatePortraitPrompt({ charName: 'Alex', currentDescription: 'Red hair' });
+    await h.waitForCalls(1);
+    assert.match(h.calls[0].args.quietPrompt, /Matching card: ""/);
+    h.respond(0, 'Red hair.');
+    assert.equal(await run, 'Red hair.');
+});
+
+test('portrait cancellation releases a stalled lore lookup without generating text', async () => {
+    const h = await harness();
+    h.context.getWorldInfoPrompt = () => new Promise(() => {});
+    const controller = new AbortController();
+    const run = h.api.generatePortraitPrompt({ charName: 'Alex', signal: controller.signal });
+    controller.abort();
+    await assert.rejects(run, { code: 'cancelled' });
+    assert.equal(h.calls.length, 0);
+});
+
 test('English character profile prompt preserves source facts and uses selected language', async () => {
     const h = await harness(); h.settings['BB-Visual-Novel'].outputLanguage='en';
     const run = h.api.generateCharacterDescription({charName:'Alex',currentDescription:'Верный друг',stats:{}});
@@ -1183,7 +1226,7 @@ test('settings groups are balanced, keep controls accessible, and only gameplay 
         if (!['input','hr','br'].includes(name)) stack.push({name, group});
     }
     assert.equal(stack.length, 0);
-    assert.deepEqual(groups.map(g => g.name), ['game','answers','connection','relationships','data','debug']);
+    assert.deepEqual(groups.map(g => g.name), ['game','answers','connection','relationships','data','images','debug']);
     assert.deepEqual(groups.filter(g => g.open).map(g => g.name), ['game']);
     for (const [id, group] of Object.entries({
         'bb-vn-cfg-autosend':'game', 'bb-vn-cfg-instructions':'answers',

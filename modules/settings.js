@@ -1,3 +1,4 @@
+import { mountPortraitSettings } from './portrait-ui.js';
 import { mountSettingsAnimations } from './settings-animation.js';
 import { refreshSnapshotControls, snapshotRemovalPrompt } from './snapshot-controls.js';
 import { t, ui, normalizeUiLanguage } from './i18n.js';
@@ -378,6 +379,10 @@ export function setupExtensionSettings() {
                         </div>
                     </div>
                 </details>
+                <details class="bb-vn-settings-section" data-section="images">
+                    <summary><i class="fa-solid fa-image bb-vn-section-icon" aria-hidden="true"></i><span>Изображения</span></summary>
+                    <div id="bb-vn-portrait-settings" class="bb-vn-settings-section-body"></div>
+                </details>
                 <details class="bb-vn-settings-section" data-section="debug">
                     <summary><i class="fa-solid fa-wrench bb-vn-section-icon" aria-hidden="true"></i><span>Отладка</span></summary>
                     <div class="bb-vn-settings-section-body">
@@ -410,6 +415,7 @@ export function setupExtensionSettings() {
     `;
     const target = document.querySelector("#extensions_settings2") || document.querySelector("#extensions_settings");
     if (target) target.insertAdjacentHTML('beforeend', settingsHtml);
+    mountPortraitSettings(document.getElementById('bb-vn-portrait-settings'));
     mountSettingsAnimations(document.getElementById('bb-social-settings-wrapper'));
     refreshSnapshotControls(bindActivePersonaState().scopeState);
     const snapshotContext = SillyTavern.getContext();

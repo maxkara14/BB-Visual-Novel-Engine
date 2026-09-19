@@ -118,7 +118,7 @@ Detailed diagnostics are disabled by default. Enabling them can put model respon
 
 Integration was checked against the source of the local **SillyTavern 1.18.0** installation, including Connection Manager and structured-output parameters. This does not guarantee support for every version, model, or provider.
 
-148 automated checks run real extension modules with mocked APIs and UI boundaries. The user confirmed the previous manual pass except section 7, Formats and errors. The [final checklist](docs/manual-testing.md) is pending. [Draft 3.2.0 release notes](docs/release-notes-3.2.0.md) are prepared; the release is not published.
+164 automated checks run real extension modules with mocked APIs and UI boundaries. The user confirmed the previous manual pass except section 7, Formats and errors. The [final checklist](docs/manual-testing.md) is pending. [Draft 3.2.0 release notes](docs/release-notes-3.2.0.md) are prepared; the release is not published.
 
 ```sh
 node --experimental-vm-modules --test tests/generation-context.test.mjs tests/snapshot.test.mjs
@@ -145,6 +145,10 @@ This controls VNE’s history block, not total input tokens or the output limit.
 ### Disabling options
 
 “Turn off” inside “VN Actions” smoothly hides the panel, leaving a small “VN” button to restore it. You can also re-enable it in VNE settings → “Gameplay” → “VN options”. This is a global setting saved across reloads. The current request is cancelled and queued auto-generation is cleared; relationships, memory and profile/trait generation remain available. Saved options are kept. Re-enabling restores the panel without a new request; auto-generation resumes on the next character reply.
+
+### Portrait generation (VNE-TEST)
+
+Click **Create** beside the avatar in the character editor. Configure the separate connection under **VNE settings → Images**. Use manual or source-based prompts, shared style and references, then preview and crop before saving. [RU/EN guide](docs/portraits.md). Release is deferred until this feature passes manual verification.
 
 ## Author
 

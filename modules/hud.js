@@ -1,3 +1,4 @@
+import { openPortraitWorkshop } from './portrait-ui.js';
 import { mountCharacterToolbar, syncCharacterToolbarContext } from './character-toolbar.js';
 import { buildMemoryEditorHtml, mountMemoryEditors } from './memory-editor-ui.js';
 import { refreshSnapshotControls } from './snapshot-controls.js';
@@ -242,6 +243,10 @@ async function resizeImageFileToDataUrl(file, maxSide = 2200) {
         reader.readAsDataURL(file);
     });
 
+    return resizeAvatarDataUrl(dataUrl, maxSide);
+}
+
+async function resizeAvatarDataUrl(dataUrl, maxSide = 2200) {
     const image = await loadImageFromUrl(dataUrl);
 
     const width = image.naturalWidth || image.width || 0;
@@ -658,6 +663,7 @@ function buildCharacterCardHtml(charName = '') {
                         <input type="file" class="bb-avatar-upload-input" accept="image/*" style="display:none;">
                         <div class="bb-editor-actions bb-editor-actions-tight">
                             <button type="button" class="menu_button bb-btn-upload-avatar" data-char="${escapeHtml(charName)}"><i class="fa-solid fa-image"></i>&ensp;Аватар</button>
+                            <button type="button" class="menu_button bb-btn-generate-avatar" data-char="${escapeHtml(charName)}"><i class="fa-solid fa-wand-magic-sparkles"></i>&ensp;Создать</button>
                             <button type="button" class="menu_button bb-btn-clear-avatar" ${profile.avatar ? '' : 'disabled'}><i class="fa-solid fa-trash"></i>&ensp;Очистить</button>
                         </div>
                     </div>
@@ -929,6 +935,29 @@ export function renderSocialHud() {
                 e.preventDefault();
                 e.stopPropagation();
                 jQuery(this).closest('.bb-char-editor').find('.bb-avatar-upload-input').trigger('click');
+            });
+
+            jQuery('.bb-btn-generate-avatar').off('click').on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const editor = jQuery(this).closest('.bb-char-editor');
+                const description = String(editor.find('.bb-edit-description-input').val() || '');
+                openPortraitWorkshop({
+                    charName: String(jQuery(this).attr('data-char') || ''),
+                    description,
+                    prepare: resizeAvatarDataUrl,
+                    avatar: String(editor.find('.bb-edit-avatar-source').val() || ''),
+                    isEditorCurrent: () => editor[0]?.isConnected && String(editor.find('.bb-edit-description-input').val() || '') === description,
+                    apply: dataUrl => {
+                        editor.find('.bb-edit-avatar-source').val(dataUrl);
+                        editor.find('.bb-edit-avatar-data').val('');
+                        editor.find('.bb-avatar-focus-x').val('50');
+                        editor.find('.bb-avatar-focus-y').val('50');
+                        editor.find('.bb-avatar-focus-zoom').val('100');
+                        queueCharacterEditorAvatarPreview(editor, true);
+                        notifyInfo(t('Аватар загружен. При необходимости подстройте кадр перед сохранением.'));
+                    },
+                });
             });
 
             jQuery('.bb-btn-clear-avatar').off('click').on('click', function(e) {

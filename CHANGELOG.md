@@ -6,13 +6,15 @@
 
 ### Unreleased — VNE-TEST (подготовка 3.2.0)
 
-[Черновик выпуска 3.2.0 RU/EN](docs/release-notes-3.2.0.md) · [Финальный чек-лист](docs/manual-testing.md). Релиз ещё не опубликован.
+[Черновик выпуска 3.2.0 RU/EN](docs/release-notes-3.2.0.md) · [Финальный чек-лист](docs/manual-testing.md). Релиз отложен до проверки портретов.
+
+- Добавлена [генерация портретов](docs/portraits.md): ручной промпт, сборка внешности, четыре транспорта изображений, референсы, общий стиль, предпросмотр и кадрирование. Живые провайдеры и внешний вид ожидают ручной проверки.
 
 - Добавлено независимое отключение панели вариантов с сохранением отношений и памяти; повторное включение компактной кнопкой VN или через настройки «Игра», с анимацией перехода.
 
 - Добавлен выбор 1–100 последних сообщений для контекста вариантов; по умолчанию 10.
 
-- Настройки собраны в шесть компактных раскрывающихся разделов по примеру Enhance Gen.
+- Настройки собраны в семь компактных раскрывающихся разделов по примеру Enhance Gen.
 
 - Добавлены сохраняемые пожелания к вариантам, очистка и приоритет разовой подсказки; интерфейс RU/EN.
 
@@ -38,7 +40,7 @@
 - Названия моделей и данные API выводятся безопасно; подробные фрагменты ответов скрыты из диагностики по умолчанию.
 - Добавлены русское и английское руководства, история изменений и автоматические проверки. Изучение Extended-форка и выбранные идеи описаны в [отдельной заметке](docs/fork-review.md).
 
-Проверки: 148 автоматических тестов с подменёнными API и границами интерфейса. Интеграция сверена с исходниками SillyTavern 1.18.0. Пользователь подтвердил предыдущий ручной проход, кроме пункта 7 «Форматы и ошибки»; финальная проверка ещё ожидается.
+Проверки: 164 автоматических тестов с подменёнными API и границами интерфейса. Интеграция сверена с исходниками SillyTavern 1.18.0. Пользователь подтвердил предыдущий ручной проход, кроме пункта 7 «Форматы и ошибки»; финальная проверка ещё ожидается.
 
 ### 2026-07-23 — исправление снимков
 
@@ -57,13 +59,15 @@
 
 ### Unreleased — VNE-TEST (3.2.0 preparation)
 
+- Added the [portrait workshop](docs/portraits.md): manual and source-based prompts, four image transports, references, shared style, preview and crop. Release is deferred pending live-provider and visual verification.
+
 [Draft 3.2.0 release notes RU/EN](docs/release-notes-3.2.0.md) · [Final checklist](docs/manual-testing.md). Not released yet.
 
 - Added independent disabling of the option panel while keeping relationships and memory; re-enable with a compact VN button or in Gameplay settings, with animated transitions.
 
 - Added a choice of 1–100 recent messages for option context; defaults to 10.
 
-- Organized settings into six compact collapsible sections, following Enhance Gen.
+- Organized settings into seven compact collapsible sections, following Enhance Gen.
 
 - Added persistent option preferences, clearing and one-time guidance precedence, with RU/EN controls.
 
@@ -89,7 +93,7 @@ Changes from September 17–18, 2026. Available on the test branch only, without
 - Model names and API data are rendered safely; detailed response excerpts are excluded from diagnostics by default.
 - Added Russian and English guides, a changelog, and automated checks. The Extended fork review and selected ideas are recorded in a [separate note](docs/fork-review.md) (Russian).
 
-Verification: 148 automated tests with mocked APIs and UI boundaries. Integration was checked against SillyTavern 1.18.0 source. The user confirmed the previous manual pass except section 7, Formats and errors; final verification is pending.
+Verification: 164 automated tests with mocked APIs and UI boundaries. Integration was checked against SillyTavern 1.18.0 source. The user confirmed the previous manual pass except section 7, Formats and errors; final verification is pending.
 
 ### 2026-07-23 — snapshot fix
 

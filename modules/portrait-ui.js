@@ -1,0 +1,175 @@
+import { extension_settings } from '../../../../extensions.js';
+import { saveSettingsDebounced } from '../../../../../script.js';
+import { MODULE_NAME } from './constants.js';
+import { t } from './i18n.js';
+import { generatePortrait, PORTRAIT_DEFAULTS, readPortraitFile, parsePortraitImage } from './portrait-provider.js';
+import { generatePortraitPrompt } from './generator.js';
+import { getCurrentPersonaScopeKey } from './social.js';
+
+function settings() { return { ...PORTRAIT_DEFAULTS, ...extension_settings[MODULE_NAME].portrait }; }
+function node(tag, text = '', className = '') {
+    const el = document.createElement(tag); el.textContent = text; el.className = className; return el;
+}
+function button(text, handler) {
+    const el = node('button', t(text), 'menu_button'); el.type = 'button'; el.addEventListener('click', handler); return el;
+}
+function field(root, label, value, { choices, type = 'text', rows, maxLength = 8000 } = {}) {
+    const wrap = node('label', '', 'bb-portrait-field'); wrap.append(node('span', t(label)));
+    const input = node(choices ? 'select' : rows ? 'textarea' : 'input', '', 'text_pole');
+    if (choices) for (const [value, caption] of choices) { const option = node('option', t(caption)); option.value = value; input.append(option); }
+    else if (rows) input.rows = rows;
+    else input.type = type;
+    input.maxLength = maxLength; input.value = value;
+    wrap.append(input); root.append(wrap); return input;
+}
+
+export function mountPortraitSettings(root) {
+    if (!root || root.dataset.mounted) return;
+    root.dataset.mounted = 'true';
+    const s = settings();
+    const definitions = [
+        ['type', 'Протокол изображений', { choices: [['openai-images','OpenAI Images'],['openai-chat','OpenAI Chat'],['gemini','Gemini'],['naistera','Naistera']] }],
+        ['endpoint', 'Адрес API изображений', { type: 'url' }], ['key','Ключ API изображений',{type:'password'}],
+        ['model','Модель изображений',{}], ['style','Общий стиль портретов',{rows:2,maxLength:2000}],
+        ['size','Размер OpenAI Images',{choices:[['1024x1024','1024×1024'],['1024x1536','1024×1536'],['1536x1024','1536×1024'],['1024x1792','1024×1792'],['1792x1024','1792×1024']]}],
+        ['quality','Качество OpenAI Images',{choices:[['','По умолчанию'],['standard','standard'],['hd','hd'],['low','low'],['medium','medium'],['high','high'],['auto','auto']]}],
+        ['aspect','Пропорции портрета',{choices:[['1:1','1:1'],['3:4','3:4'],['2:3','2:3'],['4:3','4:3']]}],
+        ['imageSize','Разрешение Gemini / Chat',{choices:[['1K','1K'],['2K','2K'],['4K','4K']]}],
+        ['preset','Пресет Naistera',{}], ['timeout','Тайм-аут изображения (секунды)',{type:'number'}],
+    ];
+    const controls = new Map();
+    const sync = () => {
+        const type = controls.get('type').value;
+        for (const key of ['size','quality']) controls.get(key).parentElement.hidden = type !== 'openai-images';
+        controls.get('aspect').parentElement.hidden = type === 'openai-images';
+        controls.get('imageSize').parentElement.hidden = !['gemini','openai-chat'].includes(type);
+        controls.get('preset').parentElement.hidden = type !== 'naistera';
+    };
+    for (const [key, caption, options] of definitions) {
+        const input = field(root, caption, s[key], options); controls.set(key,input);
+        input.dataset.portraitField = key;
+        if (key === 'timeout') { input.min = '15'; input.max = '600'; }
+        if (key === 'key') input.autocomplete = 'off';
+        input.addEventListener('change', () => {
+            const value = key === 'timeout' ? Math.max(15, Math.min(600, Number(input.value) || 180)) : input.value;
+            extension_settings[MODULE_NAME].portrait = { ...settings(), [key]: value };
+            input.value = value; saveSettingsDebounced(); sync();
+        });
+    }
+    root.append(node('small', t('Укажите модель вручную. Размеры и качество зависят от провайдера. Референсы не отбрасываются при ошибке.'), 'bb-vn-settings-note'));
+    sync();
+}
+
+export function portraitContextKey(context, persona) {
+    return JSON.stringify([context.getCurrentChatId?.() ?? context.chatId, context.characterId, context.groupId, persona]);
+}
+
+export function openPortraitWorkshop({ charName, description, avatar, isEditorCurrent, apply, prepare = async value => value }) {
+    if (document.querySelector('.bb-portrait-dialog')) return;
+    const context = SillyTavern.getContext();
+    const chat = context.chat;
+    const key = portraitContextKey(context, getCurrentPersonaScopeKey());
+    const narrative = () => JSON.stringify((SillyTavern.getContext().chat || []).map(m => [m.mes, m.swipe_id]));
+    const initialNarrative = narrative();
+    const valid = () => isEditorCurrent() && SillyTavern.getContext().chat === chat && key === portraitContextKey(SillyTavern.getContext(), getCurrentPersonaScopeKey()) && narrative() === initialNarrative;
+    const dialog = node('dialog', '', 'bb-portrait-dialog');
+    const title = node('h3', t('Портрет') + ' · ' + charName); title.id = 'bb-portrait-title'; dialog.setAttribute('aria-labelledby',title.id);
+    let controller = null, result = '', closed = false;
+    const close = () => { closed = true; controller?.abort(); dialog.close(); dialog.remove(); };
+    const header = node('header'); header.append(title,button('Закрыть',close)); dialog.append(header);
+    const layout = node('div','','bb-portrait-layout'); dialog.append(layout);
+    const preview = node('div','','bb-portrait-preview'); const image = node('img'); image.alt = t('Предпросмотр портрета'); image.hidden = true;
+    const placeholder = node('p',t('Результат появится здесь. Старый аватар не изменится до применения.'));
+    preview.append(image,placeholder); layout.append(preview);
+    const form = node('div','','bb-portrait-form'); layout.append(form);
+    form.append(node('small',t('Подключение: настройки VNE → Изображения. Сборка промпта использует обычное подключение генерации VNE.')));
+    const prompt = field(form,'Промпт портрета','',{rows:6});
+    form.append(node('small',t('Напишите свой промпт или соберите внешность из описания и сцены. Если данных мало, уточните внешность вручную.')));
+    const style = field(form,'Общий стиль портретов',settings().style,{rows:2,maxLength:2000});
+    style.addEventListener('change',()=> {
+        extension_settings[MODULE_NAME].portrait={...settings(),style:style.value};saveSettingsDebounced();
+        const settingsStyle = document.querySelector('#bb-vn-portrait-settings [data-portrait-field="style"]');
+        if (settingsStyle) settingsStyle.value = style.value;
+    });
+    const refsDetails=node('details');refsDetails.append(node('summary',t('Референсы')));form.append(refsDetails);
+    const refsList=node('div','','bb-portrait-refs');refsDetails.append(refsList);
+    const refs=[];
+    const status=node('p','','bb-portrait-status');status.setAttribute('role','status');dialog.append(status);
+    const actions=node('footer');dialog.append(actions);
+    const controls=[];
+    function errorText(error) {
+        if (error?.code === 'cancelled' || error?.name === 'AbortError') return t('Отменено');
+        if (error?.message === 'portrait_context') return t('Чат или карточка изменились. Откройте портрет заново.');
+        if (error?.message === 'portrait_image') return t('Нужен PNG, JPEG или WebP до 10 МиБ.');
+        if (error?.message === 'portrait_references') return t('Можно добавить до четырёх референсов.');
+        if (error?.message === 'portrait_configuration') return t('Заполните подключение изображений и промпт.');
+        if (error?.message === 'portrait_empty') return t('Провайдер не вернул изображение.');
+        if (error?.code === 'timeout') return t('Истекло время ожидания изображения.');
+        if (error?.name === 'VnRequestError') return error.message;
+        return t('Запрос не выполнен. Проверьте подключение, модель и поддержку референсов.');
+    }
+    function renderRefs() {
+        refsList.replaceChildren();
+        refs.forEach((ref,index)=>{
+            const row=node('div','','bb-portrait-ref');const img=node('img');img.src=ref.dataUrl;img.alt=t('Референс');row.append(img);
+            const role=field(row,'Назначение',ref.role,{choices:[['appearance','Внешность'],['style','Стиль']]});role.disabled=!!controller;
+            role.addEventListener('change',()=>ref.role=role.value);
+            const remove=button('Удалить',()=>{refs.splice(index,1);renderRefs();});remove.disabled=!!controller;row.append(remove);refsList.append(row);
+        });
+    }
+    function addReference(dataUrl) {
+        if (closed || controller) return;
+        if (!valid()) throw new Error('portrait_context');
+        parsePortraitImage(dataUrl); if(refs.length>=4)throw new Error('portrait_references');
+        refs.push({dataUrl,role:'appearance'});renderRefs();
+    }
+    const file=node('input');file.type='file';file.accept='image/png,image/jpeg,image/webp';file.hidden=true;refsDetails.append(file);
+    file.addEventListener('change',async()=>{try{if(file.files?.[0])await addReference(await readPortraitFile(file.files[0]));}catch(e){status.textContent=errorText(e);}finally{file.value='';}});
+    const upload=button('Добавить референс',()=>file.click());refsDetails.append(upload);controls.push(upload);
+    const current=button('Текущий аватар',async()=>{try{await addReference(avatar);}catch(e){status.textContent=errorText(e);}});current.disabled=!avatar;refsDetails.append(current);
+    const build=button('Собрать промпт',()=>run('prompt'));const generate=button('Сгенерировать портрет',()=>run('image'));
+    const cancel=button('Отмена',()=>controller?.abort());cancel.disabled=true;
+    const use=button('Использовать',()=>{
+        if(!valid()){status.textContent=t('Чат или карточка изменились. Откройте портрет заново.');return;}
+        apply(result);close();
+    });use.disabled=true;actions.append(build,generate,cancel,use);controls.push(build,generate,prompt,style);
+    const refreshBusy=()=>{controls.forEach(el=>el.disabled=!!controller);current.disabled=!!controller||!avatar;cancel.disabled=!controller;use.disabled=!!controller||!result;renderRefs();};
+    async function run(kind) {
+        if(controller)return;
+        if(!valid()){status.textContent=t('Чат или карточка изменились. Откройте портрет заново.');return;}
+        const operation=new AbortController();controller=operation;refreshBusy();status.textContent=t('Генерация…');
+        const monitor=setInterval(()=>{if(!valid())operation.abort();},300);
+        try {
+            let output=kind==='prompt'
+                ? await generatePortraitPrompt({charName,currentDescription:description,signal:operation.signal})
+                : await generatePortrait({...settings(),style:style.value},prompt.value,refs.map(ref=>({...ref})),operation.signal);
+            if(closed||operation.signal.aborted)return;
+            if(!valid())throw new Error('portrait_context');
+            if(kind==='prompt')prompt.value=output;
+            else {
+                output = await prepare(output);
+                if(closed||operation.signal.aborted)return;
+                if(!valid())throw new Error('portrait_context');
+                const decoded = node('img');
+                decoded.src=output;
+                await decoded.decode();
+                if(closed||operation.signal.aborted)return;
+                if(!valid())throw new Error('portrait_context');
+                result=output;image.src=output;image.hidden=false;placeholder.hidden=true;
+            }
+            status.textContent=t('Готово. Проверьте результат перед применением.');
+        } catch(error) { if(!closed)status.textContent=errorText(error); }
+        finally {
+            clearInterval(monitor);
+            if(controller===operation){
+                controller=null;
+                if(!closed){
+                    if(operation.signal.aborted) status.textContent = valid() ? t('Отменено') : t('Чат или карточка изменились. Откройте портрет заново.');
+                    refreshBusy();
+                }
+            }
+        }
+    }
+    dialog.addEventListener('cancel',event=>{event.preventDefault();close();});
+    document.body.append(dialog);dialog.showModal();prompt.focus();
+}
