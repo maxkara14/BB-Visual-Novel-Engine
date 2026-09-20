@@ -1,5 +1,16 @@
 // Static extension UI text only. Never apply this catalogue to stored story data.
 export const EN = {
+    "Портреты": "Portraits",
+    "Галерея": "Gallery",
+    "Здесь появятся созданные портреты этого персонажа.": "Generated portraits of this character will appear here.",
+    "Скачать": "Download",
+    "Копировать изображение": "Copy image",
+    "Удалить из галереи…": "Remove from gallery…",
+    "Удалить портрет из галереи? Текущий аватар и файл на диске останутся.": "Remove this portrait from the gallery? The current avatar and image file will remain.",
+    "Изображение скопировано": "Image copied",
+    "Браузер не разрешил копирование. Используйте «Скачать».": "The browser did not allow copying. Use Download instead.",
+    "Файл портрета недоступен. Его можно убрать из галереи.": "The portrait file is unavailable. You can remove it from the gallery.",
+    "Портрет создан, но не сохранён в галерею. Скачайте его перед закрытием окна.": "Portrait generated, but not saved to the gallery. Download it before closing this window.",
     "Обновить выбранный": "Update selected",
     "Сохранить как новый…": "Save as new…",
     "Удалить профиль…": "Delete profile…",

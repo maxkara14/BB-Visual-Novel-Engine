@@ -5,6 +5,7 @@ import { t } from './i18n.js';
 import { generatePortrait, fetchPortraitModels, PORTRAIT_DEFAULTS, readPortraitFile, parsePortraitImage } from './portrait-provider.js';
 import { generatePortraitPrompt } from './generator.js';
 import { getCurrentPersonaScopeKey } from './social.js';
+import { createPortraitGallery, downloadPortrait, copyPortrait } from './portrait-gallery.js';
 
 function settings() { return { ...PORTRAIT_DEFAULTS, ...extension_settings[MODULE_NAME].portrait }; }
 function node(tag, text = '', className = '') {
@@ -210,9 +211,15 @@ export function openPortraitWorkshop({ charName, description, avatar, isEditorCu
     const valid = () => isEditorCurrent() && SillyTavern.getContext().chat === chat && key === portraitContextKey(SillyTavern.getContext(), getCurrentPersonaScopeKey()) && narrative() === initialNarrative;
     const dialog = node('dialog', '', 'bb-portrait-dialog');
     const title = node('h3', t('Портрет') + ' · ' + charName); title.id = 'bb-portrait-title'; dialog.setAttribute('aria-labelledby',title.id);
-    let controller = null, result = '', closed = false;
+    let controller = null, result = '', original = '', closed = false;
+    const gallery = createPortraitGallery(charName);
+    let entries = gallery.list(), selectedId = '', selectedImage = '';
     const close = () => { closed = true; controller?.abort(); dialog.close(); dialog.remove(); };
     const header = node('header'); header.append(title,button('Закрыть',close)); dialog.append(header);
+    const tabs = node('nav', '', 'bb-portrait-tabs'); tabs.setAttribute('aria-label', t('Портреты'));
+    const createTab = button('Создать', () => showTab(false));
+    const galleryTab = button('Галерея', () => showTab(true));
+    tabs.append(createTab, galleryTab); dialog.append(tabs);
     const layout = node('div','','bb-portrait-layout'); dialog.append(layout);
     const preview = node('div','','bb-portrait-preview'); const image = node('img'); image.alt = t('Предпросмотр портрета'); image.hidden = true;
     const placeholder = node('p',t('Результат появится здесь. Старый аватар не изменится до применения.'));
@@ -232,6 +239,71 @@ export function openPortraitWorkshop({ charName, description, avatar, isEditorCu
     const refs=[];
     const status=node('p','','bb-portrait-status');status.setAttribute('role','status');dialog.append(status);
     const actions=node('footer');dialog.append(actions);
+    const galleryPane = node('div', '', 'bb-portrait-gallery'); galleryPane.hidden = true; dialog.append(galleryPane);
+    const galleryPreview = node('div', '', 'bb-portrait-preview');
+    const galleryImage = node('img'); galleryImage.alt = t('Предпросмотр портрета'); galleryImage.hidden = true;
+    const galleryEmpty = node('p', t('Здесь появятся созданные портреты этого персонажа.'));
+    galleryPreview.append(galleryImage, galleryEmpty);
+    const thumbnails = node('div', '', 'bb-portrait-thumbnails');
+    galleryPane.append(galleryPreview, thumbnails);
+    const galleryActions = node('footer', '', 'bb-portrait-gallery-actions'); galleryActions.hidden = true; dialog.append(galleryActions);
+    function showTab(isGallery) {
+        layout.hidden = actions.hidden = isGallery;
+        galleryPane.hidden = galleryActions.hidden = !isGallery;
+        createTab.setAttribute('aria-pressed', String(!isGallery)); galleryTab.setAttribute('aria-pressed', String(isGallery));
+    }
+    function renderGallery() {
+        entries = gallery.list();
+        galleryTab.textContent = t('Галерея') + ' · ' + entries.length;
+        thumbnails.replaceChildren();
+        for (const entry of entries) {
+            const item = button('', () => selectPortrait(entry.id)); item.className = 'bb-portrait-thumbnail';
+            item.setAttribute('aria-label', t('Портрет') + ' ' + new Date(entry.createdAt).toLocaleString());
+            item.setAttribute('aria-pressed', String(entry.id === selectedId));
+            const thumb = node('img'); thumb.src = entry.path; thumb.alt = ''; thumb.loading = 'lazy'; thumb.decoding = 'async';
+            item.append(thumb); thumbnails.append(item);
+        }
+    }
+    async function selectPortrait(id) {
+        if (controller || !valid()) return;
+        selectedId = id; selectedImage = ''; galleryImage.hidden = true; galleryEmpty.hidden = false;
+        renderGallery();
+        const operation = new AbortController(); controller = operation; refreshBusy();
+        try {
+            const data = await gallery.read(id, operation.signal);
+            const decoded = node('img'); decoded.src = data; await decoded.decode();
+            if (closed || operation.signal.aborted || !valid()) return;
+            selectedId = id; selectedImage = data; galleryImage.src = data;
+            galleryImage.hidden = false; galleryEmpty.hidden = true;
+            status.textContent = ''; renderGallery();
+        } catch (error) { if (!closed) status.textContent = errorText(error); }
+        finally { if (controller === operation) { controller = null; if (!closed) refreshBusy(); } }
+    }
+    const galleryUse = button('Использовать', async () => {
+        if (!valid() || !selectedImage || controller) return;
+        const operation = new AbortController(); controller = operation; refreshBusy();
+        try {
+            const data = await prepare(selectedImage);
+            if (closed || operation.signal.aborted || !valid()) return;
+            apply(data); close();
+        } catch (error) { if (!closed) status.textContent = errorText(error); }
+        finally { if (controller === operation) { controller = null; if (!closed) refreshBusy(); } }
+    });
+    const galleryDownload = button('Скачать', () => downloadPortrait(selectedImage));
+    const galleryCopy = button('Копировать изображение', () => copyImage(selectedImage));
+    const galleryDelete = button('Удалить из галереи…', () => {
+        if (!valid() || controller || !selectedId || !window.confirm(t('Удалить портрет из галереи? Текущий аватар и файл на диске останутся.'))) return;
+        gallery.remove(selectedId); selectedId = ''; selectedImage = '';
+        galleryImage.hidden = true; galleryImage.removeAttribute('src'); galleryEmpty.hidden = false;
+        renderGallery(); refreshBusy();
+        if (entries.length) void selectPortrait(entries[0].id);
+    });
+    galleryActions.append(galleryUse, galleryDownload, galleryCopy, galleryDelete);
+    galleryUse.className += ' bb-portrait-primary';
+    async function copyImage(data) {
+        try { await copyPortrait(data); if (!closed) status.textContent = t('Изображение скопировано'); }
+        catch { if (!closed) status.textContent = t('Браузер не разрешил копирование. Используйте «Скачать».'); }
+    }
     const controls=[];
     function errorText(error) {
         if (error?.code === 'cancelled' || error?.name === 'AbortError') return t('Отменено');
@@ -240,6 +312,7 @@ export function openPortraitWorkshop({ charName, description, avatar, isEditorCu
         if (error?.message === 'portrait_references') return t('Можно добавить до четырёх референсов.');
         if (error?.message === 'portrait_configuration') return t('Заполните подключение изображений и промпт.');
         if (error?.message === 'portrait_empty') return t('Провайдер не вернул изображение.');
+        if (error?.message === 'portrait_gallery_missing') return t('Файл портрета недоступен. Его можно убрать из галереи.');
         if (error?.message === 'portrait_edits_unavailable') return t('Сервис не поддерживает /images/edits. Выберите модель или подключение с поддержкой референсов. Запрос без картинок не отправлялся.');
         if (error?.code === 'timeout') return t('Истекло время ожидания изображения.');
         if (error?.name === 'VnRequestError') return error.message;
@@ -270,7 +343,17 @@ export function openPortraitWorkshop({ charName, description, avatar, isEditorCu
         if(!valid()){status.textContent=t('Чат или карточка изменились. Откройте портрет заново.');return;}
         apply(result);close();
     });use.disabled=true;actions.append(build,generate,cancel,use);controls.push(build,generate,prompt,style);
-    const refreshBusy=()=>{controls.forEach(el=>el.disabled=!!controller);current.disabled=!!controller||!avatar;cancel.disabled=!controller;use.disabled=!!controller||!result;renderRefs();};
+    use.className += ' bb-portrait-primary'; generate.className += ' bb-portrait-primary';
+    const download = button('Скачать', () => downloadPortrait(original));
+    const copy = button('Копировать изображение', () => copyImage(original));
+    actions.append(download, copy);
+    const refreshBusy=()=>{
+        controls.forEach(el=>el.disabled=!!controller);current.disabled=!!controller||!avatar;cancel.disabled=!controller;use.disabled=!!controller||!result;
+        download.disabled=copy.disabled=!!controller||!original;
+        galleryUse.disabled=galleryDownload.disabled=galleryCopy.disabled=!!controller||!selectedImage;
+        galleryDelete.disabled=!!controller||!selectedId;
+        renderRefs();
+    };
     async function run(kind) {
         if(controller)return;
         if(!valid()){status.textContent=t('Чат или карточка изменились. Откройте портрет заново.');return;}
@@ -284,6 +367,7 @@ export function openPortraitWorkshop({ charName, description, avatar, isEditorCu
             if(!valid())throw new Error('portrait_context');
             if(kind==='prompt')prompt.value=output;
             else {
+                const source = output;
                 output = await prepare(output);
                 if(closed||operation.signal.aborted)return;
                 if(!valid())throw new Error('portrait_context');
@@ -292,7 +376,16 @@ export function openPortraitWorkshop({ charName, description, avatar, isEditorCu
                 await decoded.decode();
                 if(closed||operation.signal.aborted)return;
                 if(!valid())throw new Error('portrait_context');
-                result=output;image.src=output;image.hidden=false;placeholder.hidden=true;
+                result=output;original=source;image.src=output;image.hidden=false;placeholder.hidden=true;
+                try {
+                    const entry = await gallery.add(source, operation.signal);
+                    if (closed || operation.signal.aborted || !valid()) return;
+                    selectedId = entry.id; selectedImage = source; galleryImage.src = source;
+                    galleryImage.hidden = false; galleryEmpty.hidden = true; renderGallery();
+                } catch {
+                    if (!closed && !operation.signal.aborted) status.textContent = t('Портрет создан, но не сохранён в галерею. Скачайте его перед закрытием окна.');
+                    return;
+                }
             }
             status.textContent=t('Готово. Проверьте результат перед применением.');
         } catch(error) { if(!closed)status.textContent=errorText(error); }
@@ -308,5 +401,8 @@ export function openPortraitWorkshop({ charName, description, avatar, isEditorCu
         }
     }
     dialog.addEventListener('cancel',event=>{event.preventDefault();close();});
-    document.body.append(dialog);dialog.showModal();prompt.focus();
+    renderGallery(); refreshBusy(); showTab(entries.length > 0);
+    document.body.append(dialog);dialog.showModal();
+    if (entries.length) { galleryTab.focus(); void selectPortrait(entries[0].id); }
+    else prompt.focus();
 }

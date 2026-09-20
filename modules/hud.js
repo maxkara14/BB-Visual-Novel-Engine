@@ -663,7 +663,7 @@ function buildCharacterCardHtml(charName = '') {
                         <input type="file" class="bb-avatar-upload-input" accept="image/*" style="display:none;">
                         <div class="bb-editor-actions bb-editor-actions-tight">
                             <button type="button" class="menu_button bb-btn-upload-avatar" data-char="${escapeHtml(charName)}"><i class="fa-solid fa-image"></i>&ensp;Аватар</button>
-                            <button type="button" class="menu_button bb-btn-generate-avatar" data-char="${escapeHtml(charName)}"><i class="fa-solid fa-wand-magic-sparkles"></i>&ensp;Создать</button>
+                            <button type="button" class="menu_button bb-btn-generate-avatar" data-char="${escapeHtml(charName)}"><i class="fa-solid fa-images"></i>&ensp;Портреты</button>
                             <button type="button" class="menu_button bb-btn-clear-avatar" ${profile.avatar ? '' : 'disabled'}><i class="fa-solid fa-trash"></i>&ensp;Очистить</button>
                         </div>
                     </div>

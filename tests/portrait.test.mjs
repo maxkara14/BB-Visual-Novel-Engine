@@ -6,20 +6,21 @@ import { SourceTextModule, SyntheticModule, createContext } from 'node:vm';
 const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6X8AAAAASUVORK5CYII=';
 const connection = { endpoint: 'https://images.example/v1', model: 'test-image', key: 'test-key' };
 
-async function harness({ fetch: fetchImpl, fakeClock = false } = {}) {
-    const requests = [], textRequests = [], applied = [], timers = new Map();
+async function harness({ fetch: fetchImpl, fakeClock = false, uploadFails = false, upload: uploadImpl } = {}) {
+    const requests = [], textRequests = [], applied = [], downloads = [], timers = new Map();
     const dialogs = { name: undefined, confirm: true };
     let timerId = 0, persona = 'a', editorCurrent = true, saves = 0, decodeError = false;
-    const context = { chat: [{ mes: 'Scene', swipe_id: 0 }], chatId: 'a', characterId: 1 };
+    const context = { chat: [{ mes: 'Scene', swipe_id: 0 }], chatId: 'a', characterId: 1, chatMetadata: {}, getRequestHeaders: () => ({'Content-Type':'application/json'}), saveMetadataDebounced() {} };
     const settings = { 'BB-Visual-Novel': { portrait: { ...connection } } };
     class Node {
         constructor(tag) { this.tagName = tag; this.children = []; this.dataset = {}; this.listeners = new Map(); this.value = ''; this.hidden = false; }
         append(...children) { for (const child of children) { child.parentElement = this; this.children.push(child); } }
         replaceChildren(...children) { this.children = []; this.append(...children); }
         setAttribute(key, value) { this[key] = value; }
+        removeAttribute(key) { delete this[key]; }
         addEventListener(type, listener) { this.listeners.set(type, listener); }
         emit(type) { if (this.disabled) return; return this.listeners.get(type)?.({ preventDefault() {} }); }
-        click() { return this.emit('click'); }
+        click() { if (this.tagName === 'a') downloads.push({ href: this.href, filename: this.download }); return this.emit('click'); }
         focus() {}
         showModal() { this.open = true; }
         close() { this.open = false; }
@@ -36,13 +37,19 @@ async function harness({ fetch: fetchImpl, fakeClock = false } = {}) {
         readAsDataURL(blob) { blob.arrayBuffer().then(bytes => { this.result = 'data:' + blob.type + ';base64,' + Buffer.from(bytes).toString('base64'); this.onload(); }, () => this.onerror()); }
     }
     const sandbox = createContext({
-        URL, FormData, Blob, Uint8Array, atob, AbortController, Error, TypeError, FileReader: Reader,
+        URL, FormData, Blob, Uint8Array, atob, AbortController, Error, TypeError, FileReader: Reader, crypto: globalThis.crypto,
         setTimeout: fakeClock ? callback => { timers.set(++timerId, callback); return timerId; } : setTimeout,
         clearTimeout: fakeClock ? id => timers.delete(id) : clearTimeout,
         setInterval, clearInterval, document, SillyTavern: { getContext: () => context },
         window: { prompt: (_message, value) => dialogs.name === undefined ? value : dialogs.name, confirm: () => dialogs.confirm },
         fetch: async (url, init) => {
             requests.push({ url, init });
+            if (url === '/api/images/upload') {
+                const body = JSON.parse(init.body);
+                if (uploadImpl) return uploadImpl(body, init);
+                return {ok: !uploadFails, json: async () => ({path: '/user/images/bb_vne_portraits/' + body.filename + '.' + body.format})};
+            }
+            if (url.startsWith('/user/images/bb_vne_portraits/')) return {ok:true,blob:async()=>new Blob([Buffer.from(png.split(',')[1],'base64')],{type:'image/png'})};
             return fetchImpl ? fetchImpl(url, init) : { ok: true, json: async () => ({ data_url: png }) };
         },
     });
@@ -50,7 +57,7 @@ async function harness({ fetch: fetchImpl, fakeClock = false } = {}) {
         ['./i18n.js', { t: x => x }], ['./constants.js', { MODULE_NAME: 'BB-Visual-Novel' }],
         ['../../../../extensions.js', { extension_settings: settings }],
         ['../../../../../script.js', { saveSettingsDebounced: () => { saves++; } }],
-        ['./social.js', { getCurrentPersonaScopeKey: () => persona }],
+        ['./social.js', { getCurrentPersonaScopeKey: () => persona, resolveCharacterIdentity: name => ({id:name}) }],
         ['./generator.js', { generatePortraitPrompt: async args => { textRequests.push(args); return 'Portrait of Alex.'; } }],
     ]);
     const cache = new Map();
@@ -64,8 +71,8 @@ async function harness({ fetch: fetchImpl, fakeClock = false } = {}) {
     };
     const module = load('./portrait-ui.js'); await module.link(load); await module.evaluate();
     return {
-        api: cache.get('./portrait-provider.js').namespace, ui: module.namespace,
-        context, settings, requests, textRequests, applied, nodes, dialogs,
+        api: cache.get('./portrait-provider.js').namespace, ui: module.namespace, gallery: cache.get('./portrait-gallery.js').namespace,
+        context, settings, requests, textRequests, applied, nodes, dialogs, downloads, sandbox, document,
         get saves() { return saves; },
         setPersona: value => { persona = value; },
         invalidateEditor: () => { editorCurrent = false; },
@@ -281,7 +288,8 @@ test('workshop manual generation previews without a text request and applies onl
         await h.button('Текущий аватар').click();
         await h.button('Сгенерировать портрет').click();
         assert.equal(h.textRequests.length,0);
-        assert.equal(h.requests.length,1);
+        assert.equal(h.requests.length,2);
+        assert.equal(h.requests[1].url, '/api/images/upload');
         assert.equal(h.applied.length,0);
         assert.match(h.requests[0].init.body.get('prompt'),/Manual appearance/);
         assert.equal(h.button('Использовать').disabled,false);
@@ -347,4 +355,110 @@ test('image settings persist separately and show only relevant provider fields',
     assert.equal(h.settings['BB-Visual-Novel'].portrait.timeout,600);
     assert.equal(h.saves,2);
     assert.equal(h.settings['BB-Visual-Novel'].customApiKey,undefined);
+});
+
+test('gallery stores file links and isolates characters, personas and chat metadata', async () => {
+    const h = await harness();
+    const first = h.gallery.createPortraitGallery('Alex');
+    const entry = await first.add(png);
+    assert.match(entry.path, /^\/user\/images\/bb_vne_portraits\//);
+    assert.doesNotMatch(JSON.stringify(h.context.chatMetadata), /base64|test-key/);
+    assert.equal(h.gallery.createPortraitGallery('Alex').list().length, 1);
+    assert.equal(h.gallery.createPortraitGallery('Other').list().length, 0);
+    h.setPersona('other');
+    assert.equal(h.gallery.createPortraitGallery('Alex').list().length, 0);
+    assert.throws(() => first.list(), /portrait_context/);
+    h.setPersona('a');
+    assert.equal(first.list().length, 1);
+    const originalMetadata = h.context.chatMetadata;
+    h.context.chatMetadata = {}; h.context.chatId = 'b';
+    assert.equal(h.gallery.createPortraitGallery('Alex').list().length, 0);
+    assert.throws(() => first.remove(entry.id), /portrait_context/);
+    assert.ok(JSON.stringify(originalMetadata).includes(entry.id));
+});
+
+test('late upload after a persona switch cannot register a portrait in either gallery', async () => {
+    let finish, uploaded;
+    const h = await harness({upload: body => { uploaded=body; return new Promise(resolve=>finish=resolve); }});
+    const run = h.gallery.createPortraitGallery('Alex').add(png);
+    h.setPersona('other');
+    finish({ok:true,json:async()=>({path:'/user/images/bb_vne_portraits/'+uploaded.filename+'.png'})});
+    await assert.rejects(run, /portrait_context/);
+    assert.deepEqual(h.context.chatMetadata, {});
+});
+
+test('gallery deletion only removes the index entry and rejected paths are never fetched', async () => {
+    const h=await harness(); const gallery=h.gallery.createPortraitGallery('Alex');
+    const one=await gallery.add(png), two=await gallery.add(png);
+    const before=h.requests.length;
+    gallery.remove(one.id);
+    assert.deepEqual(Array.from(gallery.list(), item=>item.id), [two.id]);
+    assert.equal(h.requests.length,before);
+    const rows=Object.values(h.context.chatMetadata.bb_vn_portrait_gallery)[0];
+    rows.push({id:'external',path:'https://example.invalid/private.png',createdAt:Date.now()});
+    await assert.rejects(gallery.read('external'),/portrait_gallery_missing/);
+    assert.equal(h.requests.length,before);
+});
+
+test('failed gallery save keeps generated portrait available without claiming it was saved', async () => {
+    const h=await harness({uploadFails:true});h.open();
+    try {
+        h.prompt().value='Alex';await h.button('Сгенерировать портрет').click();
+        assert.equal(h.button('Скачать').disabled,false);
+        assert.equal(h.button('Использовать').disabled,false);
+        assert.match(h.nodes().find(n=>n.className==='bb-portrait-status').textContent,/не сохранён/);
+        assert.deepEqual(h.context.chatMetadata,{});
+    } finally {h.close();}
+});
+
+test('reopening the workshop defaults to its saved gallery and applies only on request', async () => {
+    const h=await harness();h.open();
+    h.prompt().value='Alex';await h.button('Сгенерировать портрет').click();h.close();
+    h.open();
+    try {
+        assert.equal(h.nodes().find(n=>n.className==='bb-portrait-gallery').hidden,false);
+        const actions=h.nodes().find(n=>n.className==='bb-portrait-gallery-actions');
+        for(let i=0;i<20 && actions.children[0].disabled;i++)await new Promise(resolve=>setImmediate(resolve));
+        assert.equal(actions.children[0].disabled,false);
+        assert.equal(h.applied.length,0);
+        await actions.children[0].click();
+        assert.deepEqual(h.applied,[png]);
+    } finally {h.close();}
+});
+
+test('gallery removal honours confirmation and keeps the editor untouched', async () => {
+    const h=await harness();h.open();
+    try {
+        h.prompt().value='Alex';await h.button('Сгенерировать портрет').click();
+        const remove=h.button('Удалить из галереи…');
+        h.dialogs.confirm=false;remove.click();
+        assert.equal(h.gallery.createPortraitGallery('<Alex>').list().length,1);
+        h.dialogs.confirm=true;remove.click();
+        assert.equal(h.gallery.createPortraitGallery('<Alex>').list().length,0);
+        assert.equal(h.applied.length,0);
+    } finally {h.close();}
+});
+
+test('unavailable image clipboard reports a controlled failure', async () => {
+    const h=await harness();await assert.rejects(h.gallery.copyPortrait(png),/portrait_clipboard/);
+});
+
+test('download exports the original image and removes the temporary link', async () => {
+    const h=await harness();
+    h.gallery.downloadPortrait(png);
+    assert.equal(h.downloads[0].href,png);
+    assert.match(h.downloads[0].filename,/^vne-portrait-\d+\.png$/);
+    assert.equal(h.nodes().some(n=>n.tagName==='a'),false);
+});
+
+test('clipboard writes a PNG blob using the decoded original dimensions', async () => {
+    const h=await harness();let clipboard,drawn=false,canvas;
+    h.sandbox.Image=class {naturalWidth=512;naturalHeight=768;async decode(){}};
+    h.sandbox.ClipboardItem=class {constructor(data){this.data=data;}};
+    h.sandbox.navigator={clipboard:{write:async items=>{clipboard=await items[0].data['image/png'];}}};
+    const create=h.document.createElement;
+    h.document.createElement=tag=>tag==='canvas' ? (canvas={getContext:()=>({drawImage:()=>{drawn=true;}}),toBlob:callback=>callback(new Blob(['png'],{type:'image/png'}))}) : create(tag);
+    await h.gallery.copyPortrait(png);
+    assert.equal(clipboard.type,'image/png');assert.equal(drawn,true);
+    assert.equal(canvas.width,512);assert.equal(canvas.height,768);
 });

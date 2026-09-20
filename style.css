@@ -2897,7 +2897,20 @@ body.bb-hud-popup-active #bb-social-toast-container {
 .bb-portrait-dialog .menu_button { display: inline-flex; align-items: center; justify-content: center; width: auto; min-width: 0; height: auto; padding: 8px 12px; margin: 0; white-space: normal; word-break: normal; overflow-wrap: break-word; line-height: 1.35; font-size: 13px; border-radius: 8px; }
 .bb-portrait-dialog details > .menu_button { margin: 6px 6px 0 0; }
 .bb-portrait-dialog footer { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.bb-portrait-dialog footer .menu_button:nth-child(2), .bb-portrait-dialog footer .menu_button:last-child { border-color: #6286af; background: #20334b; }
+.bb-portrait-dialog .menu_button.bb-portrait-primary { border-color: #6286af; background: #20334b; }
+.bb-portrait-tabs { display: flex; gap: 6px; padding: 4px; margin-bottom: 16px; border: 1px solid #29374b; border-radius: 10px; background: #0a1019; }
+.bb-portrait-tabs .menu_button { flex: 1; border-color: transparent; background: transparent; color: #9eacc0; }
+.bb-portrait-tabs .menu_button[aria-pressed="true"] { background: #22364f; color: #e2efff; border-color: #5b7a9c; }
+.bb-portrait-gallery { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; align-items: start; }
+.bb-portrait-thumbnails { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-height: 420px; overflow-y: auto; padding: 2px; }
+.bb-portrait-thumbnail { min-width: 0; padding: 0; aspect-ratio: 4 / 5; overflow: hidden; background: #0a1019; border: 2px solid #2b374c; border-radius: 8px; cursor: pointer; }
+.bb-portrait-thumbnail img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.bb-portrait-thumbnail[aria-pressed="true"] { border-color: #87c5f0; }
+.bb-portrait-dialog .bb-portrait-gallery-actions > :last-child { color: #f0b4ba; }
+@media (max-width: 600px) {
+    .bb-portrait-gallery { grid-template-columns: minmax(0, 1fr); }
+    .bb-portrait-thumbnails { max-height: 180px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
 .bb-portrait-dialog .menu_button:disabled { opacity: .45; cursor: default; }
 .bb-portrait-dialog :focus-visible { outline: 2px solid #83b9e7; outline-offset: 2px; }
 .bb-portrait-status { min-height: 1.5em; margin: 14px 0; color: #a9c8e4; font-size: 12px; line-height: 1.5; }

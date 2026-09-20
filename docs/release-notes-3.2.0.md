@@ -28,6 +28,8 @@
 
 ### Портреты
 
+- Вкладки «Создать» / «Галерея»: история по чату, персоне и персонажу, скачивание оригинала, копирование PNG и повторное применение с кадрированием.
+
 - Мастерская портрета из редактора карточки: ручной промпт или английская сборка по описанию, совпадающей карточке, лору и сцене.
 - Отдельное подключение изображений: OpenAI Images, OpenAI Chat, Gemini, Naistera; общий стиль и до четырёх референсов внешности/стиля без гардероба.
 - Предпросмотр, применение через обычное кадрирование, отмена, тайм-аут и защита от смены контекста. При ошибке референсы не отбрасываются.
@@ -66,6 +68,8 @@
 
 ### Portraits
 
+- Create / Gallery tabs: scoped history, original downloads, PNG clipboard copying and reuse with cropping.
+
 - Character portrait workshop: manual prompts or English prompt building from the description, matching card, lore and scene.
 - Separate image connection: OpenAI Images, OpenAI Chat, Gemini and Naistera; shared style and up to four appearance/style references, without wardrobe controls.
 - Preview, existing crop workflow, cancellation, timeout and context guards. Failed requests never silently discard references.
@@ -80,9 +84,9 @@
 
 ## Состояние проверки / Verification status
 
-173 автоматических тестов проходят с подменёнными API и границами интерфейса. Пользователь сообщил о прохождении предыдущего ручного списка, кроме раздела 7 «Форматы и ошибки». Живые сервисы изображений и визуальный вид мастерской ещё не проверены. Финальный проход ожидается; перечень проверенных моделей и пропусков нужно заполнить в [чек-листе](manual-testing.md). Интеграция сверена с установленным SillyTavern 1.18.0; универсальная совместимость не заявляется.
+182 автоматических тестов проходят с подменёнными API и границами интерфейса. Пользователь сообщил о прохождении предыдущего ручного списка, кроме раздела 7 «Форматы и ошибки». Живые сервисы изображений и визуальный вид мастерской ещё не проверены. Финальный проход ожидается; перечень проверенных моделей и пропусков нужно заполнить в [чек-листе](manual-testing.md). Интеграция сверена с установленным SillyTavern 1.18.0; универсальная совместимость не заявляется.
 
-173 automated tests pass using mocked APIs and UI boundaries. The user reported completing the previous manual checklist except section 7, Formats and errors. Live image providers and workshop layout have not yet been verified. Final manual verification is pending; tested models and skipped cases must be recorded in the [checklist](manual-testing.md). Integration was checked against the installed SillyTavern 1.18.0 source; universal compatibility is not claimed.
+182 automated tests pass using mocked APIs and UI boundaries. The user reported completing the previous manual checklist except section 7, Formats and errors. Live image providers and workshop layout have not yet been verified. Final manual verification is pending; tested models and skipped cases must be recorded in the [checklist](manual-testing.md). Integration was checked against the installed SillyTavern 1.18.0 source; universal compatibility is not claimed.
 
 ## Действия после финального подтверждения
 
