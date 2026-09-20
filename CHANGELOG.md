@@ -6,6 +6,8 @@
 
 ### Unreleased — VNE-TEST (подготовка 3.2.0)
 
+- Разделены обновление выбранного профиля изображений и сохранение как нового; добавлено удаление с подтверждением и сохранением текущего подключения.
+
 - Переработана компоновка настроек изображений: компактное подключение, отдельные разделы профилей, параметров и стиля, короткая кнопка подключения и отмена только во время запроса.
 
 - Исправлено подключение портретов по примеру Comic Forge: проверка API с загрузкой моделей, выбор из списка, именованные профили. Проверена отправка референсов через `/images/edits`, добавлено сообщение о неподдерживаемом endpoint.
@@ -44,7 +46,7 @@
 - Названия моделей и данные API выводятся безопасно; подробные фрагменты ответов скрыты из диагностики по умолчанию.
 - Добавлены русское и английское руководства, история изменений и автоматические проверки. Изучение Extended-форка и выбранные идеи описаны в [отдельной заметке](docs/fork-review.md).
 
-Проверки: 172 автоматических тестов с подменёнными API и границами интерфейса. Интеграция сверена с исходниками SillyTavern 1.18.0. Пользователь подтвердил предыдущий ручной проход, кроме пункта 7 «Форматы и ошибки»; финальная проверка ещё ожидается.
+Проверки: 173 автоматических тестов с подменёнными API и границами интерфейса. Интеграция сверена с исходниками SillyTavern 1.18.0. Пользователь подтвердил предыдущий ручной проход, кроме пункта 7 «Форматы и ошибки»; финальная проверка ещё ожидается.
 
 ### 2026-07-23 — исправление снимков
 
@@ -62,6 +64,8 @@
 ## English
 
 ### Unreleased — VNE-TEST (3.2.0 preparation)
+
+- Separated updating an image connection profile from saving a new one; added confirmed deletion that preserves the current connection.
 
 - Reworked image settings into a compact connection block and separate profile, image-option and style sections; cancellation is shown only while connecting.
 
@@ -101,7 +105,7 @@ Changes from September 17–18, 2026. Available on the test branch only, without
 - Model names and API data are rendered safely; detailed response excerpts are excluded from diagnostics by default.
 - Added Russian and English guides, a changelog, and automated checks. The Extended fork review and selected ideas are recorded in a [separate note](docs/fork-review.md) (Russian).
 
-Verification: 172 automated tests with mocked APIs and UI boundaries. Integration was checked against SillyTavern 1.18.0 source. The user confirmed the previous manual pass except section 7, Formats and errors; final verification is pending.
+Verification: 173 automated tests with mocked APIs and UI boundaries. Integration was checked against SillyTavern 1.18.0 source. The user confirmed the previous manual pass except section 7, Formats and errors; final verification is pending.
 
 ### 2026-07-23 — snapshot fix
 

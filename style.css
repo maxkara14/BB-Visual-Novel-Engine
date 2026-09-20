@@ -2839,6 +2839,8 @@ body.bb-hud-popup-active #bb-social-toast-container {
 #bb-vn-portrait-settings .bb-portrait-connection-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
 #bb-vn-portrait-settings .bb-portrait-connection-actions .menu_button { flex: 1 1 110px; width: auto; min-width: 0; margin: 0; white-space: normal; word-break: normal; font-size: 12px; padding: 7px 10px; border-radius: 7px; }
 #bb-vn-portrait-settings .bb-portrait-connect-button { background: #21435a66; border: 1px solid #73bce94d; color: #c7e8fa; }
+#bb-vn-portrait-settings .bb-portrait-profile-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#bb-vn-portrait-settings .bb-portrait-profile-actions > :last-child { grid-column: 1 / -1; color: #e6a8ad; }
 #bb-vn-portrait-settings .bb-portrait-connect-button:hover:not(:disabled) { background: #29557299; border-color: #73bce9; }
 #bb-vn-portrait-settings .bb-portrait-fold { margin: 0; border: 1px solid #94a3b826; border-radius: 9px; background: #0a10191a; overflow: hidden; }
 #bb-vn-portrait-settings .bb-portrait-fold > summary { display: flex; align-items: center; justify-content: space-between; list-style: none; cursor: pointer; padding: 10px 12px; margin: 0; font-size: 12px; font-weight: 600; color: #cbd5e1; }

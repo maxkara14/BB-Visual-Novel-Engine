@@ -116,6 +116,7 @@ export function mountPortraitSettings(root) {
         for (const item of savedProfiles()) { const option = node('option', item.label); option.value = item.id; profiles.append(option); }
         profiles.value = settings().activeProfile || '';
         profileName.value = savedProfiles().find(p => p.id === profiles.value)?.label || '';
+        updateProfile.disabled = deleteProfile.disabled = !savedProfiles().some(p => p.id === profiles.value);
     }
     profiles.addEventListener('change', () => {
         const profile = savedProfiles().find(p => p.id === profiles.value);
@@ -124,19 +125,32 @@ export function mountPortraitSettings(root) {
         for (const key of profileFields) if (controls.has(key)) controls.get(key).value = settings()[key];
         saveSettingsDebounced(); invalidate(); sync(); renderProfiles();
     });
-    const profileActions = node('div', '', 'bb-portrait-connection-actions');
-    profileActions.append(button('Сохранить профиль', () => {
+    const profileActions = node('div', '', 'bb-portrait-connection-actions bb-portrait-profile-actions');
+    const updateProfile = button('Обновить выбранный', () => {
+        const existing = savedProfiles().find(p => p.id === profiles.value);
+        if (!existing) return;
         const label = profileName.value.trim();
         if (!label) { profileName.focus(); return; }
-        const existing = savedProfiles().find(p => p.id === profiles.value);
-        const id = existing?.id || 'portrait-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+        const id = existing.id;
         const entry = { id, label, ...Object.fromEntries(profileFields.map(key => [key, settings()[key]])) };
         extension_settings[MODULE_NAME].portrait = { ...settings(), activeProfile: id, profiles: [...savedProfiles().filter(p => p.id !== id), entry] };
         saveSettingsDebounced(); renderProfiles();
-    }), button('Новый профиль', () => {
-        extension_settings[MODULE_NAME].portrait = { ...settings(), activeProfile: '' };
-        saveSettingsDebounced(); renderProfiles(); profileName.focus();
-    }));
+    });
+    const createProfile = button('Сохранить как новый…', () => {
+        const label = window.prompt(t('Название нового профиля'), profileName.value)?.trim();
+        if (!label) return;
+        const id = 'portrait-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+        const entry = { id, label, ...Object.fromEntries(profileFields.map(key => [key, settings()[key]])) };
+        extension_settings[MODULE_NAME].portrait = { ...settings(), activeProfile: id, profiles: [...savedProfiles(), entry] };
+        saveSettingsDebounced(); renderProfiles();
+    });
+    const deleteProfile = button('Удалить профиль…', () => {
+        const selected = savedProfiles().find(p => p.id === profiles.value);
+        if (!selected || !window.confirm(t('Удалить сохранённый профиль? Текущее подключение останется.') + '\n' + selected.label)) return;
+        extension_settings[MODULE_NAME].portrait = { ...settings(), activeProfile: '', profiles: savedProfiles().filter(p => p.id !== selected.id) };
+        saveSettingsDebounced(); renderProfiles();
+    });
+    profileActions.append(updateProfile, createProfile, deleteProfile);
     profileBody.append(profileActions);
     const sync = () => {
         const type = controls.get('type').value;

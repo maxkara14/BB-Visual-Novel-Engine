@@ -8,6 +8,7 @@ const connection = { endpoint: 'https://images.example/v1', model: 'test-image',
 
 async function harness({ fetch: fetchImpl, fakeClock = false } = {}) {
     const requests = [], textRequests = [], applied = [], timers = new Map();
+    const dialogs = { name: undefined, confirm: true };
     let timerId = 0, persona = 'a', editorCurrent = true, saves = 0, decodeError = false;
     const context = { chat: [{ mes: 'Scene', swipe_id: 0 }], chatId: 'a', characterId: 1 };
     const settings = { 'BB-Visual-Novel': { portrait: { ...connection } } };
@@ -39,6 +40,7 @@ async function harness({ fetch: fetchImpl, fakeClock = false } = {}) {
         setTimeout: fakeClock ? callback => { timers.set(++timerId, callback); return timerId; } : setTimeout,
         clearTimeout: fakeClock ? id => timers.delete(id) : clearTimeout,
         setInterval, clearInterval, document, SillyTavern: { getContext: () => context },
+        window: { prompt: (_message, value) => dialogs.name === undefined ? value : dialogs.name, confirm: () => dialogs.confirm },
         fetch: async (url, init) => {
             requests.push({ url, init });
             return fetchImpl ? fetchImpl(url, init) : { ok: true, json: async () => ({ data_url: png }) };
@@ -63,7 +65,7 @@ async function harness({ fetch: fetchImpl, fakeClock = false } = {}) {
     const module = load('./portrait-ui.js'); await module.link(load); await module.evaluate();
     return {
         api: cache.get('./portrait-provider.js').namespace, ui: module.namespace,
-        context, settings, requests, textRequests, applied, nodes,
+        context, settings, requests, textRequests, applied, nodes, dialogs,
         get saves() { return saves; },
         setPersona: value => { persona = value; },
         invalidateEditor: () => { editorCurrent = false; },
@@ -173,15 +175,41 @@ test('Naistera built-in models are not reported as a verified connection', async
 test('saved image profiles restore credentials and model but leave shared art style alone', async () => {
     const h=await harness();h.mountSettings();
     const field=caption=>h.nodes().find(n=>n.tagName==='label' && n.children[0]?.textContent===caption).children[1];
-    field('Имя профиля').value='Studio';h.button('Сохранить профиль').click();
+    field('Имя профиля').value='Studio';h.button('Сохранить как новый…').click();
     const id=h.settings['BB-Visual-Novel'].portrait.activeProfile;
-    h.button('Новый профиль').click();
+    h.dialogs.name='Second';h.button('Сохранить как новый…').click();
     const key=h.nodes().find(n=>n.dataset.portraitField==='key');key.value='changed';key.emit('change');
     h.settings['BB-Visual-Novel'].portrait.style='ink';
     field('Сохранённое подключение').value=id;field('Сохранённое подключение').emit('change');
     assert.equal(key.value,'test-key');
     assert.equal(h.settings['BB-Visual-Novel'].portrait.style,'ink');
     assert.equal(h.settings['BB-Visual-Novel'].portrait.model,'test-image');
+});
+
+test('profile creation, update and confirmed deletion are distinct actions', async () => {
+    const h = await harness(); h.mountSettings();
+    const settings = () => h.settings['BB-Visual-Novel'].portrait;
+    assert.equal(h.button('Обновить выбранный').disabled, true);
+    assert.equal(h.button('Удалить профиль…').disabled, true);
+    h.dialogs.name = null; h.button('Сохранить как новый…').click();
+    assert.equal(settings().profiles, undefined);
+    h.dialogs.name = 'First'; h.button('Сохранить как новый…').click();
+    const first = settings().profiles[0].id;
+    settings().model = 'new-model'; h.button('Обновить выбранный').click();
+    assert.equal(settings().profiles.length, 1);
+    assert.equal(settings().profiles[0].id, first);
+    assert.equal(settings().profiles[0].model, 'new-model');
+    h.dialogs.name = 'Second'; h.button('Сохранить как новый…').click();
+    assert.equal(settings().profiles.length, 2);
+    assert.notEqual(settings().activeProfile, first);
+    h.dialogs.confirm = false; h.button('Удалить профиль…').click();
+    assert.equal(settings().profiles.length, 2);
+    h.dialogs.confirm = true; h.button('Удалить профиль…').click();
+    assert.equal(settings().profiles.length, 1);
+    assert.equal(settings().profiles[0].id, first);
+    assert.equal(settings().model, 'new-model');
+    assert.equal(settings().key, 'test-key');
+    assert.equal(h.button('Обновить выбранный').disabled, true);
 });
 
 test('Gemini auth is selected by exact hostname and full endpoint is preserved', async () => {

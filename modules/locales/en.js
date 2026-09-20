@@ -1,5 +1,10 @@
 // Static extension UI text only. Never apply this catalogue to stored story data.
 export const EN = {
+    "Обновить выбранный": "Update selected",
+    "Сохранить как новый…": "Save as new…",
+    "Удалить профиль…": "Delete profile…",
+    "Название нового профиля": "New profile name",
+    "Удалить сохранённый профиль? Текущее подключение останется.": "Delete the saved profile? The current connection will remain.",
     "Модель": "Model",
     "Размер": "Size",
     "Качество": "Quality",

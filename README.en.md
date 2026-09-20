@@ -118,7 +118,7 @@ Detailed diagnostics are disabled by default. Enabling them can put model respon
 
 Integration was checked against the source of the local **SillyTavern 1.18.0** installation, including Connection Manager and structured-output parameters. This does not guarantee support for every version, model, or provider.
 
-172 automated checks run real extension modules with mocked APIs and UI boundaries. The user confirmed the previous manual pass except section 7, Formats and errors. The [final checklist](docs/manual-testing.md) is pending. [Draft 3.2.0 release notes](docs/release-notes-3.2.0.md) are prepared; the release is not published.
+173 automated checks run real extension modules with mocked APIs and UI boundaries. The user confirmed the previous manual pass except section 7, Formats and errors. The [final checklist](docs/manual-testing.md) is pending. [Draft 3.2.0 release notes](docs/release-notes-3.2.0.md) are prepared; the release is not published.
 
 ```sh
 node --experimental-vm-modules --test tests/generation-context.test.mjs tests/snapshot.test.mjs
