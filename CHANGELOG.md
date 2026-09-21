@@ -6,6 +6,10 @@
 
 ### Unreleased — VNE-TEST (подготовка 3.2.0)
 
+- Добавлен общий редактируемый промпт описания персонажа в «Язык и ответы» с восстановлением стандарта. Контекст и язык добавляются автоматически; пользовательский шаблон поддерживает описание обычным текстом.
+
+- Добавлен список скрытых персонажей с поиском и восстановлением по одному или всех сразу. Открывается из отношений и настроек; защищён от смены чата и персоны.
+
 - Добавлена галерея портретов: вкладки «Создать» / «Галерея», история по чату, персоне и персонажу, повторное применение, скачивание оригиналов и копирование PNG. Удаление записи требует подтверждения и сохраняет файл и текущий аватар.
 
 - Разделены обновление выбранного профиля изображений и сохранение как нового; добавлено удаление с подтверждением и сохранением текущего подключения.
@@ -48,7 +52,7 @@
 - Названия моделей и данные API выводятся безопасно; подробные фрагменты ответов скрыты из диагностики по умолчанию.
 - Добавлены русское и английское руководства, история изменений и автоматические проверки. Изучение Extended-форка и выбранные идеи описаны в [отдельной заметке](docs/fork-review.md).
 
-Проверки: 182 автоматических тестов с подменёнными API и границами интерфейса. Интеграция сверена с исходниками SillyTavern 1.18.0. Пользователь подтвердил предыдущий ручной проход, кроме пункта 7 «Форматы и ошибки»; финальная проверка ещё ожидается.
+Проверки: 189 автоматических тестов с подменёнными API и границами интерфейса. Интеграция сверена с исходниками SillyTavern 1.18.0. Пользователь подтвердил предыдущий ручной проход, кроме пункта 7 «Форматы и ошибки»; финальная проверка ещё ожидается.
 
 ### 2026-07-23 — исправление снимков
 
@@ -66,6 +70,10 @@
 ## English
 
 ### Unreleased — VNE-TEST (3.2.0 preparation)
+
+- Added shared editable character description instructions under Language and replies, with default reset. Context and language are appended automatically; custom instructions support plain prose.
+
+- Added a searchable hidden-character manager with individual and bulk restore, accessible from relationships and settings, with chat/persona guards.
 
 - Added Create / Gallery portrait tabs with history scoped to chat, persona and character, reapplying portraits, original downloads and PNG clipboard copying. Removing an entry requires confirmation and preserves its disk file and the current avatar.
 
@@ -109,7 +117,7 @@ Changes from September 17–18, 2026. Available on the test branch only, without
 - Model names and API data are rendered safely; detailed response excerpts are excluded from diagnostics by default.
 - Added Russian and English guides, a changelog, and automated checks. The Extended fork review and selected ideas are recorded in a [separate note](docs/fork-review.md) (Russian).
 
-Verification: 182 automated tests with mocked APIs and UI boundaries. Integration was checked against SillyTavern 1.18.0 source. The user confirmed the previous manual pass except section 7, Formats and errors; final verification is pending.
+Verification: 189 automated tests with mocked APIs and UI boundaries. Integration was checked against SillyTavern 1.18.0 source. The user confirmed the previous manual pass except section 7, Formats and errors; final verification is pending.
 
 ### 2026-07-23 — snapshot fix
 

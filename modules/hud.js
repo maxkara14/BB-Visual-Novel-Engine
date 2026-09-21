@@ -1,3 +1,4 @@
+import { mountHiddenCharactersButton } from './hidden-characters-ui.js';
 import { openPortraitWorkshop } from './portrait-ui.js';
 import { mountCharacterToolbar, syncCharacterToolbarContext } from './character-toolbar.js';
 import { buildMemoryEditorHtml, mountMemoryEditors } from './memory-editor-ui.js';
@@ -1234,6 +1235,8 @@ export function renderSocialHud() {
             });
         }
     }
+
+    if (charsBox) mountHiddenCharactersButton(charsBox);
 
     const logBox = document.getElementById('bb-hud-log');
     if (logBox) {

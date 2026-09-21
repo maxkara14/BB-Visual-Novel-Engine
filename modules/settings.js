@@ -1,3 +1,5 @@
+import { DEFAULT_DESCRIPTION_PROMPT, DESCRIPTION_PROMPT_LIMIT, normalizeDescriptionPrompt, resolveDescriptionPrompt } from './description-prompt.js';
+import { openHiddenCharacters } from './hidden-characters-ui.js';
 import { mountPortraitSettings } from './portrait-ui.js';
 import { mountSettingsAnimations } from './settings-animation.js';
 import { refreshSnapshotControls, snapshotRemovalPrompt } from './snapshot-controls.js';
@@ -286,6 +288,15 @@ export function setupExtensionSettings() {
                             <label for="bb-vn-cfg-context-messages">Сообщений в контексте вариантов</label>
                             <input type="number" id="bb-vn-cfg-context-messages" class="text_pole" min="1" max="100" step="1" value="${normalizeVnContextMessages(s.vnContextMessages)}">
                             <span class="bb-vn-settings-note">Последние 1–100 сообщений, по умолчанию 10. Последний ответ остаётся ориентиром сцены. Это объём истории для вариантов, а не лимит токенов ответа; основное подключение может добавлять контекст SillyTavern.</span>
+                            <details class="bb-description-prompt-settings">
+                                <summary>Промпт описания персонажа</summary>
+                                <div class="bb-vn-settings-stack">
+                                    <label for="bb-vn-description-prompt">Инструкция для описания</label>
+                                    <textarea id="bb-vn-description-prompt" class="text_pole" rows="8" maxlength="8000"></textarea>
+                                    <span class="bb-vn-settings-note">Для кнопки «По шаблону» у всех персонажей. Контекст и язык добавляются автоматически. Пустое поле использует стандартный промпт.</span>
+                                    <button type="button" id="bb-vn-description-prompt-reset" class="menu_button bb-vn-settings-button">Восстановить стандартный</button>
+                                </div>
+                            </details>
                             <label for="bb-vn-cfg-instructions">Постоянные пожелания к вариантам</label>
                             <textarea id="bb-vn-cfg-instructions" class="text_pole" rows="4" maxlength="4000"></textarea>
                             <span class="bb-vn-settings-note">Для вариантов во всех чатах, до 4000 символов. Разовая подсказка уточняет пожелания; язык и формат ответа сохраняются. Не применяется к профилям и чертам.</span>
@@ -431,6 +442,15 @@ export function setupExtensionSettings() {
         extension_settings[MODULE_NAME].vnContextMessages = value;
         jQuery(this).val(value);
         saveSettingsDebounced();
+    });
+    jQuery('#bb-vn-description-prompt').val(resolveDescriptionPrompt(s.characterDescriptionPrompt)).attr('maxlength', DESCRIPTION_PROMPT_LIMIT);
+    jQuery('#bb-vn-description-prompt').on('input', function() {
+        const value = normalizeDescriptionPrompt(jQuery(this).val());
+        extension_settings[MODULE_NAME].characterDescriptionPrompt = value === DEFAULT_DESCRIPTION_PROMPT ? '' : value;
+        saveSettingsDebounced();
+    });
+    jQuery('#bb-vn-description-prompt-reset').on('click', function() {
+        jQuery('#bb-vn-description-prompt').val(DEFAULT_DESCRIPTION_PROMPT).trigger('input');
     });
     jQuery('#bb-vn-cfg-instructions').val(s.vnUserInstructions || '');
     jQuery('#bb-vn-cfg-instructions').on('input', function() {
@@ -927,7 +947,7 @@ export function setupExtensionSettings() {
         }
     });
 
-    jQuery('#bb-social-restore-chars-btn').on('click', () => { const { scopeState } = bindActivePersonaState(); scopeState.ignored_chars = []; chat_metadata['bb_vn_ignored_chars'] = scopeState.ignored_chars; saveChatDebounced(); recalculateAllStats(); notifySuccess(t("Скрытые персонажи восстановлены!")); });
+    jQuery('#bb-social-restore-chars-btn').on('click', openHiddenCharacters);
     jQuery('#bb-social-clear-log-btn').on('click', wipeGlobalLog);
     jQuery('#bb-social-wipe-btn').on('click', wipeAllSocialData);
     renderMergeSuggestionsList();

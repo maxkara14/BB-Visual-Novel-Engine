@@ -1,5 +1,15 @@
 // Static extension UI text only. Never apply this catalogue to stored story data.
 export const EN = {
+    "Скрытые": "Hidden",
+    "Скрытые персонажи": "Hidden characters",
+    "Вернуть": "Restore",
+    "Вернуть всех": "Restore all",
+    "Нет скрытых персонажей.": "No hidden characters.",
+    "Чат или персона изменились. Откройте список заново.": "The chat or persona changed. Reopen the list.",
+    "Промпт описания персонажа": "Character description prompt",
+    "Инструкция для описания": "Description instructions",
+    "Для кнопки «По шаблону» у всех персонажей. Контекст и язык добавляются автоматически. Пустое поле использует стандартный промпт.": "Used by From template for all characters. Context and language are added automatically. An empty field uses the default prompt.",
+    "Восстановить стандартный": "Restore default",
     "Портреты": "Portraits",
     "Галерея": "Gallery",
     "Здесь появятся созданные портреты этого персонажа.": "Generated portraits of this character will appear here.",

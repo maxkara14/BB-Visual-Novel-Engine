@@ -1,3 +1,4 @@
+import { DEFAULT_DESCRIPTION_PROMPT, resolveDescriptionPrompt } from './description-prompt.js';
 import { syncOptionsVisibility } from './options-visibility.js';
 import { t, ui } from './i18n.js';
 import { buildOutputLanguageDirective } from './language.js';
@@ -916,36 +917,10 @@ async function generateStructuredCharacterDescription({ charName = '', stats = {
         personaText,
     });
 
-    const prompt = `Build a complete character profile for injection into a roleplay prompt.
+    const instructions = resolveDescriptionPrompt(extension_settings[MODULE_NAME]?.characterDescriptionPrompt);
+    const prompt = `${instructions}
 
-Return a compact dossier, not a literary paragraph: detailed enough to preserve appearance, background, voice, role, and internal logic in future scenes.
-Use the chat history, user persona, relationship dynamics, character card, creator notes, speech examples, and relevant world info / lorebook.
-
-[OUTPUT FORMAT]
-Return only the finished profile in the requested output language, without markdown, explanations, or an introduction.
-Write exactly 10 lines with the following fields. Translate the field labels into the requested output language:
-Name: ...
-Age / life stage: ...
-Role and position: ...
-Appearance: ...
-Clothing and distinctive details: ...
-Personality and inner foundation: ...
-Speech and behavior: ...
-Background and personal context: ...
-Attitude toward ${userName}: ...
-Scene guide: ...
-
-[RULES]
-1. Complete the profile. Do not use placeholders such as "not specified", "insufficient data", "maybe", "possibly", or "unclear".
-2. Fill gaps carefully using established facts, scene tone, world info, the card, and observed behavior.
-3. Invent details only where they do not contradict explicit canon. Facts from the card, creator notes, world info, and chat take priority over inference.
-4. If several interpretations are possible, choose one plausible, consistent version instead of listing alternatives.
-5. Make appearance concrete: build, face, hair, eyes, voice, habits, scars, scent, or movement where appropriate.
-6. Give the background story hooks: origins, social position, connections, secrets, trauma, goals, fears, or obligations.
-7. Explain how to portray the character in the scene guide: reactions to emphasize, behavior to avoid, and sensitive topics.
-8. Preserve and expand useful facts from the current description.
-9. Every line must be substantial and ready for prompt injection, with no empty questionnaire fields.
-10. Keep the profile compact and dense, usually 1400-2800 characters.
+Return only the finished description as plain text, without code fences or commentary.
 
 [CHARACTER DATA]
 Name: ${safeCharName}
@@ -964,6 +939,7 @@ ${sourceContext.cardContext || 'No matching card or additional fields in this ch
 ${sourceContext.worldInfoText || 'No world info entries activated for this context.'}
 
 [USER PERSONA]
+Name: ${userName}
 ${personaText || 'Not provided'}
 
 [RECENT CHAT]
@@ -971,7 +947,10 @@ ${recentChat || 'No available messages'}`;
 
     const generated = await generateFastPrompt(prompt, { responseFormat: 'text', signal });
     const result = sanitizeStructuredCharacterDescriptionResult(generated);
-    if (!isValidStructuredCharacterDescriptionResult(result)) {
+    const valid = instructions === DEFAULT_DESCRIPTION_PROMPT
+        ? isValidStructuredCharacterDescriptionResult(result)
+        : Boolean(result) && !isLikelyModelRefusalText(result);
+    if (!valid) {
         throw new Error('INVALID_CHARACTER_DESCRIPTION_RESULT');
     }
     return result;

@@ -2923,3 +2923,21 @@ body.bb-hud-popup-active #bb-social-toast-container {
     .bb-portrait-preview img { max-height: 220px; }
     .bb-portrait-dialog header .menu_button { flex-shrink: 0; }
 }
+
+/* Hidden characters use the portrait workshop's existing dialog shell. */
+.bb-portrait-dialog.bb-hidden-characters { width: min(520px, calc(100vw - 24px)); }
+.bb-hidden-list { display: grid; gap: 8px; max-height: 50dvh; overflow-y: auto; margin-bottom: 16px; }
+.bb-hidden-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px; border: 1px solid #29374b; border-radius: 10px; background: #0b111a; }
+.bb-hidden-initials { display: grid; place-items: center; width: 36px; height: 42px; background: #223047; border-radius: 8px; color: #dceaff; font-weight: 700; font-size: 12px; }
+.bb-hidden-name { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.bb-hidden-characters footer { grid-template-columns: minmax(0, 1fr); }
+.bb-hidden-open { width: 100%; min-width: 0; margin: 8px 0 0; white-space: normal; }
+@media (max-width: 420px) {
+    .bb-hidden-row { gap: 8px; padding: 8px; }
+    .bb-hidden-row .menu_button { padding: 8px; font-size: 12px; }
+}
+
+.bb-description-prompt-settings { border-top: 1px solid #94a3b826; padding-top: 10px; }
+.bb-description-prompt-settings summary { cursor: pointer; padding: 6px 0; }
+.bb-description-prompt-settings .bb-vn-settings-stack { padding-top: 10px; }
+#bb-vn-description-prompt { min-height: 160px; resize: vertical; text-align: left; line-height: 1.45; }

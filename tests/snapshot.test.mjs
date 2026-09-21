@@ -323,3 +323,32 @@ test('memory selector previews are bounded without truncating the editable recor
  assert.ok(Array.from(label).length<=32);assert.ok(label.endsWith('…'));
  assert.equal(h.editor.memoryEditorEntries('Alex')[0].text,original);
 });
+
+
+test('restore one hidden character preserves others, profile and relationship data',async()=>{
+    const h=await harness();const data=fixture();data.data.ignored_chars=['Alex','Other'];
+    h.api.importActivePersonaSnapshot(data);h.api.recalculateAllStats(false);
+    const session=h.api.createHiddenCharacterSession();
+    assert.deepEqual(Array.from(session.list()),['Alex','Other']);
+    assert.equal(session.restore('Alex'),true);
+    assert.deepEqual(Array.from(h.metadata.bb_vn_ignored_chars),['Other']);
+    assert.equal(h.state.currentCalculatedStats.Alex.affinity,25);
+    const saves=h.saves;assert.equal(session.restore('Missing'),false);assert.equal(h.saves,saves);
+    assert.equal(session.restore(),true);assert.equal(session.list().length,0);
+});
+
+test('a restore session cannot change a different chat',async()=>{
+    const h=await harness();const data=fixture();data.data.ignored_chars=['Alex'];h.api.importActivePersonaSnapshot(data);
+    const session=h.api.createHiddenCharacterSession();h.context.chatId='other';h.context.chat=[];
+    const before=JSON.stringify(h.metadata);const saves=h.saves;
+    assert.equal(session.restore('Alex'),false);assert.equal(session.restore(),false);
+    assert.equal(JSON.stringify(h.metadata),before);assert.equal(h.saves,saves);
+});
+
+
+test('a restore session rejects a different persona',async()=>{
+    const h=await harness();h.context.user_avatar='persona-a.png';
+    const data=fixture();data.data.ignored_chars=['Alex'];h.api.importActivePersonaSnapshot(data);
+    const session=h.api.createHiddenCharacterSession();h.context.user_avatar='persona-b.png';
+    assert.equal(session.current(),false);assert.equal(session.restore(),false);
+});

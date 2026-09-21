@@ -1362,3 +1362,24 @@ test('option visibility swaps compact restore button and panel, safely reversing
  api.syncOptionsVisibility(false);assert.equal(bar.hidden,true);assert.equal(restore.hidden,false);assert.equal(restore.inert,false);
  api.syncOptionsVisibility(true);assert.equal(bar.hidden,false);assert.equal(restore.hidden,true);
 });
+
+
+test('custom description instructions replace the dossier and keep context and language', async () => {
+    const h=await harness();h.settings['BB-Visual-Novel'].outputLanguage='ru';
+    h.settings['BB-Visual-Novel'].characterDescriptionPrompt='Describe appearance in one short sentence.';
+    const run=h.api.generateCharacterDescription({charName:'Alex',currentDescription:'Silver hair',stats:{affinity:12}});
+    await h.waitForCalls(1);const prompt=h.calls[0].args.quietPrompt;
+    assert.match(prompt,/Describe appearance in one short sentence/);
+    assert.doesNotMatch(prompt,/Write exactly 10 lines/);
+    assert.match(prompt,/Silver hair/);assert.match(prompt,/Trust: \+12/);assert.match(prompt,/text in Russian/);
+    h.respond(0,'Сереброволосый человек с зелёными глазами.');
+    assert.equal(await run,'Сереброволосый человек с зелёными глазами.');
+});
+
+test('blank description instructions fall back to the original dossier', async () => {
+    const h=await harness();h.settings['BB-Visual-Novel'].characterDescriptionPrompt='   ';
+    const run=h.api.generateCharacterDescription({charName:'Alex'});
+    await h.waitForCalls(1);assert.match(h.calls[0].args.quietPrompt,/Write exactly 10 lines/);
+    h.respond(0,'Name: Alex\n'+ 'Background: A loyal friend who has lived here for years. '.repeat(5));
+    assert.match(await run,/Name: Alex/);
+});

@@ -1130,6 +1130,36 @@ export function bindActivePersonaState() {
     return { scopeKey, scopeState, aliasSet, identity, binding };
 }
 
+// A restore window belongs to the chat and persona in which it was opened.
+export function createHiddenCharacterSession() {
+    const context = SillyTavern.getContext();
+    const chat = context.chat;
+    const personaRef = getCurrentPersonaIdentity().ref;
+    const key = JSON.stringify([context.chatId, context.characterId, context.groupId, getCurrentPersonaScopeKey()]);
+    const { scopeState } = bindActivePersonaState();
+    const current = () => {
+        const next = SillyTavern.getContext();
+        return next.chat === chat
+            && getCurrentPersonaIdentity().ref === personaRef
+            && JSON.stringify([next.chatId, next.characterId, next.groupId, getCurrentPersonaScopeKey()]) === key
+            && bindActivePersonaState().scopeState === scopeState;
+    };
+    return {
+        current,
+        list: () => [...new Set(scopeState.ignored_chars)].filter(name => typeof name === 'string'),
+        restore(name = null) {
+            if (!current()) return false;
+            const next = name === null ? [] : scopeState.ignored_chars.filter(value => value !== name);
+            if (next.length === scopeState.ignored_chars.length) return false;
+            scopeState.ignored_chars = next;
+            chat_metadata['bb_vn_ignored_chars'] = next;
+            saveChatDebounced();
+            recalculateAllStats(false);
+            return true;
+        },
+    };
+}
+
 export function exportActivePersonaSnapshot() {
     const { scopeKey, scopeState } = bindActivePersonaState();
     const chat = SillyTavern.getContext().chat || [];
