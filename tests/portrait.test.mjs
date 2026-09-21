@@ -6,7 +6,7 @@ import { SourceTextModule, SyntheticModule, createContext } from 'node:vm';
 const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6X8AAAAASUVORK5CYII=';
 const connection = { endpoint: 'https://images.example/v1', model: 'test-image', key: 'test-key' };
 
-async function harness({ fetch: fetchImpl, fakeClock = false, uploadFails = false, upload: uploadImpl, promptError } = {}) {
+async function harness({ fetch: fetchImpl, fakeClock = false, uploadFails = false, upload: uploadImpl, promptError, needsAppearance = false, supplementError } = {}) {
     const requests = [], textRequests = [], applied = [], downloads = [], timers = new Map();
     const dialogs = { name: undefined, confirm: true };
     let timerId = 0, persona = 'a', editorCurrent = true, saves = 0, decodeError = false;
@@ -58,7 +58,7 @@ async function harness({ fetch: fetchImpl, fakeClock = false, uploadFails = fals
         ['../../../../extensions.js', { extension_settings: settings }],
         ['../../../../../script.js', { saveSettingsDebounced: () => { saves++; } }],
         ['./social.js', { getCurrentPersonaScopeKey: () => persona, resolveCharacterIdentity: name => ({id:name}) }],
-        ['./generator.js', { generatePortraitPrompt: async args => { textRequests.push(args); if (promptError) throw promptError; return 'Portrait of Alex.'; } }],
+        ['./generator.js', { generatePortraitPrompt: async args => { textRequests.push(args); if (promptError) throw promptError; if (args.supplementAppearance && supplementError) throw supplementError; return args.assessAppearance ? {prompt:'Portrait of Alex.', needsAppearanceDetails:needsAppearance} : 'Completed portrait of Alex.'; } }],
     ]);
     const cache = new Map();
     const load = name => {
@@ -474,4 +474,38 @@ test('truncated prompt build preserves the draft and reports the limit instead o
         assert.match(status,/Прежний промпт сохранён/);assert.doesNotMatch(status,/Готово/);
         assert.equal(h.button('Собрать промпт').disabled,false);assert.equal(h.requests.length,0);
     } finally {h.close();}
+});
+
+
+test('missing appearance offers opt-in completion without generating an image',async()=>{
+    const h=await harness({needsAppearance:true});h.open();
+    try {
+        await h.button('Собрать промпт').click();
+        const help=h.nodes().find(n=>n.className==='bb-portrait-appearance-help');
+        assert.equal(help.hidden,false);assert.equal(h.textRequests.length,1);assert.equal(h.requests.length,0);
+        h.prompt().value='User-edited portrait draft';
+        await h.button('Дополнить с ИИ').click();
+        assert.equal(h.textRequests[1].supplementAppearance,true);assert.equal(h.textRequests[1].draftPrompt,'User-edited portrait draft');
+        assert.equal(h.prompt().value,'Completed portrait of Alex.');assert.equal(help.hidden,true);assert.equal(h.requests.length,0);
+    }finally{h.close();}
+});
+
+test('manual completion and failed AI completion preserve the current draft',async()=>{
+    for(const error of [{code:'cancelled'},{code:'truncated'}]){
+        const h=await harness({needsAppearance:true,supplementError:error});h.open();
+        try {
+            await h.button('Собрать промпт').click();h.prompt().value='Preserve my draft';
+            await h.button('Дополнить с ИИ').click();assert.equal(h.prompt().value,'Preserve my draft');
+            assert.equal(h.button('Дополнить с ИИ').disabled,false);
+            h.button('Дополнить вручную').click();
+            assert.equal(h.prompt().value,'Preserve my draft');
+            assert.equal(h.nodes().find(n=>n.className==='bb-portrait-appearance-help').hidden,true);
+            assert.equal(h.requests.length,0);
+        }finally{h.close();}
+    }
+});
+
+test('sufficient appearance keeps completion controls hidden',async()=>{
+    const h=await harness();h.open();
+    try{await h.button('Собрать промпт').click();assert.equal(h.nodes().find(n=>n.className==='bb-portrait-appearance-help').hidden,true);}finally{h.close();}
 });

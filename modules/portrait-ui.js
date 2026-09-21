@@ -227,6 +227,12 @@ export function openPortraitWorkshop({ charName, description, avatar, isEditorCu
     const form = node('div','','bb-portrait-form'); layout.append(form);
     form.append(node('small',t('Подключение: настройки VNE → Изображения. Сборка промпта использует обычное подключение генерации VNE.')));
     const prompt = field(form,'Промпт портрета','',{rows:6});
+    const appearanceHelp = node('div', '', 'bb-portrait-appearance-help'); appearanceHelp.hidden = true;
+    appearanceHelp.append(node('p', t('Недостаточно сведений о внешности. Можно дополнить образ по контексту мира или описать его самостоятельно.')));
+    const appearanceActions = node('div', '', 'bb-portrait-appearance-actions');
+    const supplement = button('Дополнить с ИИ', () => run('supplement'));
+    const manual = button('Дополнить вручную', () => { appearanceHelp.hidden = true; prompt.focus(); });
+    appearanceActions.append(supplement, manual); appearanceHelp.append(appearanceActions); form.append(appearanceHelp);
     form.append(node('small',t('Напишите свой промпт или соберите внешность из описания и сцены. Если данных мало, уточните внешность вручную.')));
     const style = field(form,'Общий стиль портретов',settings().style,{rows:2,maxLength:2000});
     style.addEventListener('change',()=> {
@@ -343,7 +349,7 @@ export function openPortraitWorkshop({ charName, description, avatar, isEditorCu
     const use=button('Использовать',()=>{
         if(!valid()){status.textContent=t('Чат или карточка изменились. Откройте портрет заново.');return;}
         apply(result);close();
-    });use.disabled=true;actions.append(build,generate,cancel,use);controls.push(build,generate,prompt,style);
+    });use.disabled=true;actions.append(build,generate,cancel,use);controls.push(build,generate,prompt,style,supplement,manual);
     use.className += ' bb-portrait-primary'; generate.className += ' bb-portrait-primary';
     const download = button('Скачать', () => downloadPortrait(original));
     const copy = button('Копировать изображение', () => copyImage(original));
@@ -361,12 +367,16 @@ export function openPortraitWorkshop({ charName, description, avatar, isEditorCu
         const operation=new AbortController();controller=operation;refreshBusy();status.textContent=t('Генерация…');
         const monitor=setInterval(()=>{if(!valid())operation.abort();},300);
         try {
-            let output=kind==='prompt'
-                ? await generatePortraitPrompt({charName,currentDescription:description,signal:operation.signal})
+            let output=kind!=='image'
+                ? await generatePortraitPrompt({charName,currentDescription:description,signal:operation.signal,assessAppearance:kind==='prompt',supplementAppearance:kind==='supplement',draftPrompt:prompt.value})
                 : await generatePortrait({...settings(),style:style.value},prompt.value,refs.map(ref=>({...ref})),operation.signal);
             if(closed||operation.signal.aborted)return;
             if(!valid())throw new Error('portrait_context');
-            if(kind==='prompt')prompt.value=output;
+            if(kind==='prompt') {
+                prompt.value=output.prompt;
+                appearanceHelp.hidden=!output.needsAppearanceDetails;
+            }
+            else if(kind==='supplement') { prompt.value=output; appearanceHelp.hidden=true; }
             else {
                 const source = output;
                 output = await prepare(output);

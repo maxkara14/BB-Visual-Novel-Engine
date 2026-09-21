@@ -4,6 +4,14 @@
 
 ## Русский
 
+### 3.2.1 — 2026-09-21
+
+- Исправлена потеря внешности в конце длинной персоны и лора при сборке портрета. Добавлены позиции лорбука на глубине чата, заметки автора, примеры и именованные вставки; в поиск передаётся имя персонажа.
+- Ответ «внешности достаточно» больше не принимается без цитаты, найденной в источниках: при её отсутствии показывается предложение дополнить.
+
+- Сборка промпта портрета учитывает описание персоны и контекст мира из активной карточки, не подставляя внешность другого персонажа.
+- При недостатке сведений о внешности предлагается дополнить промпт с ИИ по контексту мира или вручную. Дополнение с ИИ запускается отдельно; ошибка или отмена сохраняет прежний текст.
+
 ### 3.2.0 — 2026-09-21
 
 - Бюджет сборки промпта портрета увеличен с 900 до 8192 токенов. Текстовые ответы профилей Chat Completion проверяются на обрезание; при лимите прежний промпт сохраняется и показывается ошибка.
@@ -38,6 +46,14 @@
 Источник: [78557dc](https://github.com/maxkara14/BB-Visual-Novel-Engine/commit/78557dc), включая версию в manifest. Более ранняя история здесь не реконструирована.
 
 ## English
+
+### 3.2.1 — 2026-09-21
+
+- Fixed lost appearance details at the end of long personas and lore when building portraits. Included depth, author-note, example and outlet lore entries, and the target name in lore scanning.
+- A sufficient-appearance assessment now requires a quote found in the supplied sources; missing or fabricated quotes trigger the completion offer.
+
+- Portrait prompt building now includes persona descriptions and world context from the active card, with instructions against borrowing another character’s appearance.
+- Insufficient appearance details offer opt-in AI completion using the world context or manual editing. AI completion is a separate request; errors and cancellation preserve the existing draft.
 
 ### 3.2.0 — 2026-09-21
 

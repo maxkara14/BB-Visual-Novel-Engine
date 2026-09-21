@@ -8,7 +8,7 @@ Turn your roleplay chat into a visual novel: choose your actions, follow relatio
 <a href="img/%D0%94%D0%B5%D0%B9%D1%81%D1%82%D0%B2%D0%B8%D1%8F%20VN.png"><img src="img/%D0%94%D0%B5%D0%B9%D1%81%D1%82%D0%B2%D0%B8%D1%8F%20VN.png" alt="Three VNE action choices with distinct tones and generation controls" width="945" /></a>
 </p>
 
-**3.2.0**
+**3.2.1**
 
 ## ✨ Features
 
@@ -85,6 +85,8 @@ The **memory and trait editor** lets you edit text and hide entries with undo. T
 Click **Portraits** beside the avatar in the character editor.
 
 **Create:** write a prompt or build one from the description and scene. Add a shared art style and up to four appearance or style references. Preview the result, adjust the crop and save the card.
+
+If appearance details are missing when building a prompt, complete them with AI using the world context or edit the prompt yourself. The builder also uses persona and setting information.
 
 **Gallery:** new generations are saved per chat, persona and character, even if you do not apply them. Choose another portrait, download its original or copy the image.
 

@@ -1439,3 +1439,64 @@ test('text completion profiles retain host extraction',async()=>{
     assert.equal(h.calls[0].options.extractData,true);h.respond(0,{content:'Portrait of Alex.'});
     assert.equal(await run,'Portrait of Alex.');
 });
+
+
+test('portrait assessment receives persona facts and a separate world context',async()=>{
+    const h=await harness();
+    h.context.substituteParams=text=>text==='{{persona}}'?'Alex is my brother. His hair is silver and he has a scar.':text==='{{user}}'?'Player':text;
+    h.context.characters=[{name:'Unused'},{name:'World narrator'}];
+    h.context.getCharacterCardFields=()=>({scenario:'Naruto world, Konoha hospital',description:'Narrator has red eyes.'});
+    const run=h.api.generatePortraitPrompt({charName:'Alex',assessAppearance:true});await h.waitForCalls(1);
+    const prompt=h.calls[0].args.quietPrompt;
+    assert.match(prompt,/His hair is silver/);assert.match(prompt,/Naruto world, Konoha hospital/);
+    assert.ok(prompt.includes('world/setting ONLY'));assert.match(prompt,/Kinship alone does not establish/);
+    h.respond(0,JSON.stringify({prompt:'Silver-haired medical ninja in Konoha.',needsAppearanceDetails:false,appearanceEvidence:['His hair is silver and he has a scar.']}));
+    const result=await run;assert.equal(result.needsAppearanceDetails,false);assert.match(result.prompt,/Silver-haired/);
+});
+
+test('portrait assessment requires an explicit completeness result rather than accepting a partial structure',async()=>{
+    for(const response of [{prompt:'Medical ninja in Konoha.',needsAppearanceDetails:true},{prompt:'Medical ninja in Konoha.'}]){
+        const h=await harness();const run=h.api.generatePortraitPrompt({charName:'Alex',assessAppearance:true});
+        const outcome=response.needsAppearanceDetails===true?run:assert.rejects(run,{code:'invalid_response'});
+        await h.waitForCalls(1);h.respond(0,JSON.stringify(response));const result=await outcome;
+        if(response.needsAppearanceDetails===true)assert.equal(result.needsAppearanceDetails,true);
+    }
+});
+
+test('creative portrait completion explicitly preserves facts and the edited draft',async()=>{
+    const h=await harness();
+    const run=h.api.generatePortraitPrompt({charName:'Alex',currentDescription:'Silver hair',supplementAppearance:true,draftPrompt:'Keep the scar and green uniform.'});
+    await h.waitForCalls(1);const prompt=h.calls[0].args.quietPrompt;
+    assert.match(prompt,/user explicitly requests creative completion/);
+    assert.match(prompt,/invent ONLY missing/);assert.match(prompt,/Keep the scar and green uniform/);
+    assert.doesNotMatch(prompt,/Never invent appearance during this assessment/);
+    h.respond(0,'Silver hair, scar, green uniform, brown eyes.');assert.match(await run,/brown eyes/);
+});
+
+
+test('portrait retains late persona details and lore from every host insertion position',async()=>{
+    const h=await harness();
+    const appearance='Акито Хайбара: светло-каштановые волосы до плеч собраны белой лентой в низкий хвост; розовато-красные глаза.';
+    const persona='Описание Ямико. '.repeat(400)+appearance;
+    h.context.substituteParams=text=>text==='{{persona}}'?persona:text==='{{user}}'?'Ямико':text;
+    h.context.getWorldInfoPrompt=async(chat,max,dry,scan)=>{
+        assert.equal(chat[0],'Акито Хайбара');assert.ok(scan.personaDescription.includes(appearance));assert.equal(dry,true);
+        return {worldInfoString:'Общий лор. '.repeat(400)+'Акито — гражданский помощник госпиталя, не ирьёнин.',
+            worldInfoDepth:[{entries:['Акито Хайбара — двадцатиоднолетний старший брат Ямико.']}],
+            worldInfoExamples:[{content:'EXAMPLE_LORE'}],anBefore:['AN_BEFORE'],anAfter:['AN_AFTER'],outletEntries:{setting:['OUTLET_LORE']}};
+    };
+    const run=h.api.generatePortraitPrompt({charName:'Акито Хайбара',assessAppearance:true});await h.waitForCalls(1);
+    const prompt=h.calls[0].args.quietPrompt;
+    for(const fragment of [appearance,'двадцатиоднолетний','не ирьёнин','EXAMPLE_LORE','AN_BEFORE','AN_AFTER','OUTLET_LORE'])assert.ok(prompt.includes(fragment),fragment);
+    h.respond(0,JSON.stringify({prompt:'A 21-year-old civilian with shoulder-length light brown hair in a low ponytail and pink-red eyes.',needsAppearanceDetails:false,appearanceEvidence:[appearance]}));
+    const result=await run;assert.equal(result.needsAppearanceDetails,false);
+});
+
+test('portrait offers completion when model claims sufficient appearance without source evidence',async()=>{
+    for(const appearanceEvidence of [undefined,[],['Invented dark brown short hair and kind eyes.']]){
+        const h=await harness();
+        const run=h.api.generatePortraitPrompt({charName:'Alex',assessAppearance:true});await h.waitForCalls(1);
+        h.respond(0,JSON.stringify({prompt:'A teenage boy with short brown hair.',needsAppearanceDetails:false,appearanceEvidence}));
+        assert.equal((await run).needsAppearanceDetails,true);
+    }
+});

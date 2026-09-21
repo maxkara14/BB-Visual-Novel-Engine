@@ -2941,3 +2941,8 @@ body.bb-hud-popup-active #bb-social-toast-container {
 .bb-description-prompt-settings summary { cursor: pointer; padding: 6px 0; }
 .bb-description-prompt-settings .bb-vn-settings-stack { padding-top: 10px; }
 #bb-vn-description-prompt { min-height: 160px; resize: vertical; text-align: left; line-height: 1.45; }
+
+.bb-portrait-appearance-help { border: 1px solid #526580; border-radius: 10px; background: #192638; padding: 12px; }
+.bb-portrait-appearance-help p { margin: 0 0 10px; font-size: 13px; line-height: 1.5; color: #c8d8eb; }
+.bb-portrait-appearance-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.bb-portrait-appearance-actions .menu_button { flex: 1 1 145px; }
