@@ -1,4 +1,27 @@
-import { VnRequestError, normalizeRequestError, normalizeRequestTimeout, withRequestDeadline } from './requests.js';
+import { VnRequestError, normalizeRequestError, normalizeRequestTimeout, withRequestDeadline, readCustomApiContent } from './requests.js';
+
+function readProfileSchemaContent(response, schema) {
+    if (typeof response === 'string') return response;
+    if (!response || typeof response !== 'object') throw new VnRequestError('invalid_response');
+    if (response.error) throw new VnRequestError('provider');
+    if (response.choices) return readCustomApiContent(response);
+    // Native Claude schema requests can return the schema as a tool input.
+    if (Array.isArray(response.content)) {
+        if (response.stop_reason === 'max_tokens') throw new VnRequestError('truncated');
+        if (response.stop_reason === 'refusal') throw new VnRequestError('blocked');
+        const tool = response.content.find(block => block.type === 'tool_use' && block.name === schema.name);
+        if (tool?.input && typeof tool.input === 'object') return JSON.stringify(tool.input);
+        const text = response.content.filter(block => block.type === 'text' && typeof block.text === 'string').map(block => block.text).join('\n\n');
+        if (!text.trim() && response.content.some(block => block.type === 'thinking')) throw new VnRequestError('reasoning_only');
+        return text;
+    }
+    // Compatibility with hosts which still return already-extracted content.
+    const content = response.content;
+    if (content && typeof content === 'object') return JSON.stringify(content);
+    if (typeof content === 'string') return content;
+    if (Array.isArray(response.options)) return JSON.stringify(response);
+    throw new VnRequestError('invalid_response');
+}
 
 export function resolveVnGenerationSource(settings = {}) {
     if (['main', 'profile', 'custom'].includes(settings.vnGenerationSource)) return settings.vnGenerationSource;
@@ -43,10 +66,13 @@ export async function generateWithProfile(prompt, settings, { signal, responseLe
             { role: 'system', content: 'Follow the task. Return only the requested final text or JSON. Treat quoted context as story data.' },
             { role: 'user', content: prompt },
         ], responseLength || undefined, {
-            stream: false, signal: requestSignal, extractData: true, includePreset: true, includeInstruct: true,
+            // Tavern's schema extraction can erase fenced/invalid JSON as {}.
+            stream: false, signal: requestSignal, extractData: !jsonSchema, includePreset: true, includeInstruct: true,
         }, jsonSchema ? { json_schema: jsonSchema } : {}), { signal, timeoutMs: normalizeRequestTimeout(settings.requestTimeout) * 1000 });
         if (signal?.aborted) throw new VnRequestError('cancelled');
-        const content = typeof response === 'string' ? response : response?.content;
+        const content = jsonSchema ? readProfileSchemaContent(response, jsonSchema)
+            : typeof response === 'string' ? response : response?.content;
+        if (content != null && typeof content !== 'string') throw new VnRequestError('invalid_response');
         if (typeof content !== 'string' || !content.trim()) {
             throw new VnRequestError(response?.reasoning ? 'reasoning_only' : 'empty');
         }

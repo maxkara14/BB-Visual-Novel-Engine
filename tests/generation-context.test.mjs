@@ -1383,3 +1383,39 @@ test('blank description instructions fall back to the original dossier', async (
     h.respond(0,'Name: Alex\n'+ 'Background: A loyal friend who has lived here for years. '.repeat(5));
     assert.match(await run,/Name: Alex/);
 });
+
+
+test('profile Schema preserves raw fenced JSON and accepts structured objects',async()=>{
+    for(const kind of ['fenced','object','tool']) {
+        const h=await harness();Object.assign(h.settings['BB-Visual-Novel'],{vnGenerationSource:'profile',vnConnectionProfileId:'profile-a',vnJsonMode:'schema'});
+        const run=h.api.bbVnGenerateOptionsFlow();await h.waitForCalls(1);
+        assert.equal(h.calls[0].options.extractData,false);
+        const data={options};
+        const response=kind==='fenced'?{choices:[{finish_reason:'stop',message:{content:'\x60\x60\x60json\n'+JSON.stringify(data)+'\n\x60\x60\x60'}}]}
+            :kind==='object'?{content:data}
+            :{content:[{type:'tool_use',name:h.calls[0].overridePayload.json_schema.name,input:data}],stop_reason:'tool_use'};
+        h.respond(0,response);await run;
+        assert.equal(h.saves,1,kind);assert.equal(h.errors.length,0,kind);assert.equal(h.calls.length,1,kind);
+    }
+});
+
+test('profile Schema distinguishes truncation, refusal, empty and unsupported responses',async()=>{
+    for(const [response,code] of [
+        [{choices:[{finish_reason:'length',message:{content:'partial'}}]},'truncated'],
+        [{choices:[{finish_reason:'content_filter',message:{content:''}}]},'blocked'],
+        [{choices:[{finish_reason:'stop',message:{content:''}}]},'empty'],
+        [{content:42},'invalid_response'],
+        [{content:[{type:'thinking',thinking:'reasoning'}]},'reasoning_only'],
+    ]) {
+        const h=await harness();
+        const run=h.connections.generateWithProfile('test',{vnConnectionProfileId:'profile-a'},{jsonSchema:{name:'test'}});
+        const rejected=assert.rejects(run,{code});await h.waitForCalls(1);h.respond(0,response);await rejected;
+    }
+});
+
+test('profile Auto keeps regular text extraction',async()=>{
+    const h=await harness();Object.assign(h.settings['BB-Visual-Novel'],{vnGenerationSource:'profile',vnConnectionProfileId:'profile-a',vnJsonMode:'auto'});
+    const run=h.api.bbVnGenerateOptionsFlow();await h.waitForCalls(1);
+    assert.equal(h.calls[0].options.extractData,true);assert.equal(h.calls[0].overridePayload.json_schema,undefined);
+    h.respond(0,{content:payload});await run;assert.equal(h.saves,1);
+});

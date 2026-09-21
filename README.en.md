@@ -42,6 +42,12 @@ Expand a character card and open **How relationships add up** to see the startin
 
 Above the cards, search by name, sort by trust (highest/lowest), romance, or name, and enable compact cards. Searching hides cards without deleting characters or clearing editor drafts. Sort and compact preferences persist; search resets when the chat or persona changes. Panel totals cover all characters, while the search counter shows matches.
 
+The **Hidden · N** button opens a searchable list with individual and bulk restore. It remains available when all characters are hidden; the settings restore button opens the same list. Hidden characters are excluded from recalculation. Restoring them replays stored chat events, including events recorded while hidden: hiding does not freeze scores.
+
+## Character descriptions
+
+**From template** in the character editor builds a description from available sources. Under **Language and replies → Character description prompt**, edit the shared instructions for all characters. Names, context and output language are appended automatically. Changes are saved; an empty field or Restore default restores default behavior. Existing descriptions are not changed automatically.
+
 ## Memory and trait editor
 
 Expand a character card, open **Memory and trait editor**, select an entry, and save its revised text. Current soft and deep memories, archived memories, and traits are available. Traits use “Name: description” (up to 240 characters); memories allow up to 2000 characters.
@@ -60,7 +66,7 @@ Edits belong to the persona and source entry of the active swipe or imported bas
 | Interface language | Auto / Русский / English. Auto follows SillyTavern, then the browser. Other interface languages fall back to English. |
 | Language of new responses | Match the chat / Русский / English. Independent of interface language. |
 
-All service instructions are written in English. Output language controls new replies, option labels, profiles, traits, and human-readable relationship fields. Existing names and story records are not translated automatically. See [language notes](docs/languages.md) (Russian).
+Default service instructions are written in English. Output language controls new replies, option labels, profiles, traits, and human-readable relationship fields. Existing names and story records are not translated automatically. Match chat uses recent messages as a language guide. Build prompt for portraits always produces English; manual instructions are not translated automatically.
 
 Fallback to the main model after a Custom API failure is a separate, disabled-by-default setting. Cancellation, invalid credentials, quota errors, and provider blocks do not trigger fallback.
 
@@ -118,37 +124,41 @@ Detailed diagnostics are disabled by default. Enabling them can put model respon
 
 Integration was checked against the source of the local **SillyTavern 1.18.0** installation, including Connection Manager and structured-output parameters. This does not guarantee support for every version, model, or provider.
 
-173 automated checks run real extension modules with mocked APIs and UI boundaries. The user confirmed the previous manual pass except section 7, Formats and errors. The [final checklist](docs/manual-testing.md) is pending. [Draft 3.2.0 release notes](docs/release-notes-3.2.0.md) are prepared; the release is not published.
+192 automated checks use real modules with mocked APIs and UI boundaries. The user confirmed profile JSON Schema works with Claude after the fix and reported completing the checks available to them. This does not establish coverage of every scenario or provider. Remaining checks and skips belong in the [checklist](docs/manual-testing.md). Version 3.2.0 awaits a separate release decision; changes remain under Unreleased.
 
 ```sh
-node --experimental-vm-modules --test tests/generation-context.test.mjs tests/snapshot.test.mjs
+node --experimental-vm-modules --test tests/*.test.mjs
 ```
 
-[Work plan](plan.md) · [Extended fork review](docs/fork-review.md) (Russian)
+Compatibility and character-management ideas were reviewed in the [Extended fork](https://github.com/Proquror/BB-Visual-Novel-Engine-Extended); its social model was not merged wholesale.
+
+## Persistent option preferences
+
+VNE settings can store preferences for option style and content (up to 4000 characters). They apply to future option generations across all chats; existing options are unchanged. One-time guidance takes precedence in a conflict. Required output format, language and length still apply, and Scene Director context is passed as before. Preferences are not added to profile or trait generation. “Clear preferences” removes them from future requests.
+
+## Option context size
+
+Under “Language and replies”, “Messages in option context” selects the latest 1–100 messages (default: 10). This counts chat entries, not pairs of turns; shorter chats use all available entries. The latest reply also remains the immediate scene anchor. Changes apply to the next generation and do not delete history.
+
+This controls VNE’s history block, not total input tokens or the output limit. Persona, author’s note and summary still use macro substitution; Scene Director context is retained. Character profiles, memories and relationships are not separately copied into this block. The main connection may receive them through Tavern context, VNE injection or the {{bb_vn}} macro. Connection profiles and Custom API receive the assembled prompt; they do not automatically inherit all Tavern context. This setting does not cap extra preset or macro content.
+
+## Disabling options
+
+“Turn off” inside “VN Actions” smoothly hides the panel, leaving a small “VN” button to restore it. You can also re-enable it in VNE settings → “Gameplay” → “VN options”. This is a global setting saved across reloads. The current request is cancelled and queued auto-generation is cleared; relationships, memory and profile/trait generation remain available. Saved options are kept. Re-enabling restores the panel without a new request; auto-generation resumes on the next character reply.
+
+## Portrait generation (VNE-TEST)
+
+Click **Portraits** beside the avatar in the character editor. Configure the separate connection under **VNE settings → Images**. Use manual or source-based prompts, shared style and references, then preview and crop before saving. [RU/EN guide](docs/portraits.md). The **Create / Gallery** tabs retain new generations per chat, persona and character. Reapply a portrait, download its original or copy it as PNG. Removing a gallery entry preserves the current avatar and disk file. VNE snapshots do not contain the gallery: moving it requires chat metadata and the corresponding SillyTavern image files.
+
+## Development
+
+Localization: `language.js` controls output language; `i18n.js` and `locales/en.js` handle static labels. Do not pass user text to `t()`; `ui` translation does not replace HTML escaping. `template` / `templateText` follow output language; local Match chat templates use Cyrillic in the last message as a heuristic.
 
 ## Screenshot
 
 An earlier version; the test branch may look different.
 
 <img width="942" height="236" alt="BB VNE options" src="https://github.com/user-attachments/assets/90d3f105-93a5-4a94-8e5b-c1a4e1bd0c93" />
-
-### Persistent option preferences
-
-VNE settings can store preferences for option style and content (up to 4000 characters). They apply to future option generations across all chats; existing options are unchanged. One-time guidance takes precedence in a conflict. Required output format, language and length still apply, and Scene Director context is passed as before. Preferences are not added to profile or trait generation. “Clear preferences” removes them from future requests.
-
-### Option context size
-
-Under “Language and replies”, “Messages in option context” selects the latest 1–100 messages (default: 10). This counts chat entries, not pairs of turns; shorter chats use all available entries. The latest reply also remains the immediate scene anchor. Changes apply to the next generation and do not delete history.
-
-This controls VNE’s history block, not total input tokens or the output limit. Persona, author’s note and summary still use macro substitution; Scene Director context is retained. Character profiles, memories and relationships are not separately copied into this block. The main connection may receive them through Tavern context, VNE injection or the {{bb_vn}} macro. Connection profiles and Custom API receive the assembled prompt; they do not automatically inherit all Tavern context. This setting does not cap extra preset or macro content.
-
-### Disabling options
-
-“Turn off” inside “VN Actions” smoothly hides the panel, leaving a small “VN” button to restore it. You can also re-enable it in VNE settings → “Gameplay” → “VN options”. This is a global setting saved across reloads. The current request is cancelled and queued auto-generation is cleared; relationships, memory and profile/trait generation remain available. Saved options are kept. Re-enabling restores the panel without a new request; auto-generation resumes on the next character reply.
-
-### Portrait generation (VNE-TEST)
-
-Click **Create** beside the avatar in the character editor. Configure the separate connection under **VNE settings → Images**. Use manual or source-based prompts, shared style and references, then preview and crop before saving. [RU/EN guide](docs/portraits.md). Release is deferred until this feature passes manual verification.
 
 ## Author
 
