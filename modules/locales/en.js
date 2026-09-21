@@ -10,6 +10,7 @@ export const EN = {
     "Инструкция для описания": "Description instructions",
     "Для кнопки «По шаблону» у всех персонажей. Контекст и язык добавляются автоматически. Пустое поле использует стандартный промпт.": "Used by From template for all characters. Context and language are added automatically. An empty field uses the default prompt.",
     "Восстановить стандартный": "Restore default",
+    "Ответ обрезан по лимиту токенов. Прежний промпт сохранён. Проверьте лимит текстовой модели или выберите другую модель.": "The response reached its token limit. Your previous prompt was kept. Check the text model token limit or choose another model.",
     "Портреты": "Portraits",
     "Галерея": "Gallery",
     "Здесь появятся созданные портреты этого персонажа.": "Generated portraits of this character will appear here.",

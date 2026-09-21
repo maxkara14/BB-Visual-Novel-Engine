@@ -975,7 +975,8 @@ Current VNE description: ${JSON.stringify(clipPromptBlock(currentDescription, 40
 Matching card: ${JSON.stringify(sources.cardContext)}
 Relevant lore: ${JSON.stringify(sources.worldInfoText)}
 Recent scene: ${JSON.stringify(recentChat)}`;
-    const result = await generateFastPrompt(prompt, { responseFormat: 'text', outputLanguage: 'en', responseLength: 900, signal });
+    // Output stays short; reasoning models may spend the same token budget on thinking.
+    const result = await generateFastPrompt(prompt, { responseFormat: 'text', outputLanguage: 'en', responseLength: 8192, signal });
     const text = String(result || '').trim();
     if (!text) throw new VnRequestError('empty');
     return text.slice(0, 8000);

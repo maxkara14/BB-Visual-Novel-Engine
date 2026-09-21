@@ -306,6 +306,7 @@ export function openPortraitWorkshop({ charName, description, avatar, isEditorCu
     }
     const controls=[];
     function errorText(error) {
+        if (error?.code === 'truncated') return t('Ответ обрезан по лимиту токенов. Прежний промпт сохранён. Проверьте лимит текстовой модели или выберите другую модель.');
         if (error?.code === 'cancelled' || error?.name === 'AbortError') return t('Отменено');
         if (error?.message === 'portrait_context') return t('Чат или карточка изменились. Откройте портрет заново.');
         if (error?.message === 'portrait_image') return t('Нужен PNG, JPEG или WebP до 10 МиБ.');

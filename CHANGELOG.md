@@ -6,6 +6,8 @@
 
 ### Unreleased — VNE-TEST (подготовка 3.2.0)
 
+- Бюджет сборки промпта портрета увеличен с 900 до 8192 токенов. Текстовые ответы профилей Chat Completion проверяются на обрезание; при лимите прежний промпт сохраняется и показывается ошибка.
+
 Выпуск ещё не опубликован; manifest остаётся 3.1.0 Release.
 
 - Добавлены варианты действий с разовой подсказкой, сохраняемыми пожеланиями, тремя длинами ответа и выбором 1–100 сообщений истории (по умолчанию 10). Сохранены вставка для редактирования и немедленная автоотправка.
@@ -22,9 +24,7 @@
 - Подключения изображений по примеру Comic Forge: OpenAI Images, OpenAI Chat, Gemini и Naistera, загрузка моделей и профили. Для OpenAI Images референсы отправляются через `/images/edits`; отказ не запускает скрытый повтор без референсов.
 - Галерея хранит новые оригиналы по чату, персоне и персонажу: повторное применение, скачивание и копирование PNG. Удаление записи сохраняет аватар и файл; галерея не включается в снимок VNE.
 - Обновление профиля изображения отделено от сохранения нового; удаление требует подтверждения и сохраняет текущее подключение. Настройки собраны в компактные раскрывающиеся разделы.
-- Документация сокращена до README RU/EN, changelog, инструкции по портретам и текущего ручного чек-листа. Старые рабочие планы и заметки доступны в истории Git.
 
-Проверки: 192 автоматических теста с подменёнными API и границами интерфейса. Пользователь подтвердил работу Schema на своём профиле Claude после исправления и сообщил о прохождении доступных проверок. Это не проверка всех провайдеров; [ручной чек-лист](docs/manual-testing.md) сохраняется до решения о выпуске.
 
 ### 2026-07-23 — исправление снимков
 
@@ -43,6 +43,8 @@
 
 ### Unreleased — VNE-TEST (3.2.0 preparation)
 
+- Increased the portrait prompt budget from 900 to 8192 tokens. Chat Completion profile text responses are checked for truncation; a limit error preserves the previous prompt instead of accepting partial text.
+
 Not released; the manifest remains 3.1.0 Release.
 
 - Added action choices with per-generation hints, persistent preferences, three reply lengths and 1–100 history messages (default 10). Both editable insertion and immediate auto-send remain available.
@@ -59,9 +61,7 @@ Not released; the manifest remains 3.1.0 Release.
 - Image connections adapted from Comic Forge: OpenAI Images, OpenAI Chat, Gemini and Naistera, model discovery and profiles. OpenAI Images references use `/images/edits`; failed reference requests are never silently retried without images.
 - Gallery stores new originals per chat, persona and character, with reuse, downloading and PNG copying. Removing an entry preserves its file and avatar; VNE snapshots exclude gallery history.
 - Image profile updates are separate from saving new profiles; confirmed deletion preserves the current connection. Settings use compact collapsible sections.
-- Consolidated documentation into RU/EN READMEs, changelog, portrait guide and current manual checklist. Old working plans and notes remain in Git history.
 
-Verification: 192 automated tests with mocked APIs and UI boundaries. The user confirmed Schema works on their Claude profile after the fix and reported completing available checks. This does not cover all providers; the [manual checklist](docs/manual-testing.md) remains until the release decision.
 
 ### 2026-07-23 — snapshot fix
 

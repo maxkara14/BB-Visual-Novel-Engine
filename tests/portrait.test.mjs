@@ -6,7 +6,7 @@ import { SourceTextModule, SyntheticModule, createContext } from 'node:vm';
 const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6X8AAAAASUVORK5CYII=';
 const connection = { endpoint: 'https://images.example/v1', model: 'test-image', key: 'test-key' };
 
-async function harness({ fetch: fetchImpl, fakeClock = false, uploadFails = false, upload: uploadImpl } = {}) {
+async function harness({ fetch: fetchImpl, fakeClock = false, uploadFails = false, upload: uploadImpl, promptError } = {}) {
     const requests = [], textRequests = [], applied = [], downloads = [], timers = new Map();
     const dialogs = { name: undefined, confirm: true };
     let timerId = 0, persona = 'a', editorCurrent = true, saves = 0, decodeError = false;
@@ -58,7 +58,7 @@ async function harness({ fetch: fetchImpl, fakeClock = false, uploadFails = fals
         ['../../../../extensions.js', { extension_settings: settings }],
         ['../../../../../script.js', { saveSettingsDebounced: () => { saves++; } }],
         ['./social.js', { getCurrentPersonaScopeKey: () => persona, resolveCharacterIdentity: name => ({id:name}) }],
-        ['./generator.js', { generatePortraitPrompt: async args => { textRequests.push(args); return 'Portrait of Alex.'; } }],
+        ['./generator.js', { generatePortraitPrompt: async args => { textRequests.push(args); if (promptError) throw promptError; return 'Portrait of Alex.'; } }],
     ]);
     const cache = new Map();
     const load = name => {
@@ -461,4 +461,17 @@ test('clipboard writes a PNG blob using the decoded original dimensions', async 
     await h.gallery.copyPortrait(png);
     assert.equal(clipboard.type,'image/png');assert.equal(drawn,true);
     assert.equal(canvas.width,512);assert.equal(canvas.height,768);
+});
+
+
+test('truncated prompt build preserves the draft and reports the limit instead of success',async()=>{
+    const h=await harness({promptError:{code:'truncated'}});h.open();
+    try {
+        h.prompt().value='My existing portrait prompt';
+        await h.button('Собрать промпт').click();
+        assert.equal(h.prompt().value,'My existing portrait prompt');
+        const status=h.nodes().find(n=>n.className==='bb-portrait-status').textContent;
+        assert.match(status,/Прежний промпт сохранён/);assert.doesNotMatch(status,/Готово/);
+        assert.equal(h.button('Собрать промпт').disabled,false);assert.equal(h.requests.length,0);
+    } finally {h.close();}
 });

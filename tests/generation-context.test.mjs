@@ -580,7 +580,7 @@ test('profile options use the selected ID, preset and instruct without changing 
     assert.equal(call.options.stream, false);
     assert.equal(call.options.includePreset, true);
     assert.equal(call.options.includeInstruct, true);
-    assert.equal(call.options.extractData, true);
+    assert.equal(call.options.extractData, false);
     assert.equal(call.maxTokens, 5200);
     assert.equal(call.prompt[1].role, 'user');
     assert.match(call.prompt[1].content, /Initial scene/);
@@ -1413,9 +1413,29 @@ test('profile Schema distinguishes truncation, refusal, empty and unsupported re
     }
 });
 
-test('profile Auto keeps regular text extraction',async()=>{
+test('profile Auto preserves text response metadata without requesting Schema',async()=>{
     const h=await harness();Object.assign(h.settings['BB-Visual-Novel'],{vnGenerationSource:'profile',vnConnectionProfileId:'profile-a',vnJsonMode:'auto'});
     const run=h.api.bbVnGenerateOptionsFlow();await h.waitForCalls(1);
-    assert.equal(h.calls[0].options.extractData,true);assert.equal(h.calls[0].overridePayload.json_schema,undefined);
+    assert.equal(h.calls[0].options.extractData,false);assert.equal(h.calls[0].overridePayload.json_schema,undefined);
     h.respond(0,{content:payload});await run;assert.equal(h.saves,1);
+});
+
+
+test('portrait prompt rejects profile length stops and uses a reasoning-sized budget',async()=>{
+    for(const finish of ['length','stop']) {
+        const h=await harness();selectProfile(h);
+        const run=h.api.generatePortraitPrompt({charName:'Alex'});
+        const outcome=finish==='length'?assert.rejects(run,{code:'truncated'}):run;
+        await h.waitForCalls(1);assert.equal(h.calls[0].maxTokens,8192);assert.equal(h.calls[0].options.extractData,false);
+        h.respond(0,{choices:[{message:{content:'Portrait of Alex.'},finish_reason:finish}]});
+        const result=await outcome;if(finish==='stop')assert.equal(result,'Portrait of Alex.');
+        assert.equal(h.calls.length,1);
+    }
+});
+
+test('text completion profiles retain host extraction',async()=>{
+    const h=await harness();selectProfile(h);h.profileState.backend='textgenerationwebui';
+    const run=h.api.generatePortraitPrompt({charName:'Alex'});await h.waitForCalls(1);
+    assert.equal(h.calls[0].options.extractData,true);h.respond(0,{content:'Portrait of Alex.'});
+    assert.equal(await run,'Portrait of Alex.');
 });

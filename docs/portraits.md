@@ -53,4 +53,9 @@ Select a thumbnail to **Use portrait** with the existing crop workflow, **Downlo
 
 Originals are stored on the SillyTavern server in the user's `images/bb_vne_portraits` directory, with links in chat metadata. VNE snapshots do not include the gallery. Moving history requires both the full chat metadata and the corresponding image files; a chat export alone does not contain image binaries. History is not automatically pruned, and removing an entry does not reclaim disk space.
 
-Live-provider and visual verification remains part of the [manual checklist](manual-testing.md).
+
+## Лимит сборки промпта / Prompt building budget
+
+«Собрать промпт» запрашивает до 180 слов с бюджетом ответа 8192 токена, чтобы оставить запас для рассуждений. Для своего API явно заданный лимит токенов имеет приоритет. Если профиль Chat Completion или своё API сообщает об обрезании, прежний промпт сохраняется и показывается ошибка. Основное подключение и профили Text Completion возвращают извлечённый текст без гарантированно доступного признака обрезания.
+
+Build prompt requests up to 180 words with an 8192-token response budget to leave room for reasoning. An explicit Custom API token limit takes precedence. When a Chat Completion profile or Custom API reports truncation, the previous prompt is preserved and an error is displayed. The main connection and Text Completion profiles return extracted text without guaranteed truncation metadata.
