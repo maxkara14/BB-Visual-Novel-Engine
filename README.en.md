@@ -4,6 +4,12 @@
 
 Turn your roleplay chat into a visual novel: choose your actions, follow relationships and keep the moments that matter.
 
+<p align="center">
+<a href="img/%D0%94%D0%B5%D0%B9%D1%81%D1%82%D0%B2%D0%B8%D1%8F%20VN.png"><img src="img/%D0%94%D0%B5%D0%B9%D1%81%D1%82%D0%B2%D0%B8%D1%8F%20VN.png" alt="Three VNE action choices with distinct tones and generation controls" width="945" /></a>
+</p>
+
+**3.2.0**
+
 ## ✨ Features
 
 | Feature | What it offers |
@@ -38,6 +44,21 @@ You can disable the action panel while keeping relationships and memory. The sma
 
 ## 💞 Relationships and characters
 
+<table>
+<tr>
+<td width="42%" align="center" valign="top">
+<a href="img/VNE.png"><img src="img/VNE.png" alt="Tsunade character card: trust, relationship dynamics and memories" width="340" /></a>
+</td>
+<td valign="top">
+<h3>Every character has a story</h3>
+<p><b>Relationships.</b> Trust, romance and recent changes in one card.</p>
+<p><b>Memory.</b> Soft traces and defining events you can revisit and edit.</p>
+<p><b>Personality.</b> Descriptions, portraits and lasting traits help preserve character identity.</p>
+<p><b>Navigation.</b> Search, compact view and a hidden-character list.</p>
+</td>
+</tr>
+</table>
+
 The side panel contains character cards, a log and a diary. Expand a card to see memories and how trust and romance scores are calculated.
 
 Search, sorting and compact view help navigate a growing cast. **Hidden · N** opens a list with individual and bulk restore. Hiding does not erase events: restoring a character recalculates relationships from stored history.
@@ -47,6 +68,19 @@ Edit a character's name, avatar and description. **From template** builds a desc
 The **memory and trait editor** lets you edit text and hide entries with undo. These edits do not change relationship scores or original events.
 
 ## 🖼️ Portraits and gallery
+
+<table>
+<tr>
+<th width="50%">Create a portrait</th>
+<th width="50%">Keep your favourites</th>
+</tr>
+<tr>
+<td valign="top"><a href="img/%D0%90%D0%B2%D0%B0%D1%82%D0%B0%D1%80.png"><img src="img/%D0%90%D0%B2%D0%B0%D1%82%D0%B0%D1%80.png" alt="Portrait workshop: prompt, style, references and preview" width="440" /></a></td>
+<td valign="top"><a href="img/%D0%93%D0%B0%D0%BB%D0%B5%D1%80%D0%B5%D1%8F.png"><img src="img/%D0%93%D0%B0%D0%BB%D0%B5%D1%80%D0%B5%D1%8F.png" alt="Portrait gallery: selection, downloading and copying" width="440" /></a></td>
+</tr>
+</table>
+
+*Click any screenshot to view it at full size.*
 
 Click **Portraits** beside the avatar in the character editor.
 

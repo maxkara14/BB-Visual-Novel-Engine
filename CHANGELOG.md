@@ -4,11 +4,9 @@
 
 ## Русский
 
-### Unreleased — VNE-TEST (подготовка 3.2.0)
+### 3.2.0 — 2026-09-21
 
 - Бюджет сборки промпта портрета увеличен с 900 до 8192 токенов. Текстовые ответы профилей Chat Completion проверяются на обрезание; при лимите прежний промпт сохраняется и показывается ошибка.
-
-Выпуск ещё не опубликован; manifest остаётся 3.1.0 Release.
 
 - Добавлены варианты действий с разовой подсказкой, сохраняемыми пожеланиями, тремя длинами ответа и выбором 1–100 сообщений истории (по умолчанию 10). Сохранены вставка для редактирования и немедленная автоотправка.
 - Генератор вариантов отключается независимо от отношений и памяти. Компактная кнопка VN возвращает панель с анимацией.
@@ -41,11 +39,9 @@
 
 ## English
 
-### Unreleased — VNE-TEST (3.2.0 preparation)
+### 3.2.0 — 2026-09-21
 
 - Increased the portrait prompt budget from 900 to 8192 tokens. Chat Completion profile text responses are checked for truncation; a limit error preserves the previous prompt instead of accepting partial text.
-
-Not released; the manifest remains 3.1.0 Release.
 
 - Added action choices with per-generation hints, persistent preferences, three reply lengths and 1–100 history messages (default 10). Both editable insertion and immediate auto-send remain available.
 - Option generation can be disabled independently of relationships and memory. A compact VN button restores the panel with an animation.
