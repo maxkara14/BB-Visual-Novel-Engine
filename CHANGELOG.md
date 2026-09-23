@@ -4,6 +4,12 @@
 
 ## Русский
 
+### 3.2.2 — 2026-09-23
+
+- Добавлены перемещаемые язычки VNE и Scene Director: их можно двигать вверх и вниз, а выбранная позиция сохраняется.
+- Панель можно открыть обычным кликом или постепенно вытянуть горизонтальным жестом; состояние перетаскивания корректно сбрасывается после закрытия.
+- Исправлено позиционирование язычка Scene Director на узких мобильных экранах.
+
 ### 3.2.1 — 2026-09-21
 
 - Исправлена потеря внешности в конце длинной персоны и лора при сборке портрета. Добавлены позиции лорбука на глубине чата, заметки автора, примеры и именованные вставки; в поиск передаётся имя персонажа.
@@ -46,6 +52,12 @@
 Источник: [78557dc](https://github.com/maxkara14/BB-Visual-Novel-Engine/commit/78557dc), включая версию в manifest. Более ранняя история здесь не реконструирована.
 
 ## English
+
+### 3.2.2 — 2026-09-23
+
+- Added movable VNE and Scene Director tabs with saved vertical positions.
+- The drawer can be opened with a normal click or progressively pulled out with a horizontal drag; drag state is reset reliably after closing.
+- Fixed Scene Director tab positioning on narrow mobile screens.
 
 ### 3.2.1 — 2026-09-21
 

@@ -1320,7 +1320,10 @@ export function updateHudVisibility() {
 }
 
 export function openSocialHud() {
-    jQuery('#bb-social-hud').addClass('open');
+    jQuery('#bb-social-hud')
+        .removeClass('is-panel-dragging')
+        .css('--bb-social-drag-progress', '1')
+        .addClass('open');
     jQuery('#bb-social-hud-backdrop').addClass('open');
     jQuery('body').addClass('bb-social-hud-active');
     jQuery('#bb-social-toast-container').addClass('hud-open');
@@ -1330,7 +1333,9 @@ export function openSocialHud() {
 }
 
 export function closeSocialHud() {
-    jQuery('#bb-social-hud').removeClass('open');
+    jQuery('#bb-social-hud')
+        .removeClass('is-panel-dragging open')
+        .css('--bb-social-drag-progress', '0');
     jQuery('#bb-social-hud-backdrop').removeClass('open');
     jQuery('body').removeClass('bb-social-hud-active');
     jQuery('#bb-social-toast-container').removeClass('hud-open');
@@ -1352,18 +1357,78 @@ export function ensureHudContainer() {
     `;
     jQuery('body').append(hudHtml);
 
+    const toggle = document.getElementById('bb-social-hud-toggle');
+    const hud = document.getElementById('bb-social-hud');
+    const positionKey = 'bb-visual-novel-engine-toggle-top';
+    let dragState = null;
+    const clampToggleTop = top => {
+        const height = toggle?.getBoundingClientRect().height || 84;
+        return Math.max(8, Math.min(Math.max(8, window.innerHeight - height - 8), top));
+    };
+    const applySavedTogglePosition = () => {
+        if (!toggle) return;
+        const raw = Number.parseFloat(localStorage.getItem(positionKey));
+        const top = Number.isFinite(raw) ? clampToggleTop(raw) : clampToggleTop(130);
+        toggle.style.setProperty('--bb-social-toggle-top', `${Math.round(top)}px`);
+    };
+    applySavedTogglePosition();
+    toggle?.addEventListener('pointerdown', event => {
+        if (event.button !== undefined && event.button !== 0) return;
+        dragState = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startTop: toggle.getBoundingClientRect().top, startOpen: hud.classList.contains('open'), mode: null, moved: false };
+        toggle.setPointerCapture?.(event.pointerId);
+    });
+    toggle?.addEventListener('pointermove', event => {
+        if (!dragState || event.pointerId !== dragState.pointerId) return;
+        const deltaX = event.clientX - dragState.startX;
+        const delta = event.clientY - dragState.startY;
+        if (!dragState.mode && Math.max(Math.abs(deltaX), Math.abs(delta)) < 5) return;
+        if (!dragState.mode) dragState.mode = Math.abs(deltaX) > Math.abs(delta) ? 'panel' : 'position';
+        dragState.moved = true;
+        if (dragState.mode === 'panel') {
+            const panelWidth = hud.getBoundingClientRect().width || 390;
+            const progress = Math.max(0, Math.min(1, dragState.startOpen ? 1 - (deltaX / panelWidth) : -deltaX / panelWidth));
+            hud.classList.add('is-panel-dragging');
+            hud.style.setProperty('--bb-social-drag-progress', String(progress));
+            return;
+        }
+        toggle.classList.add('is-dragging');
+        toggle.style.setProperty('--bb-social-toggle-top', `${Math.round(clampToggleTop(dragState.startTop + delta))}px`);
+    });
+    const finishToggleDrag = event => {
+        if (!dragState || event.pointerId !== dragState.pointerId) return;
+        if (dragState.mode === 'panel') {
+            const progress = Number.parseFloat(hud.style.getPropertyValue('--bb-social-drag-progress')) || 0;
+            if (progress >= 0.45) openSocialHud(); else closeSocialHud();
+            hud.classList.remove('is-panel-dragging');
+            toggle.dataset.dragged = 'true';
+        } else if (dragState.moved) {
+            const top = clampToggleTop(toggle.getBoundingClientRect().top);
+            toggle.style.setProperty('--bb-social-toggle-top', `${Math.round(top)}px`);
+            localStorage.setItem(positionKey, String(Math.round(top)));
+            toggle.dataset.dragged = 'true';
+        }
+        toggle.classList.remove('is-dragging');
+        hud.classList.remove('is-panel-dragging');
+        dragState = null;
+    };
+    toggle?.addEventListener('pointerup', finishToggleDrag);
+    toggle?.addEventListener('pointercancel', finishToggleDrag);
+
     jQuery('.bb-hud-tab').on('click', function() {
         jQuery('.bb-hud-tab').removeClass('active'); jQuery('.bb-hud-content').removeClass('active');
         jQuery(this).addClass('active'); jQuery(`#bb-hud-${jQuery(this).data('tab')}`).addClass('active');
     });
 
-    jQuery('#bb-social-hud-toggle, #bb-social-hud-mobile-launcher').on('click', () => {
+    jQuery('#bb-social-hud-toggle, #bb-social-hud-mobile-launcher').on('click', function() {
+        if (this.dataset.dragged === 'true') {
+            delete this.dataset.dragged;
+            return;
+        }
         if (jQuery('#bb-social-hud').hasClass('open')) closeSocialHud(); else openSocialHud();
     });
 
     jQuery('#bb-social-hud-backdrop, .bb-hud-mobile-close').on('click', closeSocialHud);
 
-    const toggle = document.getElementById('bb-social-hud-toggle');
     let timer = null;
     const scheduleIdle = () => {
         if (!toggle) return; clearTimeout(timer); toggle.classList.remove('bb-toggle-idle');
@@ -1373,6 +1438,7 @@ export function ensureHudContainer() {
     if (toggle) ['pointerdown', 'touchstart', 'mouseenter', 'focus'].forEach(ev => toggle.addEventListener(ev, scheduleIdle));
 
     window.addEventListener('resize', () => {
+        applySavedTogglePosition();
         if (window.innerWidth > 760) jQuery('#bb-social-hud-backdrop').removeClass('open');
         syncToastContainerWithHud(); scheduleIdle();
     });
