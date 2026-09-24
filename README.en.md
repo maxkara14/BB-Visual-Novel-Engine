@@ -8,7 +8,7 @@ Turn your roleplay chat into a visual novel: choose your actions, follow relatio
 <a href="img/%D0%94%D0%B5%D0%B9%D1%81%D1%82%D0%B2%D0%B8%D1%8F%20VN.png"><img src="img/%D0%94%D0%B5%D0%B9%D1%81%D1%82%D0%B2%D0%B8%D1%8F%20VN.png" alt="Three VNE action choices with distinct tones and generation controls" width="945" /></a>
 </p>
 
-**3.2.1**
+**3.2.2**
 
 ## ✨ Features
 
