@@ -2,13 +2,13 @@ import { DEFAULT_DESCRIPTION_PROMPT, DESCRIPTION_PROMPT_LIMIT, normalizeDescript
 import { openHiddenCharacters } from './hidden-characters-ui.js';
 import { mountPortraitSettings } from './portrait-ui.js';
 import { mountSettingsAnimations } from './settings-animation.js';
-import { refreshSnapshotControls, snapshotRemovalPrompt } from './snapshot-controls.js';
+import { refreshSnapshotControls, snapshotRemovalPrompt, snapshotRecordRemovalPrompt, listRelationshipEditorRecords } from './snapshot-controls.js';
 import { t, ui, normalizeUiLanguage } from './i18n.js';
  /* global SillyTavern */
 import { chat_metadata, saveChatDebounced, saveSettingsDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { MODULE_NAME, normalizeVnContextMessages, normalizeImpactSettings, normalizeImpactValue, normalizeVnReplyLength, resolveImpactScaleSettings } from './constants.js';
-import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog, bindActivePersonaState, getCurrentPersonaScopeKey, mergeCharacterRecords, resolveCharacterIdentity, exportActivePersonaSnapshot, importActivePersonaSnapshot, clearActivePersonaSnapshot, markSnapshotReplayMessage, getLatestAssistantMessageEntry } from './social.js';
+import { recalculateAllStats, injectCombinedSocialPrompt, addGlobalLog, bindActivePersonaState, recordActivePersonaBranchState, getCurrentPersonaScopeKey, mergeCharacterRecords, resolveCharacterIdentity, exportActivePersonaSnapshot, importActivePersonaSnapshot, clearActivePersonaSnapshot, markSnapshotReplayMessage, getLatestAssistantMessageEntry } from './social.js';
 import { notifySuccess, notifyInfo, notifyError, showHudToast } from './toasts.js';
 import { restoreVNOptions, setVnOptionsEnabled, clearSavedVNOptions, invalidateVnOptionsGeneration } from './generator.js';
 import { normalizeRequestTimeout, normalizeCustomApiMaxTokens, normalizeRequestError, getCustomApiIdentity } from './requests.js';
@@ -16,6 +16,10 @@ import { escapeHtml, createTextOption } from './utils.js';
 import { resolveVnGenerationSource } from './connections.js';
 import { normalizeOutputLanguage } from './language.js';
 import { confirmSnapshotFile, confirmSnapshotRemoval } from './snapshot.js';
+import { removeSnapshotRecord, undoSnapshotRecordRemoval } from './snapshot-records.js';
+import { changeMemoryEntry } from './memory-editor.js';
+import { changeRelationshipEvent } from './relationship-event-editor.js';
+import { confirmHistoryReset } from './history-reset.js';
 import { mountVnConnectionControls } from './connection-ui.js';
 import { normalizeJsonMode, normalizeAdditionalRequests } from './structured-output.js';
 
@@ -195,11 +199,15 @@ export function wipeAllSocialData() {
     scopeState.merge_suggestions = [];
     scopeState.log_cutoff_index = 0;
     scopeState.snapshot_baseline = null;
+    scopeState.snapshot_branch_uncertain = false;
     refreshSnapshotControls(scopeState);
     scopeState.snapshot_cutoff_index = 0;
     scopeState.snapshot_restore_state = null;
     scopeState.snapshot_post_import_replay_keys = {};
     scopeState.snapshot_post_import_pending_swipes = {};
+    scopeState.relationship_event_edits = {};
+    scopeState.snapshot_record_undo = null;
+    scopeState.snapshot_lineage = null;
     chat_metadata['bb_vn_global_log'] = scopeState.global_log;
     chat_metadata['bb_vn_char_bases'] = scopeState.char_bases;
     chat_metadata['bb_vn_ignored_chars'] = scopeState.ignored_chars;
@@ -383,6 +391,31 @@ export function setupExtensionSettings() {
                             </div>
                             <button id="bb-social-clear-snapshot-btn" class="menu_button bb-vn-settings-button" style="color:#fda4af; border-color:rgba(244,114,182,0.22);">Убрать импортированную основу</button>
                         </div>
+                        <details id="bb-social-snapshot-records" class="bb-vn-snapshot-editor">
+                            <summary><i class="fa-solid fa-list-check" aria-hidden="true"></i><span>Редактор отношений</span><i class="fa-solid fa-chevron-down bb-vn-snapshot-editor-chevron" aria-hidden="true"></i></summary>
+                            <div class="bb-vn-snapshot-editor-body">
+                                <span class="bb-vn-settings-note">Здесь собраны изменения отношений, память, черты и импортированные записи текущего чата и персоны. Доступные действия зависят от источника записи.</span>
+                                <input id="bb-social-snapshot-record-search" class="text_pole" type="search" placeholder="Найти запись" aria-label="Найти запись">
+                                <div id="bb-social-snapshot-record-filters" class="bb-vn-snapshot-filters" aria-label="Тип записей"></div>
+                                <div id="bb-social-snapshot-record-list" class="bb-vn-snapshot-record-list"></div>
+                                <div id="bb-social-snapshot-record-preview" class="bb-vn-snapshot-record-preview" aria-live="polite"></div>
+                                <label id="bb-social-snapshot-record-text-label" for="bb-social-snapshot-record-text">Текст записи</label>
+                                <textarea id="bb-social-snapshot-record-text" class="text_pole" rows="4"></textarea>
+                                <div id="bb-social-snapshot-event-fields" class="bb-vn-snapshot-event-fields" hidden>
+                                    <label for="bb-social-snapshot-event-mood">Эмоция<input id="bb-social-snapshot-event-mood" class="text_pole" type="text" maxlength="240"></label>
+                                    <div class="bb-vn-settings-actions-grid">
+                                        <label for="bb-social-snapshot-event-friendship">Доверие<input id="bb-social-snapshot-event-friendship" class="text_pole" type="number" min="-100" max="100" step="1"></label>
+                                        <label for="bb-social-snapshot-event-romance">Влечение<input id="bb-social-snapshot-event-romance" class="text_pole" type="number" min="-100" max="100" step="1"></label>
+                                    </div>
+                                </div>
+                                <span id="bb-social-snapshot-record-hint" class="bb-vn-settings-note">Правки памяти и черт не меняют баллы отношений и журнал.</span>
+                                <button type="button" id="bb-social-snapshot-record-save" class="menu_button bb-vn-settings-button">Сохранить текст</button>
+                                <div class="bb-vn-settings-actions-grid">
+                                    <button type="button" id="bb-social-snapshot-record-remove" class="menu_button bb-vn-settings-button bb-vn-settings-button--danger">Удалить запись</button>
+                                    <button type="button" id="bb-social-snapshot-record-undo" class="menu_button bb-vn-settings-button">Отменить правку</button>
+                                </div>
+                            </div>
+                        </details>
                         <div class="bb-vn-settings-stack">
                             <button id="bb-social-restore-chars-btn" class="menu_button bb-vn-settings-button">Вернуть скрытых персонажей</button>
                             <button id="bb-social-clear-log-btn" class="menu_button bb-vn-settings-button">Очистить журнал</button>
@@ -856,6 +889,7 @@ export function setupExtensionSettings() {
                 if(msg.extra?.bb_vn_char_traits_swipes) { for(const sId in msg.extra.bb_vn_char_traits_swipes) { if(Array.isArray(msg.extra.bb_vn_char_traits_swipes[sId])) msg.extra.bb_vn_char_traits_swipes[sId] = msg.extra.bb_vn_char_traits_swipes[sId].filter(t => (t?.scope && !aliasSet.has(t.scope)) || !matchesTargetCharacter(t.charName)); } }
             });
         }
+        recordActivePersonaBranchState(Boolean(scopeState.snapshot_baseline));
         saveChatDebounced(); recalculateAllStats(false); notifySuccess(t("Персонаж обнулен."));
     });
 
@@ -947,8 +981,165 @@ export function setupExtensionSettings() {
         }
     });
 
+    jQuery('#bb-social-snapshot-record-search').on('input', () => refreshSnapshotControls(bindActivePersonaState().scopeState));
+    jQuery('#bb-social-snapshot-record-filters').on('click', 'button[data-kind]', event => {
+        document.querySelector('#bb-social-snapshot-record-filters').dataset.filter = event.currentTarget.dataset.kind;
+        refreshSnapshotControls(bindActivePersonaState().scopeState);
+    });
+    jQuery('#bb-social-snapshot-record-list').on('click', 'button[data-record]', event => {
+        document.querySelector('#bb-social-snapshot-record-list').dataset.selected = event.currentTarget.dataset.record;
+        refreshSnapshotControls(bindActivePersonaState().scopeState);
+    });
+
+    const selectedEditorRecord = scope => {
+        const value = document.querySelector('#bb-social-snapshot-record-list')?.dataset.selected || '';
+        return listRelationshipEditorRecords(scope).find(item => `${item.kind}:${item.key}` === value);
+    };
+
+    const changeSelectedMemory = async action => {
+        const context = SillyTavern.getContext();
+        const chat = context.chat;
+        const chatId = context.chatId;
+        const scene = JSON.stringify(chat?.map(message => [message.mes, message.swipe_id]));
+        const persona = getCurrentPersonaScopeKey();
+        const scope = bindActivePersonaState().scopeState;
+        const record = selectedEditorRecord(scope);
+        if (record?.kind !== 'memory' || (record.hidden && action !== 'undo')) return;
+        const value = document.querySelector('#bb-social-snapshot-record-text')?.value || '';
+        try {
+            if (action === 'delete' && await context.callPopup(escapeHtml(t('Удалить запись из памяти? Баллы отношений и журнал останутся прежними. Удаление можно отменить.')), 'confirm') !== true) return;
+            const current = SillyTavern.getContext();
+            if (current.chat !== chat || current.chatId !== chatId || getCurrentPersonaScopeKey() !== persona
+                || bindActivePersonaState().scopeState !== scope
+                || JSON.stringify(current.chat?.map(message => [message.mes, message.swipe_id])) !== scene
+                || selectedEditorRecord(scope)?.kind !== 'memory' || selectedEditorRecord(scope)?.key !== record.key) throw new Error('EDITOR_STALE');
+            if (!changeMemoryEntry(record.index, record.revision, action, value)) return;
+            if (record.imported) recordActivePersonaBranchState(true);
+            saveChatDebounced();
+            recalculateAllStats(false);
+            refreshSnapshotControls(scope);
+            notifySuccess(t(action === 'delete' ? 'Запись скрыта.' : action === 'undo' ? 'Правка отменена.' : 'Текст сохранён.'));
+        } catch (error) {
+            notifyError(t(error.message === 'EDITOR_TEXT'
+                ? 'Проверьте длину текста. Для черты используйте «Название: описание».'
+                : 'Сцена или записи изменились. Откройте редактор заново.'));
+        }
+    };
+
+    const changeSelectedEvent = async action => {
+        const context = SillyTavern.getContext();
+        const chat = context.chat;
+        const chatId = context.chatId;
+        const scene = JSON.stringify(chat?.map(message => [message.mes, message.swipe_id]));
+        const persona = getCurrentPersonaScopeKey();
+        const scope = bindActivePersonaState().scopeState;
+        const record = selectedEditorRecord(scope);
+        if (record?.kind !== 'event' || (record.disabled && action !== 'undo')) return;
+        const readNumber = selector => {
+            const raw = document.querySelector(selector)?.value?.trim();
+            return raw ? Number(raw) : NaN;
+        };
+        const values = {
+            reason: document.querySelector('#bb-social-snapshot-record-text')?.value || '',
+            mood: document.querySelector('#bb-social-snapshot-event-mood')?.value || '',
+            friendshipDelta: readNumber('#bb-social-snapshot-event-friendship'),
+            romanceDelta: readNumber('#bb-social-snapshot-event-romance'),
+        };
+        try {
+            if (action === 'disable' && await context.callPopup(escapeHtml(t('Отключить это изменение отношений? Баллы, память и журнал будут пересчитаны. Действие можно отменить.')), 'confirm') !== true) return;
+            const current = SillyTavern.getContext();
+            const selected = selectedEditorRecord(scope);
+            if (current.chat !== chat || current.chatId !== chatId || getCurrentPersonaScopeKey() !== persona
+                || bindActivePersonaState().scopeState !== scope
+                || JSON.stringify(current.chat?.map(message => [message.mes, message.swipe_id])) !== scene
+                || selected?.kind !== 'event' || selected.key !== record.key) throw new Error('EDITOR_STALE');
+            if (!changeRelationshipEvent(scope, record.index, record.revision, action, values)) return;
+            recordActivePersonaBranchState();
+            saveChatDebounced();
+            recalculateAllStats(false);
+            refreshSnapshotControls(scope);
+            notifySuccess(t(action === 'disable' ? 'Событие отключено.' : action === 'undo' ? 'Правка отменена.' : 'Изменение сохранено.'));
+        } catch (error) {
+            notifyError(t(error.message === 'EDITOR_VALUE'
+                ? 'Баллы должны быть целыми числами от −100 до +100.'
+                : error.message === 'EDITOR_TEXT' ? 'Проверьте длину причины и эмоции.'
+                    : 'Сцена или записи изменились. Откройте редактор заново.'));
+        }
+    };
+
+    jQuery('#bb-social-snapshot-record-save').on('click', () => {
+        const scope = bindActivePersonaState().scopeState;
+        return selectedEditorRecord(scope)?.kind === 'event' ? changeSelectedEvent('edit') : changeSelectedMemory('edit');
+    });
+
+    jQuery('#bb-social-snapshot-record-remove').on('click', async () => {
+        const context = SillyTavern.getContext();
+        const chat = context.chat;
+        const chatId = context.chatId;
+        const persona = getCurrentPersonaScopeKey();
+        const scope = bindActivePersonaState().scopeState;
+        const baseline = scope.snapshot_baseline;
+        const record = selectedEditorRecord(scope);
+        if (record?.kind === 'memory') return changeSelectedMemory('delete');
+        if (record?.kind === 'event') return changeSelectedEvent('disable');
+        if (record?.readOnly) return;
+        if (!baseline || !record) return;
+        let confirmed = false;
+        try {
+            confirmed = await context.callPopup(snapshotRecordRemovalPrompt(record), 'confirm');
+        } catch (error) {
+            notifyError(t('Не удалось подтвердить удаление записи.'));
+            return;
+        }
+        if (confirmed !== true) return;
+        const current = SillyTavern.getContext();
+        if (current.chat !== chat || current.chatId !== chatId || getCurrentPersonaScopeKey() !== persona
+            || bindActivePersonaState().scopeState !== scope || scope.snapshot_baseline !== baseline) {
+            notifyError(t('Чат, персона или снимок изменились. Откройте редактор заново.'));
+            return;
+        }
+        if (!removeSnapshotRecord(scope, record.kind, record.key)) return;
+        recordActivePersonaBranchState(true);
+        saveChatDebounced();
+        recalculateAllStats(false);
+        refreshSnapshotControls(scope);
+        notifySuccess(t('Запись удалена из основы снимка.'));
+    });
+
+    jQuery('#bb-social-snapshot-record-undo').on('click', () => {
+        const scope = bindActivePersonaState().scopeState;
+        if (selectedEditorRecord(scope)?.kind === 'memory') return changeSelectedMemory('undo');
+        if (selectedEditorRecord(scope)?.kind === 'event') return changeSelectedEvent('undo');
+        if (selectedEditorRecord(scope)?.readOnly || !undoSnapshotRecordRemoval(scope)) return;
+        recordActivePersonaBranchState(true);
+        saveChatDebounced();
+        recalculateAllStats(false);
+        refreshSnapshotControls(scope);
+        notifySuccess(t('Удаление записи отменено.'));
+    });
+
     jQuery('#bb-social-restore-chars-btn').on('click', openHiddenCharacters);
     jQuery('#bb-social-clear-log-btn').on('click', wipeGlobalLog);
-    jQuery('#bb-social-wipe-btn').on('click', wipeAllSocialData);
+    jQuery('#bb-social-wipe-btn').on('click', async () => {
+        try {
+            await confirmHistoryReset({
+                getContext: () => SillyTavern.getContext(),
+                getPersonaKey: getCurrentPersonaScopeKey,
+                confirm: () => SillyTavern.getContext().callPopup(ui`
+                    <h3>Сбросить историю отношений?</h3>
+                    <p>Будут удалены отношения, память, черты, журнал и сохранённые варианты VN в текущем чате. Сообщения чата останутся.</p>
+                    <p>Трекер останется включённым: новые ответы и рероллы снова создадут записи.</p>
+                    <p>Действие нельзя отменить в интерфейсе. Чтобы сохранить данные, сначала экспортируйте снимок состояния.</p>`, 'confirm'),
+                reset: wipeAllSocialData,
+            });
+        } catch (error) {
+            if (error.message === 'HISTORY_RESET_CONTEXT_CHANGED') {
+                notifyError(t('Чат или персона изменились. Сброс отменён.'));
+            } else {
+                console.error('[BB VN] History reset confirmation failed', error);
+                notifyError(t('Не удалось подтвердить сброс истории.'));
+            }
+        }
+    });
     renderMergeSuggestionsList();
 }

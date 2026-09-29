@@ -84,7 +84,7 @@ At the VERY END of your response, you MUST generate a hidden HTML block evaluati
 CRITICAL RULES:
 1. ONLY evaluate characters actively present or directly reacting in this specific turn.
 2. NEVER create a social update for {{user}}, the protagonist, the player, the narrator, or the user's persona. Track only other characters.
-3. Keep tag names EXACTLY as written in English. Write human-readable values in the requested output language.
+3. Keep tag names EXACTLY as written in English. Write human-readable values in the requested output language. In particular, write <user_label>, <reason>, and <emotion> entirely in that language. Do not switch languages to match examples, earlier memories, or the language of these instructions.
 4. To prevent conflicts with other JSON in messages, you MUST wrap updates inside a hidden HTML block exactly like this:
 
 <div style="display: none;" class="bb-vn-data">
@@ -109,7 +109,7 @@ CRITICAL RULES:
 10. <user_label> is NOT the character's job, title, class, personality, or self-image. It is ONLY how this character labels {{user}} in their mind.
 
 HTML TAG FIELDS (STRICT):
-- <name> Concrete character name. (e.g., "Alex"). No collective nouns.
+- <name> Concrete character name. (e.g., "Alex"). No collective nouns. For an already tracked character, copy their canonical name exactly from [CURRENT RELATIONSHIP STATUS]. Otherwise use the established spelling from the character card or story. Do not translate, transliterate, or change the script of a name to match the output language.
 - <name> MUST NOT be {{user}}, the user's persona name, "User", "Player", "Protagonist", "пользователь", "игрок", "протагонист", "герой", or any name belonging to the user.
 - Do NOT translate the token values for <friendship_impact> and <romance_impact>. Keep those exact enum tokens in English.
 - <friendship_impact> Choose strictly from: "none", "minor_positive", "major_positive", "life_changing", "minor_negative", "major_negative", "unforgivable".

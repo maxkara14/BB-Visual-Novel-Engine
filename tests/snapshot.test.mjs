@@ -6,9 +6,15 @@ const root = new URL('../modules/', import.meta.url);
 async function harness() {
     const metadata = {}; let saves = 0;
     const nodes = new Map();
+    const createNode = () => ({
+        dataset: {}, children: [], attributes: {}, textContent: '', value: '',
+        replaceChildren(...children) { this.children = children; this.textContent = ''; },
+        append(...children) { this.children.push(...children); },
+        setAttribute(name, value) { this.attributes[name] = value; },
+    });
     const context = { chat: [], chatId:'test-chat', name1:'Player', substituteParams: text=>text.replaceAll('{{user}}','Player'), callPopup:async()=>false };
     const settings = {'BB-Visual-Novel':{}};
-    const sandbox = createContext({ Event, TextEncoder, console, setTimeout, clearTimeout, SillyTavern:{getContext:()=>context}, window:{}, document:{querySelector:selector=>nodes.get(selector)||null}, jQuery:()=>({val:()=>null}) });
+    const sandbox = createContext({ Event, TextEncoder, console, setTimeout, clearTimeout, SillyTavern:{getContext:()=>context}, window:{}, document:{querySelector:selector=>nodes.get(selector)||null,createElement:createNode}, jQuery:()=>({val:()=>null}) });
     const mocks = {
         '../../../../../script.js': {chat_metadata:metadata,saveChatDebounced:()=>saves++,setExtensionPrompt(){},extension_prompt_roles:{SYSTEM:0},extension_prompt_types:{IN_CHAT:0},callPopup:async()=>false},
         '../../../../extensions.js': {extension_settings:settings},
@@ -25,7 +31,7 @@ async function harness() {
     const social=load('./social.js');await social.link(load);await social.evaluate();
     const editorUi=load('./memory-editor-ui.js');await editorUi.link(load);await editorUi.evaluate();
     const controls=load('./snapshot-controls.js');await controls.link(load);await controls.evaluate();
-    return {editorUi:editorUi.namespace,editor:cache.get('./memory-editor.js').namespace,nodes,controls:controls.namespace,breakdown:cache.get('./relationship-breakdown.js').namespace,api:social.namespace,snapshot:cache.get('./snapshot.js').namespace,state:cache.get('./state.js').namespace,context,metadata,settings,get saves(){return saves;}};
+    return {editorUi:editorUi.namespace,editor:cache.get('./memory-editor.js').namespace,eventEditor:cache.get('./relationship-event-editor.js').namespace,nodes,createNode,controls:controls.namespace,breakdown:cache.get('./relationship-breakdown.js').namespace,api:social.namespace,snapshot:cache.get('./snapshot.js').namespace,state:cache.get('./state.js').namespace,context,metadata,settings,get saves(){return saves;}};
 }
 const fixture = () => ({schema_version:1,module:'BB-Visual-Novel',persona_label:'Original persona',data:{characters:{Alex:{affinity:25,romance:0,status:'Friend',history:[],memories:{soft:[],deep:[],archive:[]},core_traits:[]}},char_bases:{Alex:3},char_bases_romance:{},global_log:[{time:'12:00',type:'system',text:'Saved log'}],story_moments:[]}});
 
@@ -36,6 +42,19 @@ test('valid v1 export/import round trip keeps relationships and log',async()=>{
     assert.equal(exported.module,'BB-Visual-Novel');assert.equal(exported.schema_version,1);
     assert.equal(exported.data.characters.Alex.affinity,25);assert.equal(exported.data.global_log[0].text,'Saved log');
     assert.equal(h.snapshot.parseSnapshot(JSON.stringify(exported)).summary.characters,1);
+});
+
+test('Russian relationship prompt uses Russian fields and the tracked character name',async()=>{
+    const h=await harness();h.settings['BB-Visual-Novel'].outputLanguage='ru';
+    h.api.importActivePersonaSnapshot(fixture());
+    h.context.chat.push({name:'Alex',mes:'Alex enters the room',swipe_id:0,extra:{}});
+    h.api.recalculateAllStats(false);
+    const prompt=h.api.getCombinedSocial();
+    assert.match(prompt,/Write newly generated human-readable text in Russian/);
+    assert.match(prompt,/write <user_label>, <reason>, and <emotion> entirely in that language/);
+    assert.match(prompt,/copy their canonical name exactly from \[CURRENT RELATIONSHIP STATUS\]/);
+    assert.match(prompt,/use these exact canonical names in <name>: Alex/);
+    assert.match(prompt,/Do not translate, transliterate, or change the script of a name/);
 });
 test('legacy bare data is accepted, unknown envelopes are not',async()=>{
     const h=await harness();assert.equal(h.snapshot.parseSnapshot(fixture().data).summary.format,'legacy');
@@ -214,6 +233,245 @@ test('snapshot controls refresh text and availability when scope changes',async(
  const scope={snapshot_baseline:{imported_at:'2026-09-18T12:00:00Z'}};
  h.controls.refreshSnapshotControls(scope);assert.equal(button.disabled,false);assert.match(status.textContent,/2026/);
  h.controls.refreshSnapshotControls({});assert.equal(button.disabled,true);assert.match(status.textContent,/Импорт не активен/);
+});
+
+test('imported record editor shows readable entries, filters, and a selected preview',async()=>{
+ const h=await harness();
+ for(const id of ['records','record-search','record-filters','record-list','record-preview','record-remove','record-undo']) {
+  const selector=id==='records'?'#bb-social-snapshot-records':`#bb-social-snapshot-${id}`;
+  h.nodes.set(selector,h.createNode());
+ }
+ const scope={snapshot_baseline:{characters:{Alex:{affinity:25,romance:0}},global_log:[{time:'12:00',text:'<div class="bb-glog-main"><span class="bb-glog-char">Alex</span><span class="bb-glog-delta">calm</span></div><div class="bb-glog-reason">Trust &amp; care</div><div class="bb-glog-points">🤝 Trust: +5</div>'}],story_moments:[{title:'A promise',text:'Alex remembered'}]}};
+ h.controls.refreshSnapshotControls(scope);
+ const list=h.nodes.get('#bb-social-snapshot-record-list');
+ const preview=h.nodes.get('#bb-social-snapshot-record-preview');
+ assert.equal(list.children.length,3);
+ assert.equal(list.children[1].children[1].textContent,'Alex');
+ assert.equal(list.children[1].children[2].textContent,'calm');
+ assert.equal(list.children[1].children[3].textContent,'Trust & care');
+ assert.equal(list.dataset.selected,'character:Alex');
+ assert.equal(preview.children[1].textContent,'Alex');
+ const filters=h.nodes.get('#bb-social-snapshot-record-filters');
+ filters.dataset.filter='log';
+ h.controls.refreshSnapshotControls(scope);
+ assert.equal(list.children.length,1);
+ assert.equal(list.dataset.selected,'log:0');
+ assert.equal(preview.children[1].textContent,'Alex');
+ assert.equal(preview.children[2].textContent,'calm');
+ assert.equal(preview.children[3].textContent,'Trust & care');
+ assert.equal(preview.children[4].children[0].textContent,'🤝 Trust: +5');
+ const search=h.nodes.get('#bb-social-snapshot-record-search');
+ search.value='missing';
+ h.controls.refreshSnapshotControls(scope);
+ assert.equal(list.children.length,0);
+ assert.equal(h.nodes.get('#bb-social-snapshot-record-remove').disabled,true);
+});
+
+test('one Data editor lists chat memories without import and imported entries after import',async()=>{
+ const h=await harness();const scopeKey=h.api.getCurrentPersonaScopeKey();
+ h.context.chat.push({name:'Alex',mes:'Alex says thanks',swipe_id:0,extra:{bb_social_swipes:{0:[{name:'Alex',friendship_impact:'minor_positive',romance_impact:'none',reason:'Helped carry books',scope:scopeKey}]}}});
+ h.api.recalculateAllStats(false);
+ const scope=h.api.bindActivePersonaState().scopeState;
+ let records=h.controls.listRelationshipEditorRecords(scope);
+ const chatMemory=records.find(record=>record.kind==='memory');
+ assert.equal(chatMemory.title,'Alex');assert.equal(chatMemory.imported,false);
+ assert.equal(scope.snapshot_baseline,null);
+ for(const id of ['records','record-search','record-filters','record-list','record-preview','record-remove','record-undo','record-text','record-text-label','record-hint','record-save','event-fields','event-mood','event-friendship','event-romance']) {
+  h.nodes.set(id==='records'?'#bb-social-snapshot-records':`#bb-social-snapshot-${id}`,h.createNode());
+ }
+ h.controls.refreshSnapshotControls(scope);
+ assert.equal(h.nodes.get('#bb-social-snapshot-records').hidden,false);
+ assert.equal(h.nodes.get('#bb-social-snapshot-record-text').value,'Helped carry books');
+ assert.equal(h.nodes.get('#bb-social-snapshot-record-save').disabled,false);
+ assert.match(h.nodes.get('#bb-social-snapshot-record-list').children[0].children[0].textContent,/Чат/);
+ assert.equal(h.nodes.get('#bb-social-snapshot-record-list').children[0].children.length,2);
+ assert.equal(h.nodes.get('#bb-social-snapshot-record-preview').hidden,true);
+ h.nodes.get('#bb-social-snapshot-record-filters').dataset.filter='event';
+ h.controls.refreshSnapshotControls(scope);
+ assert.equal(h.nodes.get('#bb-social-snapshot-event-fields').hidden,false);
+ assert.equal(h.nodes.get('#bb-social-snapshot-record-text').value,'Helped carry books');
+ assert.equal(h.nodes.get('#bb-social-snapshot-event-friendship').value,2);
+ h.nodes.get('#bb-social-snapshot-record-filters').dataset.filter='memory';
+ h.controls.refreshSnapshotControls(scope);
+ const originalChat=h.context.chat;h.context.chat=[];
+ assert.equal(h.controls.listRelationshipEditorRecords(scope).some(record=>record.kind==='memory'),false);
+ h.context.chat=originalChat;
+ h.editor.changeMemoryEntry(chatMemory.index,chatMemory.revision,'edit','A revised recollection');
+ h.api.recalculateAllStats(false);
+ records=h.controls.listRelationshipEditorRecords(scope);
+ assert.equal(records.find(record=>record.kind==='memory').text,'A revised recollection');
+ let memory=records.find(record=>record.kind==='memory');
+ h.editor.changeMemoryEntry(memory.index,memory.revision,'delete');h.api.recalculateAllStats(false);
+ h.controls.refreshSnapshotControls(scope);
+ assert.equal(h.nodes.get('#bb-social-snapshot-record-save').disabled,true);
+ assert.equal(h.nodes.get('#bb-social-snapshot-record-undo').disabled,false);
+ memory=h.controls.listRelationshipEditorRecords(scope).find(record=>record.kind==='memory');
+ h.editor.changeMemoryEntry(memory.index,memory.revision,'undo');h.api.recalculateAllStats(false);
+ assert.equal(h.controls.listRelationshipEditorRecords(scope).find(record=>record.kind==='memory').text,'A revised recollection');
+ const imported=fixture();imported.data.characters.Alex.memories.archive=[{text:'Imported promise',delta:10,tone:'positive'}];
+ h.api.importActivePersonaSnapshot(imported);h.api.recalculateAllStats(false);
+ records=h.controls.listRelationshipEditorRecords(scope);
+ assert.ok(records.some(record=>record.kind==='memory'&&record.imported&&record.text==='Imported promise'));
+ assert.ok(records.some(record=>record.kind==='character'&&record.title==='Alex'));
+ assert.ok(records.some(record=>record.kind==='log'));
+ h.nodes.get('#bb-social-snapshot-record-filters').dataset.filter='log';
+ h.controls.refreshSnapshotControls(scope);
+ assert.equal(h.nodes.get('#bb-social-snapshot-record-preview').hidden,false);
+});
+
+test('zero-point chat events still expose their character in the editor',async()=>{
+ const h=await harness();const scopeKey=h.api.getCurrentPersonaScopeKey();
+ h.context.chat.push({name:'Alex',mes:'Alex reacts',swipe_id:0,extra:{bb_social_swipes:{0:[{
+  name:'Alex',friendship_impact:'none',romance_impact:'none',reason:'Stayed distant',emotion:'irritated',scope:scopeKey,
+ }]}}});
+ h.api.recalculateAllStats(false);
+ const scope=h.api.bindActivePersonaState().scopeState;
+ assert.equal(h.state.currentCalculatedStats.Alex.affinity,0);
+ const records=h.controls.listRelationshipEditorRecords(scope);
+ assert.equal(records.filter(record=>record.kind==='character'&&record.title==='Alex').length,1);
+ assert.equal(records.find(record=>record.kind==='character').readOnly,true);
+ assert.equal(records.find(record=>record.kind==='event').friendshipDelta,0);
+ for(const id of ['records','record-search','record-filters','record-list','record-preview','record-remove','record-undo']) {
+  h.nodes.set(id==='records'?'#bb-social-snapshot-records':`#bb-social-snapshot-${id}`,h.createNode());
+ }
+ h.nodes.get('#bb-social-snapshot-record-filters').dataset.filter='character';
+ h.controls.refreshSnapshotControls(scope);
+ assert.match(h.nodes.get('#bb-social-snapshot-record-filters').children[1].textContent,/Персонажи 1/);
+ assert.equal(h.nodes.get('#bb-social-snapshot-record-remove').disabled,true);
+ assert.equal(h.nodes.get('#bb-social-snapshot-record-undo').disabled,true);
+});
+
+test('editing a chat relationship event recalculates scores, memory, and journal with undo',async()=>{
+ const h=await harness();const scopeKey=h.api.getCurrentPersonaScopeKey();
+ const update={name:'Alex',friendship_impact:'minor_positive',romance_impact:'none',reason:'Original reason',emotion:'calm',scope:scopeKey};
+ h.context.chat.push({name:'Alex',mes:'Alex replies',swipe_id:0,extra:{bb_social_swipes:{0:[update]}}});
+ h.api.recalculateAllStats(false);
+ const scope=h.api.bindActivePersonaState().scopeState;
+ let event=h.controls.listRelationshipEditorRecords(scope).find(record=>record.kind==='event');
+ assert.ok(event);assert.equal(event.friendshipDelta,2);
+ assert.equal(h.state.currentCalculatedStats.Alex.affinity,2);
+ assert.equal(event.text,'Original reason');
+ assert.throws(()=>h.eventEditor.changeRelationshipEvent(scope,event.index,event.revision,'edit',{
+  reason:'Invalid',mood:'',friendshipDelta:101,romanceDelta:0,
+ }),/EDITOR_VALUE/);
+ h.eventEditor.changeRelationshipEvent(scope,event.index,event.revision,'edit',{
+  reason:'Revised reason',mood:'hopeful',friendshipDelta:7,romanceDelta:3,
+ });
+ assert.throws(()=>h.eventEditor.changeRelationshipEvent(scope,event.index,event.revision,'disable'),/EDITOR_STALE/);
+ h.api.recordActivePersonaBranchState();h.api.recalculateAllStats(false);
+ assert.equal(h.state.currentCalculatedStats.Alex.affinity,7);
+ assert.equal(h.state.currentCalculatedStats.Alex.romance,3);
+ assert.equal(h.state.currentCalculatedStats.Alex.memories.soft[0].text,'Revised reason');
+ assert.match(h.api.exportActivePersonaSnapshot().data.global_log.at(-1).text,/Revised reason/);
+ assert.equal(update.reason,'Original reason');
+ event=h.controls.listRelationshipEditorRecords(scope).find(record=>record.kind==='event');
+ h.eventEditor.changeRelationshipEvent(scope,event.index,event.revision,'disable');
+ h.api.recordActivePersonaBranchState();h.api.recalculateAllStats(false);
+ assert.equal(h.state.currentCalculatedStats.Alex,undefined);
+ assert.equal(h.api.exportActivePersonaSnapshot().data.global_log.length,0);
+ event=h.controls.listRelationshipEditorRecords(scope).find(record=>record.kind==='event');
+ assert.equal(event.disabled,true);assert.equal(event.canUndo,true);
+ h.eventEditor.changeRelationshipEvent(scope,event.index,event.revision,'undo');
+ h.api.recordActivePersonaBranchState();h.api.recalculateAllStats(false);
+ assert.equal(h.state.currentCalculatedStats.Alex.affinity,7);
+ const reloaded=await harness();Object.assign(reloaded.metadata,structuredClone(h.metadata));
+ reloaded.context.chat=structuredClone(h.context.chat);reloaded.api.recalculateAllStats(false);
+ assert.equal(reloaded.state.currentCalculatedStats.Alex.affinity,7);
+ assert.equal(reloaded.controls.listRelationshipEditorRecords(reloaded.api.bindActivePersonaState().scopeState).find(record=>record.kind==='event').text,'Revised reason');
+});
+
+test('a platonic relationship event cannot save attraction points',async()=>{
+ const h=await harness();const scopeKey=h.api.getCurrentPersonaScopeKey();
+ h.context.chat.push({name:'Alex',mes:'Alex replies',swipe_id:0,extra:{bb_social_swipes:{0:[{
+  name:'Alex',friendship_impact:'minor_positive',romance_impact:'none',reason:'A conversation',scope:scopeKey,
+ }]}}});
+ h.api.recalculateAllStats(false);
+ const scope=h.api.bindActivePersonaState().scopeState;
+ scope.platonic_chars=['Alex'];h.api.recalculateAllStats(false);
+ const event=h.controls.listRelationshipEditorRecords(scope).find(record=>record.kind==='event');
+ assert.equal(event.platonic,true);
+ assert.throws(()=>h.eventEditor.changeRelationshipEvent(scope,event.index,event.revision,'edit',{
+  reason:'A conversation',mood:'calm',friendshipDelta:3,romanceDelta:2,
+ }),/EDITOR_VALUE/);
+});
+
+test('a branch before an event edit keeps the earlier relationship change',async()=>{
+ const parent=await harness();parent.metadata.integrity='parent';
+ const scopeKey=parent.api.getCurrentPersonaScopeKey();
+ parent.context.chat.push({name:'Alex',mes:'First',swipe_id:0,extra:{bb_social_swipes:{0:[{name:'Alex',friendship_impact:'minor_positive',romance_impact:'none',reason:'First event',scope:scopeKey}]}}});
+ parent.api.recalculateAllStats(false);
+ parent.context.chat.push({name:'Alex',mes:'Later',swipe_id:0,extra:{}});parent.api.recalculateAllStats(false);
+ const scope=parent.api.bindActivePersonaState().scopeState;
+ const event=parent.controls.listRelationshipEditorRecords(scope).find(record=>record.kind==='event');
+ parent.eventEditor.changeRelationshipEvent(scope,event.index,event.revision,'edit',{
+  reason:'Revised later',mood:'',friendshipDelta:9,romanceDelta:0,
+ });
+ parent.api.recordActivePersonaBranchState();parent.api.recalculateAllStats(false);
+ assert.equal(parent.state.currentCalculatedStats.Alex.affinity,9);
+ async function branch(length) {
+  const child=await harness();Object.assign(child.metadata,structuredClone(parent.metadata),{integrity:`branch-${length}`,main_chat:'parent'});
+  child.context.chatId=`branch-${length}`;child.context.chat=structuredClone(parent.context.chat.slice(0,length));
+  child.api.recalculateAllStats(false);return child;
+ }
+ assert.equal((await branch(1)).state.currentCalculatedStats.Alex.affinity,2);
+ assert.equal((await branch(2)).state.currentCalculatedStats.Alex.affinity,9);
+});
+
+test('relationship event edits follow the selected swipe',async()=>{
+ const h=await harness();const scopeKey=h.api.getCurrentPersonaScopeKey();
+ const message={name:'Alex',mes:'First',swipe_id:0,swipes:['First','Second'],extra:{bb_social_swipes:{
+  0:[{name:'Alex',friendship_impact:'minor_positive',romance_impact:'none',reason:'First event',scope:scopeKey}],
+  1:[{name:'Alex',friendship_impact:'minor_negative',romance_impact:'none',reason:'Second event',scope:scopeKey}],
+ }}};
+ h.context.chat.push(message);h.api.recalculateAllStats(false);
+ const scope=h.api.bindActivePersonaState().scopeState;
+ const event=h.controls.listRelationshipEditorRecords(scope).find(record=>record.kind==='event');
+ h.eventEditor.changeRelationshipEvent(scope,event.index,event.revision,'edit',{
+  reason:'Edited first',mood:'',friendshipDelta:6,romanceDelta:0,
+ });h.api.recordActivePersonaBranchState();h.api.recalculateAllStats(false);
+ assert.equal(h.state.currentCalculatedStats.Alex.affinity,6);
+ const edited=h.controls.listRelationshipEditorRecords(scope).find(record=>record.kind==='event');
+ message.swipe_id=1;message.mes='Second';
+ assert.throws(()=>h.eventEditor.changeRelationshipEvent(scope,edited.index,edited.revision,'disable'),/EDITOR_STALE/);
+ h.api.recalculateAllStats(false);
+ assert.equal(h.state.currentCalculatedStats.Alex.affinity,-2);
+ assert.equal(h.controls.listRelationshipEditorRecords(scope).find(record=>record.kind==='event').text,'Second event');
+ message.swipe_id=0;message.mes='First';h.api.recalculateAllStats(false);
+ assert.equal(h.state.currentCalculatedStats.Alex.affinity,6);
+});
+
+test('the editor lists post-import chat changes beside imported journal entries',async()=>{
+ const h=await harness();const scopeKey=h.api.getCurrentPersonaScopeKey();
+ const makeMessage=(reason)=>({name:'Alex',mes:reason,swipe_id:0,extra:{bb_social_swipes:{0:[{
+  name:'Alex',friendship_impact:'minor_positive',romance_impact:'none',reason,scope:scopeKey,
+ }]}}});
+ h.context.chat.push(makeMessage('Before import'));h.api.recalculateAllStats(false);
+ h.api.importActivePersonaSnapshot(fixture());
+ h.context.chat.push(makeMessage('After import'));h.api.recalculateAllStats(false);
+ const scope=h.api.bindActivePersonaState().scopeState;
+ const records=h.controls.listRelationshipEditorRecords(scope);
+ assert.equal(records.filter(record=>record.kind==='event').map(record=>record.text).join('|'),'After import');
+ assert.ok(records.some(record=>record.kind==='log'&&record.text==='Saved log'));
+ const event=records.find(record=>record.kind==='event');
+ h.eventEditor.changeRelationshipEvent(scope,event.index,event.revision,'disable');
+ h.api.recordActivePersonaBranchState();h.api.recalculateAllStats(false);
+ assert.equal(h.state.currentCalculatedStats.Alex.affinity,25);
+ assert.equal(h.api.exportActivePersonaSnapshot().data.global_log.length,1);
+});
+
+test('snapshot removal confirmation separates journal fields and escapes saved text',async()=>{
+ const h=await harness();
+ const prompt=h.controls.snapshotRecordRemovalPrompt({
+  kind:'log',number:1,title:'Alex <script>',mood:'calm & curious',
+  reason:'A promise <img src=x>',points:['🤝 Trust: +5'],detail:'12:00',text:'flattened entry',
+ });
+ assert.match(prompt,/bb-vn-snapshot-confirm-field/);
+ assert.match(prompt,/calm &amp; curious/);
+ assert.match(prompt,/A promise &lt;img src=x&gt;/);
+ assert.match(prompt,/🤝 Trust: \+5/);
+ assert.doesNotMatch(prompt,/<script>|<img src=x>|flattened entry/);
+ const fallback=h.controls.snapshotRecordRemovalPrompt({kind:'log',number:2,title:'#2',text:'Old journal text',detail:'13:00'});
+ assert.match(fallback,/Old journal text/);
 });
 
 test('memory edits persist on sources, undo deletion and preserve scores and journal across swipes',async()=>{

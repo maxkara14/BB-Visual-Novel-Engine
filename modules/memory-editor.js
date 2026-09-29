@@ -3,14 +3,16 @@
 const bindings = new WeakMap();
 let revision = 0;
 let entries = [];
+let ownerChat = null;
 
-export function resetMemoryEditor() {
+export function resetMemoryEditor(chat = null) {
     revision++;
     entries = [];
+    ownerChat = chat;
 }
 
-export function trackEditableRecord(record, source, slot, field) {
-    bindings.set(record, { source, slot, field });
+export function trackEditableRecord(record, source, slot, field, origin = 'chat') {
+    bindings.set(record, { source, slot, field, origin });
     return record;
 }
 
@@ -35,8 +37,16 @@ export function applyMemoryEdits(stats, scope, name) {
 
 export function memoryEditorEntries(name) {
     return entries.flatMap((entry, index) => entry.name === name
-        ? [{ index, revision, kind: entry.kind, text: entry.text, hidden: entry.hidden, canUndo: entry.canUndo }]
+        ? [{ index, revision, kind: entry.kind, text: entry.text, hidden: entry.hidden, canUndo: entry.canUndo, imported: entry.binding.origin === 'snapshot' }]
         : []);
+}
+
+export function allMemoryEditorEntries(chat = null, scope = null) {
+    if (ownerChat && chat && ownerChat !== chat) return [];
+    return entries.flatMap((entry, index) => (!scope || entry.scope === scope) ? [{
+        index, revision, name: entry.name, kind: entry.kind, text: entry.text,
+        hidden: entry.hidden, canUndo: entry.canUndo, imported: entry.binding.origin === 'snapshot',
+    }] : []);
 }
 
 export function changeMemoryEntry(index, expectedRevision, action, text = '') {

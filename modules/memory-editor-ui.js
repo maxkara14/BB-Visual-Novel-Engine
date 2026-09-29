@@ -62,7 +62,7 @@ export function mountMemoryEditors(root, { getContext, getPersonaKey, confirm, c
                 if (context.chat !== chat || contextKey(context) !== key || getPersonaKey() !== persona
                     || JSON.stringify(context.chat?.map(message => [message.mes, message.swipe_id])) !== scene) throw new Error('EDITOR_STALE');
                 if (changeMemoryEntry(record.index, record.revision, action, value)) {
-                    changed();
+                    changed(record.imported);
                     const refreshed = [...root.querySelectorAll('.bb-memory-editor')].find(node => node.dataset.char === editor.dataset.char);
                     if (refreshed) {
                         refreshed.open = true;

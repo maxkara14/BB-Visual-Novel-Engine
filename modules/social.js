@@ -1,4 +1,6 @@
 import { resetMemoryEditor, trackEditableRecord, applyMemoryEdits } from './memory-editor.js';
+import { resetRelationshipEventEditor, relationshipEventKey, relationshipEventSignature, relationshipEventEdit, trackRelationshipEvent } from './relationship-event-editor.js';
+import { ensureBranchState, recordBranchState } from './branch-state.js';
 import { rememberRelationshipStart } from './relationship-breakdown.js';
 import { t, ui } from './i18n.js';
 import { parseSnapshot } from './snapshot.js';
@@ -1017,6 +1019,7 @@ function ensurePersonaStateShape(scopeState = {}) {
     if (!scopeState.snapshot_restore_state || typeof scopeState.snapshot_restore_state !== 'object') scopeState.snapshot_restore_state = null;
     if (!scopeState.snapshot_post_import_replay_keys || typeof scopeState.snapshot_post_import_replay_keys !== 'object' || Array.isArray(scopeState.snapshot_post_import_replay_keys)) scopeState.snapshot_post_import_replay_keys = {};
     if (!scopeState.snapshot_post_import_pending_swipes || typeof scopeState.snapshot_post_import_pending_swipes !== 'object' || Array.isArray(scopeState.snapshot_post_import_pending_swipes)) scopeState.snapshot_post_import_pending_swipes = {};
+    if (!scopeState.relationship_event_edits || typeof scopeState.relationship_event_edits !== 'object' || Array.isArray(scopeState.relationship_event_edits)) scopeState.relationship_event_edits = {};
     if (!scopeState.label) scopeState.label = getCurrentPersonaLabel();
     return scopeState;
 }
@@ -1113,6 +1116,14 @@ function ensureActivePersonaState() {
 
 export function bindActivePersonaState() {
     const { scopeKey, scopeState, aliasSet, identity, binding } = ensureActivePersonaState();
+    const context = SillyTavern.getContext();
+    const branchStateChanged = ensureBranchState(scopeState, {
+        integrity: chat_metadata.integrity || String(context.chatId || ''),
+        chatLength: context.chat?.length || 0,
+        chat: context.chat,
+        isBranch: Boolean(chat_metadata.main_chat),
+    });
+    if (branchStateChanged) saveChatDebounced();
     const registryWasExpanded = ensureRegistryCoverage(scopeState);
     const suggestionsWereSeeded = seedMergeSuggestionsFromRegistry(scopeState);
     if (registryWasExpanded || suggestionsWereSeeded) {
@@ -1128,6 +1139,17 @@ export function bindActivePersonaState() {
     chat_metadata['bb_vn_merge_suggestions'] = scopeState.merge_suggestions;
     chat_metadata['bb_vn_log_cutoff_index'] = scopeState.log_cutoff_index || 0;
     return { scopeKey, scopeState, aliasSet, identity, binding };
+}
+
+export function recordActivePersonaBranchState(baselineChanged = false) {
+    const { scopeState } = bindActivePersonaState();
+    const context = SillyTavern.getContext();
+    return recordBranchState(scopeState, {
+        integrity: chat_metadata.integrity || String(context.chatId || ''),
+        chatLength: context.chat?.length || 0,
+        chat: context.chat,
+        baselineChanged,
+    });
 }
 
 // A restore window belongs to the chat and persona in which it was opened.
@@ -1229,13 +1251,16 @@ export function importActivePersonaSnapshot(rawSnapshot = '') {
         char_bases: cloneJsonData(snapshotData.char_bases, {}),
         char_bases_romance: cloneJsonData(snapshotData.char_bases_romance, {}),
     };
+    scopeState.snapshot_branch_uncertain = false;
     scopeState.snapshot_cutoff_index = Array.isArray(chat) ? chat.length : 0;
     scopeState.snapshot_post_import_replay_keys = {};
     scopeState.snapshot_post_import_pending_swipes = {};
+    scopeState.snapshot_record_undo = null;
     scopeState.log_cutoff_index = Array.isArray(chat) ? chat.length : 0;
     if (parsedSnapshot?.persona_label) scopeState.label = String(parsedSnapshot.persona_label);
 
     bindActivePersonaState();
+    recordActivePersonaBranchState(true);
     return {
         characters: Object.keys(normalizedCharacters).length,
         cutoffIndex: scopeState.snapshot_cutoff_index,
@@ -1261,14 +1286,17 @@ export function clearActivePersonaSnapshot() {
     }
 
     scopeState.snapshot_baseline = null;
+    scopeState.snapshot_branch_uncertain = false;
     scopeState.snapshot_cutoff_index = 0;
     scopeState.snapshot_restore_state = null;
     scopeState.snapshot_post_import_replay_keys = {};
     scopeState.snapshot_post_import_pending_swipes = {};
+    scopeState.snapshot_record_undo = null;
     if (!restoreState) {
         scopeState.log_cutoff_index = 0;
     }
     bindActivePersonaState();
+    recordActivePersonaBranchState(true);
     return hadSnapshot;
 }
 
@@ -1788,6 +1816,7 @@ export function renameCharacterRecord(fromName = '', toName = '') {
     );
     chat_metadata['bb_vn_merge_suggestions'] = scopeState.merge_suggestions;
 
+    recordActivePersonaBranchState(Boolean(scopeState.snapshot_baseline));
     return {
         ok: true,
         count,
@@ -1963,6 +1992,7 @@ export function mergeCharacterRecords(fromName = '', toName = '') {
     chat_metadata['bb_vn_merge_suggestions'] = scopeState.merge_suggestions;
 
     delete scopeState.char_registry[source.id];
+    recordActivePersonaBranchState(Boolean(scopeState.snapshot_baseline));
     return { ok: true, count, targetName: toPrimary };
 }
 
@@ -2134,7 +2164,7 @@ function filterStaleSceneUpdates(activeUpdates = [], msg = null, idx = -1, chat 
 
     const currentText = stripHiddenSocialDataFromText(msg?.mes || '');
     const sceneScores = collectRecentSceneCharacterScores(chat, idx, scopeState, aliasSet);
-    const meta = activeUpdates.map(update => {
+    const meta = activeUpdates.map((update, updateIndex) => {
         const rawName = String(update?.name || '').trim();
         const canonical = getCanonicalCharacterNameWithoutMutation(rawName, scopeState) || rawName;
         const manualStatus = isManualStatusOverrideUpdate(update);
@@ -2142,7 +2172,9 @@ function filterStaleSceneUpdates(activeUpdates = [], msg = null, idx = -1, chat 
         const known = isKnownTrackedCharacterName(rawName, scopeState);
         const directMention = rawName ? textContainsCharacterReference(currentText, rawName, scopeState) : false;
         const evidence = sceneScores.get(canonical) || 0;
-        return { update, rawName, canonical, manualStatus, debugInjected, known, directMention, evidence };
+        const edited = !!relationshipEventEdit(scopeState,
+            relationshipEventKey(idx, msg?.swipe_id || 0, updateIndex), relationshipEventSignature(update));
+        return { update, rawName, canonical, manualStatus, debugInjected, edited, known, directMention, evidence };
     });
 
     const hasPotentialNewCharacter = meta.some(item => item.rawName && !item.known);
@@ -2153,7 +2185,7 @@ function filterStaleSceneUpdates(activeUpdates = [], msg = null, idx = -1, chat 
 
     const dropped = [];
     const filtered = meta.filter(item => {
-        if (item.manualStatus || item.debugInjected) return true;
+        if (item.manualStatus || item.debugInjected || item.edited) return true;
         if (!item.known) return true;
         if (item.directMention || item.evidence > 0) return true;
         dropped.push(item);
@@ -2227,7 +2259,7 @@ export function getCombinedSocial() {
         combinedStr += `1. Behavior: Dialogue and actions must strictly match the Status and Relationship Tier.\n`;
         combinedStr += `2. Memory: Characters must act based on 'Recent' (short-term mood) and 'Unforgettable' (permanent emotional anchor) memories.\n`;
         combinedStr += `3. Profile Notes: If a character has a Profile note, treat it as active supporting canon for this scene.\n`;
-        combinedStr += `4. Name Consistency: For already tracked characters, prefer these canonical names when they are actually relevant to the current scene: ${characters.join(', ')}.\n`;
+        combinedStr += `4. Name Consistency: For already tracked characters relevant to the current scene, use these exact canonical names in <name>: ${characters.join(', ')}.\n`;
         combinedStr += `5. New Character Rule: If a genuinely new person appears in this specific turn and they are not one of the tracked names above, you MAY add a new character instead of forcing them into an old identity.`;
 
         if (impactInstructions.length > 0) {
@@ -2666,7 +2698,8 @@ export async function handleNewCharacterInterviews(chars) {
 }
 
 export function recalculateAllStats(isNewMessage = false) {
-    resetMemoryEditor();
+    resetMemoryEditor(SillyTavern.getContext().chat);
+    resetRelationshipEventEditor(SillyTavern.getContext().chat);
     if (extension_settings[MODULE_NAME]?.disableRelationshipTracker === true) {
         setCurrentCalculatedStats({});
         currentStoryMoments.length = 0;
@@ -2678,6 +2711,7 @@ export function recalculateAllStats(isNewMessage = false) {
     const recentRelationshipUpdateIndexes = new Map();
     const recentRelationshipUpdates = [];
     let needsSave = purgeUserPersonaTracking(scopeState);
+    if (needsSave && scopeState.snapshot_baseline) recordActivePersonaBranchState(true);
     setCurrentCalculatedStats(newStats);
     currentStoryMoments.length = 0;
     const snapshotBaseline = scopeState.snapshot_baseline && typeof scopeState.snapshot_baseline === 'object'
@@ -2710,12 +2744,12 @@ export function recalculateAllStats(isNewMessage = false) {
             const sources = new Map((stats.memories?.[kind] || []).map(record => [buildMemoryEntryDedupKey(record), record]));
             for (const record of normalizedStats.memories[kind]) {
                 const source = sources.get(buildMemoryEntryDedupKey(record));
-                if (source) trackEditableRecord(record, source, 'memory', 'text');
+                if (source) trackEditableRecord(record, source, 'memory', 'text', 'snapshot');
             }
         }
         let traitIndex = 0;
         for (const source of stats.core_traits || []) {
-            if (normalizeImportedTraitEntry(source)) trackEditableRecord(normalizedStats.core_traits[traitIndex++], source, 'trait', 'trait');
+            if (normalizeImportedTraitEntry(source)) trackEditableRecord(normalizedStats.core_traits[traitIndex++], source, 'trait', 'trait', 'snapshot');
         }
         const currentBase = parseInt(chat_metadata['bb_vn_char_bases']?.[safeName], 10);
         const importedBase = parseInt(baselineBaseMap?.[safeName], 10);
@@ -2911,7 +2945,7 @@ export function recalculateAllStats(isNewMessage = false) {
                 return 0;
             };
 
-            activeUpdates.forEach(update => {
+            activeUpdates.forEach((update, updateIndex) => {
                 if (update.scope && !aliasSet.has(update.scope)) return;
                 if (!update.scope || update.scope !== scopeKey) {
                     update.scope = scopeKey;
@@ -2931,6 +2965,16 @@ export function recalculateAllStats(isNewMessage = false) {
                 if (!charName || isCollectiveEntityName(charName) || isUserPersonaCharacterName(charName)) return;
                 if (chat_metadata['bb_vn_ignored_chars'].includes(charName)) return;
 
+                const sourceUpdate = update;
+                const eventKey = relationshipEventKey(idx, swipeId, updateIndex);
+                const eventSignature = relationshipEventSignature(sourceUpdate);
+                const eventEdit = relationshipEventEdit(scopeState, eventKey, eventSignature);
+                if (eventEdit) update = {
+                    ...sourceUpdate,
+                    reason: typeof eventEdit.reason === 'string' ? eventEdit.reason : sourceUpdate.reason,
+                    emotion: typeof eventEdit.mood === 'string' ? eventEdit.mood : (sourceUpdate.emotion || sourceUpdate.moodlet),
+                };
+
                 let f_delta = parseImpactDelta(update.friendship_impact || update.impact_level, FRIENDSHIP_IMPACT_MAP);
                 let r_delta = parseImpactDelta(update.romance_impact || update.romantic_impact || update.love_impact, ROMANCE_IMPACT_MAP);
                 if (!chat_metadata['bb_vn_platonic_chars']) chat_metadata['bb_vn_platonic_chars'] = [];
@@ -2938,24 +2982,40 @@ export function recalculateAllStats(isNewMessage = false) {
 
                 const currentStatus = update.role_dynamic || update.status || ""; 
                 const currentEmotion = update.emotion || update.moodlet || "";
-                const normalizedMixedDelta = normalizeMixedAffinityRomanceDeltas(
-                    f_delta,
-                    r_delta,
-                    update.reason || "",
-                    currentEmotion,
-                    currentStatus,
-                );
-                f_delta = normalizedMixedDelta.friendshipDelta;
-                r_delta = normalizedMixedDelta.romanceDelta;
+                const hasScoreOverride = Number.isInteger(eventEdit?.friendshipDelta) && Number.isInteger(eventEdit?.romanceDelta);
+                if (hasScoreOverride) {
+                    f_delta = eventEdit.friendshipDelta;
+                    r_delta = chat_metadata['bb_vn_platonic_chars'].includes(charName) ? 0 : eventEdit.romanceDelta;
+                } else {
+                    const normalizedMixedDelta = normalizeMixedAffinityRomanceDeltas(
+                        f_delta, r_delta, update.reason || "", currentEmotion, currentStatus,
+                    );
+                    f_delta = normalizedMixedDelta.friendshipDelta;
+                    r_delta = normalizedMixedDelta.romanceDelta;
+                }
+
+                const trackEditorEntry = disabled => trackRelationshipEvent(scopeState, chat, {
+                    scopeKey, key: eventKey, signature: eventSignature, sourceUpdate,
+                    messageIndex: idx, swipeId, name: charName,
+                    reason: update.reason || '', mood: sanitizeMoodlet(currentEmotion),
+                    friendshipDelta: f_delta, romanceDelta: r_delta,
+                    time: getRelationshipEventTimestamp(update, msg), disabled,
+                    canUndo: Array.isArray(eventEdit?.undo) && eventEdit.undo.length > 0,
+                });
+                if (eventEdit?.disabled === true) {
+                    trackEditorEntry(true);
+                    return;
+                }
 
                 const isManualStatusOverride = isManualStatusOverrideUpdate(update, currentEmotion);
                 const isDebugInjected = isDebugInjectedUpdate(update);
-                const repeatedUpdateKey = (isManualStatusOverride || isDebugInjected) ? '' : buildRecentRelationshipRepeatKey(charName, f_delta, r_delta, update.reason || '');
+                const manuallyEdited = hasScoreOverride || typeof eventEdit?.reason === 'string' || typeof eventEdit?.mood === 'string';
+                const repeatedUpdateKey = (isManualStatusOverride || isDebugInjected || manuallyEdited) ? '' : buildRecentRelationshipRepeatKey(charName, f_delta, r_delta, update.reason || '');
                 const previousRepeatIndex = repeatedUpdateKey ? recentRelationshipUpdateIndexes.get(repeatedUpdateKey) : undefined;
                 if (repeatedUpdateKey && previousRepeatIndex !== undefined && (idx - previousRepeatIndex) <= RECENT_RELATION_UPDATE_REPEAT_WINDOW) {
                     return;
                 }
-                const semanticallyRepeatedUpdate = (isManualStatusOverride || isDebugInjected) ? null : findRecentSemanticallyRepeatedUpdate(recentRelationshipUpdates, {
+                const semanticallyRepeatedUpdate = (isManualStatusOverride || isDebugInjected || manuallyEdited) ? null : findRecentSemanticallyRepeatedUpdate(recentRelationshipUpdates, {
                     charName,
                     friendshipDelta: f_delta,
                     romanceDelta: r_delta,
@@ -2964,6 +3024,7 @@ export function recalculateAllStats(isNewMessage = false) {
                 if (semanticallyRepeatedUpdate) {
                     return;
                 }
+                trackEditorEntry(false);
                 
                 if (!newStats[charName]) {
                     let base = 0, baseRomance = 0, isBrandNew = false;
@@ -3025,7 +3086,7 @@ export function recalculateAllStats(isNewMessage = false) {
                     });
                 }
                 recordedImpacts.forEach(impact => {
-                    appendCharacterMemory(newStats[charName], impact.delta, update.reason || "", moodlet, { allowDuplicate: isDebugInjected, source: update });
+                    appendCharacterMemory(newStats[charName], impact.delta, update.reason || "", moodlet, { allowDuplicate: isDebugInjected, source: sourceUpdate });
                 });
 
                 const previousTier = getTierInfo(previousAffinity).label;
@@ -3119,6 +3180,7 @@ export function recalculateAllStats(isNewMessage = false) {
     else delete chat_metadata['bb_vn_choice_context'];
 
     saveActivePersonaCutoff();
+    if (recordActivePersonaBranchState()) needsSave = true;
     if (needsSave) saveChatDebounced();
     injectCombinedSocialPrompt();
     renderHudCallback();

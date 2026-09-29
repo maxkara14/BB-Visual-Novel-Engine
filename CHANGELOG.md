@@ -4,6 +4,14 @@
 
 ## Русский
 
+### Микрообновление — 28 сентября 2026 (без изменения версии)
+
+- Новые ветки чата восстанавливают основу отношений на выбранном сообщении. Последующие импорты и правки родительского чата не попадают в более раннюю ветку.
+- В разделе «Данные» появился единый редактор отношений: память и черты чата или импорта можно править и скрывать; лишних персонажей, записи журнала и моменты можно удалять из импортированной основы. Доступны поиск, предпросмотр и отмена.
+- Изменения отношений из чата тоже доступны в редакторе: правка причины, эмоции и баллов или отключение события пересчитывает отношения, память и журнал для выбранного свайпа. Правки учитываются при создании веток.
+- Вкладка «Персонажи» показывает персонажей текущего чата даже при нулевых баллах отношений.
+- Для старых чатов без истории ревизий показано предупреждение, если точное состояние ветки не может быть подтверждено.
+
 ### 3.2.2 — 2026-09-23
 
 - Добавлены перемещаемые язычки VNE и Scene Director: их можно двигать вверх и вниз, а выбранная позиция сохраняется.
@@ -52,6 +60,14 @@
 Источник: [78557dc](https://github.com/maxkara14/BB-Visual-Novel-Engine/commit/78557dc), включая версию в manifest. Более ранняя история здесь не реконструирована.
 
 ## English
+
+### Minor update — September 28, 2026 (no version change)
+
+- New chat branches restore the relationship baseline at the selected message. Later imports and edits in the parent do not carry into an earlier branch.
+- Data now has one relationship editor: edit or hide chat and imported memories and traits, or remove unwanted characters, journal entries, and moments from the imported baseline. Search, preview, and undo are available.
+- Chat relationship changes can also be edited: changing the reason, emotion, or scores, or disabling an event, recalculates relationships, memories, and the journal for the selected swipe. Branches retain edits at their selected message.
+- The Characters filter includes current chat characters even when their relationship scores are zero.
+- Older chats without revision history show a warning when the exact branch state cannot be verified.
 
 ### 3.2.2 — 2026-09-23
 

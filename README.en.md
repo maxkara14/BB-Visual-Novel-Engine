@@ -65,7 +65,7 @@ Search, sorting and compact view help navigate a growing cast. **Hidden · N** o
 
 Edit a character's name, avatar and description. **From template** builds a description from available sources; customize the shared instructions under **Language and replies → Character description prompt**.
 
-The **memory and trait editor** lets you edit text and hide entries with undo. These edits do not change relationship scores or original events.
+The unified **relationship editor** is under **Data** in the settings. Search entries; edit chat relationship changes (reason, emotion, trust, and attraction); edit or hide memories and traits; and remove unwanted characters, journal entries, and moments from the imported baseline. Editing an event recalculates scores, memories, and the journal. Editing a memory or trait alone does not change scores or the source event.
 
 ## 🖼️ Portraits and gallery
 
@@ -113,6 +113,10 @@ Interface language and the language of new replies are independent. Existing des
 Export saves the active persona's relationships, memories, traits, descriptions and avatars. Import **replaces the relationship baseline** instead of adding two sets together. Chat messages remain intact.
 
 **Remove imported baseline** restores the baseline from before the first import and recalculates the current chat history. It does not roll back messages.
+
+A new branch receives relationship state at the selected message. Later imports and edits in the parent chat do not carry into an earlier branch. VNE warns when an older chat lacks the revision history needed to verify the exact state.
+
+**Data → Relationship editor** labels each entry as chat or import. Disabling a chat change removes its contribution to scores, memories, and the journal for the selected swipe; it can be undone. Removing a character from the imported baseline can change base scores, while removing a journal entry or moment does not change scores. Event edits follow chat branches at the selected message.
 
 The portrait gallery is stored separately: moving it requires chat metadata and SillyTavern image files. Removing a gallery entry does not delete its disk file.
 

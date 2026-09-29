@@ -1,7 +1,6 @@
 import { mountHiddenCharactersButton } from './hidden-characters-ui.js';
 import { openPortraitWorkshop } from './portrait-ui.js';
 import { mountCharacterToolbar, syncCharacterToolbarContext } from './character-toolbar.js';
-import { buildMemoryEditorHtml, mountMemoryEditors } from './memory-editor-ui.js';
 import { refreshSnapshotControls } from './snapshot-controls.js';
 import { buildRelationshipBreakdownHtml } from './relationship-breakdown.js';
 import { t, ui, templateText, template } from './i18n.js';
@@ -628,7 +627,6 @@ function buildCharacterCardHtml(charName = '') {
             </div>
             <div class="bb-char-body">
                 ${relationshipBreakdownHtml(stats, charName)}
-                ${buildMemoryEditorHtml(charName)}
                 <div class="bb-char-route-meta">
                     <div class="bb-char-meta-card"><span class="bb-char-meta-label">Последний сдвиг</span><strong style="color: ${lastShift ? lastShift.color : '#f8fafc'};">${escapeHtml(lastShift ? lastShift.full : t('Без сдвига'))}</strong></div>
                     <div class="bb-char-meta-card"><span class="bb-char-meta-label">Динамика</span><strong style="color: #cbd5e1;">${escapeHtml(t(getTrendNarrative(stats.history || [])))}</strong></div>
@@ -867,7 +865,6 @@ export function renderSocialHud() {
                                     </div>
                                 </div>
                                 ${relationshipBreakdownHtml(stats, charName)}
-                                ${buildMemoryEditorHtml(charName)}
                 <div class="bb-char-route-meta">
                                     <div class="bb-char-meta-card"><span class="bb-char-meta-label">Последний сдвиг</span><strong style="color: ${lastShift ? lastShift.color : '#f8fafc'};">${escapeHtml(lastShiftPoints)}</strong></div>
                                     <div class="bb-char-meta-card"><span class="bb-char-meta-label">Динамика</span><strong style="color: #cbd5e1;">${escapeHtml(t(getTrendNarrative(stats.history || [])))}</strong></div>
@@ -909,19 +906,8 @@ export function renderSocialHud() {
             `;
 
             mountCharacterToolbar(charsBox, currentCalculatedStats, extension_settings[MODULE_NAME], context, getCurrentPersonaScopeKey(), saveSettingsDebounced);
-            mountMemoryEditors(charsBox, {
-                getContext: () => SillyTavern.getContext(),
-                getPersonaKey: getCurrentPersonaScopeKey,
-                confirm: async text => {
-                    setHudPopupPriority(true);
-                    try { return await SillyTavern.getContext().callPopup(escapeHtml(text), 'confirm'); }
-                    finally { setHudPopupPriority(false); }
-                },
-                changed: () => { saveChatDebounced(); recalculateAllStats(false); },
-                error: notifyError,
-            });
             jQuery('.bb-char-card').off('click').on('click', function(e) {
-                if (jQuery(e.target).closest('.bb-char-edit-btn, .bb-char-editor, .bb-char-body, .bb-relationship-breakdown, .bb-memory-editor, .bb-btn-crystallize-pos, .bb-btn-crystallize-neg').length) return;
+                if (jQuery(e.target).closest('.bb-char-edit-btn, .bb-char-editor, .bb-char-body, .bb-relationship-breakdown, .bb-btn-crystallize-pos, .bb-btn-crystallize-neg').length) return;
                 const card = jQuery(this);
                 setCharacterCardExpanded(card, !card.hasClass('expanded'));
             });
