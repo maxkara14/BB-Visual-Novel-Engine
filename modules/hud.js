@@ -1334,12 +1334,14 @@ export function ensureHudContainer() {
     const hudHtml = ui`
         <button type="button" id="bb-social-hud-backdrop" aria-label="Закрыть HUD"></button>
         <button type="button" id="bb-social-hud-mobile-launcher" aria-label="Открыть HUD"><i class="fa-solid fa-users-viewfinder"></i><span>VNE</span></button>
-        <div id="bb-social-hud">
-            <div id="bb-social-hud-toggle" title="VNE HUD"><i class="fa-solid fa-users-viewfinder"></i><span class="bb-toggle-label">VNE</span><i class="fa-solid fa-chevron-left" id="bb-hud-arrow"></i></div>
-            <div class="bb-hud-header"><div class="bb-hud-header-top"><span class="bb-hud-badge">Visual Novel Engine</span><div class="bb-hud-status-row"><span class="bb-hud-live-dot"><i class="fa-solid fa-circle"></i> активно</span><button type="button" class="bb-hud-mobile-close" aria-label="Закрыть HUD"><i class="fa-solid fa-xmark"></i></button></div></div><div class="bb-hud-title">VNE</div><div class="bb-hud-subtitle">связи · журнал · дневник событий</div></div>
-            <div class="bb-hud-tabs"><div class="bb-hud-tab active" data-tab="chars"><i class="fa-solid fa-heart-pulse"></i><span>Связи</span></div><div class="bb-hud-tab" data-tab="log"><i class="fa-solid fa-terminal"></i><span>Система</span></div><div class="bb-hud-tab" data-tab="moments"><i class="fa-solid fa-book-open"></i><span>Дневник</span></div></div>
-            <div class="bb-hud-content active" id="bb-hud-chars"></div><div class="bb-hud-content" id="bb-hud-log"></div><div class="bb-hud-content" id="bb-hud-moments"></div>
+        <div id="bb-social-hud-viewport">
+            <div id="bb-social-hud">
+                <div class="bb-hud-header"><div class="bb-hud-header-top"><span class="bb-hud-badge">Visual Novel Engine</span><div class="bb-hud-status-row"><span class="bb-hud-live-dot"><i class="fa-solid fa-circle"></i> активно</span><button type="button" class="bb-hud-mobile-close" aria-label="Закрыть HUD"><i class="fa-solid fa-xmark"></i></button></div></div><div class="bb-hud-title">VNE</div><div class="bb-hud-subtitle">связи · журнал · дневник событий</div></div>
+                <div class="bb-hud-tabs"><div class="bb-hud-tab active" data-tab="chars"><i class="fa-solid fa-heart-pulse"></i><span>Связи</span></div><div class="bb-hud-tab" data-tab="log"><i class="fa-solid fa-terminal"></i><span>Система</span></div><div class="bb-hud-tab" data-tab="moments"><i class="fa-solid fa-book-open"></i><span>Дневник</span></div></div>
+                <div class="bb-hud-content active" id="bb-hud-chars"></div><div class="bb-hud-content" id="bb-hud-log"></div><div class="bb-hud-content" id="bb-hud-moments"></div>
+            </div>
         </div>
+        <div id="bb-social-hud-toggle" title="VNE HUD"><i class="fa-solid fa-users-viewfinder"></i><span class="bb-toggle-label">VNE</span><i class="fa-solid fa-chevron-left" id="bb-hud-arrow"></i></div>
     `;
     jQuery('body').append(hudHtml);
 
@@ -1375,6 +1377,8 @@ export function ensureHudContainer() {
             const progress = Math.max(0, Math.min(1, dragState.startOpen ? 1 - (deltaX / panelWidth) : -deltaX / panelWidth));
             hud.classList.add('is-panel-dragging');
             hud.style.setProperty('--bb-social-drag-progress', String(progress));
+            toggle.classList.add('is-panel-dragging');
+            toggle.style.setProperty('--bb-social-drag-progress', String(progress));
             return;
         }
         toggle.classList.add('is-dragging');
@@ -1394,6 +1398,8 @@ export function ensureHudContainer() {
             toggle.dataset.dragged = 'true';
         }
         toggle.classList.remove('is-dragging');
+        toggle.classList.remove('is-panel-dragging');
+        toggle.style.removeProperty('--bb-social-drag-progress');
         hud.classList.remove('is-panel-dragging');
         dragState = null;
     };

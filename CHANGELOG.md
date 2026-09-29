@@ -4,6 +4,10 @@
 
 ## Русский
 
+### Микрообновление — 29 сентября 2026 (без изменения версии)
+
+- Панель VNE ограничена областью экрана при закрытии и перетаскивании. Язычок вынесен из выезжающей шторки и остаётся у правого края на мобильных браузерах.
+
 ### Микрообновление — 28 сентября 2026 (без изменения версии)
 
 - Новые ветки чата восстанавливают основу отношений на выбранном сообщении. Последующие импорты и правки родительского чата не попадают в более раннюю ветку.
@@ -60,6 +64,10 @@
 Источник: [78557dc](https://github.com/maxkara14/BB-Visual-Novel-Engine/commit/78557dc), включая версию в manifest. Более ранняя история здесь не реконструирована.
 
 ## English
+
+### Minor update — September 29, 2026 (no version change)
+
+- The VNE panel is clipped to the viewport while closed or dragged. Its tab now sits outside the sliding panel and stays at the right edge on mobile browsers.
 
 ### Minor update — September 28, 2026 (no version change)
 
