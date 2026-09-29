@@ -39,6 +39,7 @@ import { normalizeRequestError } from './requests.js';
 
 const HUD_VISIBILITY_RETRY_MS = 120;
 let hudVisibilityRetryTimer = null;
+let hudExitTimer = null;
 const AVATAR_OUTPUT_WIDTH = 432;
 const AVATAR_OUTPUT_HEIGHT = 528;
 const AVATAR_PREVIEW_WIDTH = 216;
@@ -72,10 +73,8 @@ function hasContextInitialized(context) {
 
 function hasActiveChatContext(context) {
     const chatId = context?.chatId;
-    const hasValidChatId = typeof chatId === 'number'
+    return typeof chatId === 'number'
         || (typeof chatId === 'string' && chatId.trim().length > 0);
-    const hasChatMessages = Array.isArray(context?.chat) && context.chat.length > 0;
-    return hasValidChatId || hasChatMessages;
 }
 
 function isDevModeEnabled() {
@@ -1256,8 +1255,7 @@ export function renderSocialHud() {
 
 export function updateHudVisibility() {
     if (extension_settings[MODULE_NAME]?.disableRelationshipTracker === true) {
-        jQuery('#bb-social-hud-toggle, #bb-social-hud-mobile-launcher').hide();
-        closeSocialHud();
+        setHudChatVisibility(false);
         return;
     }
     const context = SillyTavern.getContext();
@@ -1290,8 +1288,7 @@ export function updateHudVisibility() {
             : 'direct';
     const shouldShowHud = hasActiveChatContext(context);
 
-    if (shouldShowHud) { jQuery('#bb-social-hud-toggle, #bb-social-hud-mobile-launcher').show(); } 
-    else { jQuery('#bb-social-hud-toggle, #bb-social-hud-mobile-launcher').hide(); closeSocialHud(); }
+    setHudChatVisibility(shouldShowHud);
 
     if (isDevModeEnabled()) {
         console.debug('[BB VN][debug] HUD visibility updated', {
@@ -1303,6 +1300,34 @@ export function updateHudVisibility() {
         });
     }
     syncToastContainerWithHud();
+}
+
+function setHudChatVisibility(visible) {
+    if (visible) {
+        clearTimeout(hudExitTimer);
+        hudExitTimer = null;
+        document.body.classList.remove('bb-social-chat-leaving');
+        document.body.classList.add('bb-social-chat-visible');
+        return;
+    }
+    if (hudExitTimer) return;
+    const hud = document.getElementById('bb-social-hud');
+    const wasOpen = hud?.classList.contains('open') || hud?.classList.contains('is-panel-dragging');
+    closeSocialHud();
+    if (!document.body.classList.contains('bb-social-chat-visible')) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        document.body.classList.remove('bb-social-chat-visible');
+        return;
+    }
+    const fadeTab = () => {
+        document.body.classList.add('bb-social-chat-leaving');
+        hudExitTimer = setTimeout(() => {
+            hudExitTimer = null;
+            document.body.classList.remove('bb-social-chat-visible', 'bb-social-chat-leaving');
+        }, 200);
+    };
+    if (wasOpen) hudExitTimer = setTimeout(fadeTab, 340);
+    else fadeTab();
 }
 
 export function openSocialHud() {
@@ -1334,12 +1359,10 @@ export function ensureHudContainer() {
     const hudHtml = ui`
         <button type="button" id="bb-social-hud-backdrop" aria-label="Закрыть HUD"></button>
         <button type="button" id="bb-social-hud-mobile-launcher" aria-label="Открыть HUD"><i class="fa-solid fa-users-viewfinder"></i><span>VNE</span></button>
-        <div id="bb-social-hud-viewport">
-            <div id="bb-social-hud">
-                <div class="bb-hud-header"><div class="bb-hud-header-top"><span class="bb-hud-badge">Visual Novel Engine</span><div class="bb-hud-status-row"><span class="bb-hud-live-dot"><i class="fa-solid fa-circle"></i> активно</span><button type="button" class="bb-hud-mobile-close" aria-label="Закрыть HUD"><i class="fa-solid fa-xmark"></i></button></div></div><div class="bb-hud-title">VNE</div><div class="bb-hud-subtitle">связи · журнал · дневник событий</div></div>
-                <div class="bb-hud-tabs"><div class="bb-hud-tab active" data-tab="chars"><i class="fa-solid fa-heart-pulse"></i><span>Связи</span></div><div class="bb-hud-tab" data-tab="log"><i class="fa-solid fa-terminal"></i><span>Система</span></div><div class="bb-hud-tab" data-tab="moments"><i class="fa-solid fa-book-open"></i><span>Дневник</span></div></div>
-                <div class="bb-hud-content active" id="bb-hud-chars"></div><div class="bb-hud-content" id="bb-hud-log"></div><div class="bb-hud-content" id="bb-hud-moments"></div>
-            </div>
+        <div id="bb-social-hud">
+            <div class="bb-hud-header"><div class="bb-hud-header-top"><span class="bb-hud-badge">Visual Novel Engine</span><div class="bb-hud-status-row"><span class="bb-hud-live-dot"><i class="fa-solid fa-circle"></i> активно</span><button type="button" class="bb-hud-mobile-close" aria-label="Закрыть HUD"><i class="fa-solid fa-xmark"></i></button></div></div><div class="bb-hud-title">VNE</div><div class="bb-hud-subtitle">связи · журнал · дневник событий</div></div>
+            <div class="bb-hud-tabs"><div class="bb-hud-tab active" data-tab="chars"><i class="fa-solid fa-heart-pulse"></i><span>Связи</span></div><div class="bb-hud-tab" data-tab="log"><i class="fa-solid fa-terminal"></i><span>Система</span></div><div class="bb-hud-tab" data-tab="moments"><i class="fa-solid fa-book-open"></i><span>Дневник</span></div></div>
+            <div class="bb-hud-content active" id="bb-hud-chars"></div><div class="bb-hud-content" id="bb-hud-log"></div><div class="bb-hud-content" id="bb-hud-moments"></div>
         </div>
         <div id="bb-social-hud-toggle" title="VNE HUD"><i class="fa-solid fa-users-viewfinder"></i><span class="bb-toggle-label">VNE</span><i class="fa-solid fa-chevron-left" id="bb-hud-arrow"></i></div>
     `;

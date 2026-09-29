@@ -6,7 +6,8 @@
 
 ### Микрообновление — 29 сентября 2026 (без изменения версии)
 
-- Панель VNE ограничена областью экрана при закрытии и перетаскивании. Язычок вынесен из выезжающей шторки и остаётся у правого края на мобильных браузерах.
+- Язычок VNE вынесен из выезжающей панели для совместимости с мобильной Opera; его анимация синхронизирована с панелью.
+- Вне чата панель и язычок скрыты. При входе язычок плавно появляется; при выходе открытая панель задвигается вместе с ним, затем язычок гаснет. Оставшиеся в контексте сообщения больше не удерживают панель открытой.
 
 ### Микрообновление — 28 сентября 2026 (без изменения версии)
 
@@ -67,7 +68,8 @@
 
 ### Minor update — September 29, 2026 (no version change)
 
-- The VNE panel is clipped to the viewport while closed or dragged. Its tab now sits outside the sliding panel and stays at the right edge on mobile browsers.
+- The VNE tab sits outside the sliding panel for mobile Opera compatibility, with its animation synchronized to the panel.
+- The panel and tab stay hidden outside chats. The tab fades in on entry; on exit, an open panel slides closed with the tab before it fades out. Retained messages no longer keep the panel open after leaving a chat.
 
 ### Minor update — September 28, 2026 (no version change)
 

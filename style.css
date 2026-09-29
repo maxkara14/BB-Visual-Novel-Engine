@@ -221,18 +221,6 @@
    HUD: БОКОВАЯ ПАНЕЛЬ (SOCIAL LINK)
 ========================================= */
 :root { --bb-social-panel-width: 390px; }
-#bb-social-hud-viewport {
-    position: fixed;
-    inset: 0;
-    overflow: hidden;
-    overflow: clip;
-    pointer-events: none;
-    z-index: 890;
-}
-#bb-social-hud-viewport > #bb-social-hud {
-    position: absolute;
-    pointer-events: auto;
-}
 #bb-social-hud {
     position: fixed; top: 0; right: 0;
     width: var(--bb-social-panel-width); height: 100vh;
@@ -255,6 +243,10 @@
 #bb-social-hud.open { 
     transform: translateX(0); 
 }
+body:not(.bb-social-chat-visible) #bb-social-hud {
+    visibility: hidden;
+    pointer-events: none;
+}
 #bb-social-hud.is-panel-dragging {
     transform: translateX(calc((1 - var(--bb-social-drag-progress, 0)) * 100%));
     transition: none;
@@ -263,9 +255,6 @@
 body.bb-hud-popup-active #bb-social-hud,
 body.bb-hud-popup-active #bb-social-hud-backdrop,
 body.bb-hud-popup-active #bb-social-toast-container {
-    z-index: 700 !important;
-}
-body.bb-hud-popup-active #bb-social-hud-viewport {
     z-index: 700 !important;
 }
 body.bb-hud-popup-active #bb-social-hud-toggle {
@@ -327,10 +316,22 @@ body.bb-hud-popup-active #bb-social-hud-toggle {
     box-shadow: -6px 0 16px rgba(0,0,0,0.24);
     display: flex; flex-direction: column; align-items: center; gap: 8px;
     backdrop-filter: blur(6px); opacity: 0.62;
-    transition: background 0.2s, color 0.2s, transform 0.2s, opacity 0.2s;
+    transition: background 0.2s, color 0.2s, transform 0.34s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s;
     overflow: hidden;
     touch-action: none;
     user-select: none;
+}
+body.bb-social-chat-visible #bb-social-hud-toggle {
+    visibility: visible;
+}
+body:not(.bb-social-chat-visible) #bb-social-hud-toggle {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+}
+body.bb-social-chat-leaving #bb-social-hud-toggle {
+    opacity: 0;
+    pointer-events: none;
 }
 body.bb-social-hud-active #bb-social-hud-toggle {
     transform: translateX(calc(-1 * var(--bb-social-panel-width)));
@@ -349,14 +350,20 @@ body #bb-social-hud-toggle.is-panel-dragging {
     width: 2px;
     background: inherit;
 }
-#bb-social-hud-toggle:hover,
-#bb-social-hud-toggle:focus-visible {
+body.bb-social-chat-visible:not(.bb-social-chat-leaving) #bb-social-hud-toggle:hover,
+body.bb-social-chat-visible:not(.bb-social-chat-leaving) #bb-social-hud-toggle:focus-visible {
     background: linear-gradient(180deg, rgba(22, 30, 46, 0.9), rgba(46, 30, 62, 0.88));
     color: #fff;
     opacity: 0.95;
 }
-#bb-social-hud-toggle.bb-toggle-idle:not(:hover):not(:focus-visible) {
+body.bb-social-chat-visible:not(.bb-social-chat-leaving) #bb-social-hud-toggle.bb-toggle-idle:not(:hover):not(:focus-visible) {
     opacity: 0.35;
+}
+@media (prefers-reduced-motion: reduce) {
+    #bb-social-hud,
+    #bb-social-hud-toggle {
+        transition: none !important;
+    }
 }
 #bb-hud-arrow { font-size: 11px; }
 .bb-toggle-label {
@@ -1464,9 +1471,6 @@ body #bb-social-hud-toggle.is-panel-dragging {
     body.bb-social-hud-active {
         overflow: hidden;
         touch-action: none;
-    }
-    body.bb-social-hud-active #bb-social-hud-viewport {
-        z-index: 9999;
     }
     body.bb-social-hud-active #bb-social-hud-toggle {
         z-index: 10000;
