@@ -231,27 +231,26 @@
     backdrop-filter: blur(20px);
     border-left: 1px solid rgba(148, 163, 184, 0.12);
     box-shadow: -24px 0 50px rgba(0,0,0,0.34);
-    z-index: 890; /* В ЗАКРЫТОМ ВИДЕ СЛАБЕЕ ПАНЕЛИ ТАВЕРНЫ */
-    transform: translateX(calc((1 - var(--bb-social-drag-progress, 0)) * 100%));
-    transition: transform 0.34s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 890;
+    clip-path: inset(0 0 0 100%);
     display: flex; flex-direction: column;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     box-sizing: border-box; 
     padding-top: 48px; 
-    overflow: visible;
+    overflow: hidden;
 }
-#bb-social-hud.open { 
-    transform: translateX(0); 
+.bb-hud-slide-content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+    transform: translateX(100%);
 }
 body:not(.bb-social-chat-visible) #bb-social-hud {
     visibility: hidden;
     pointer-events: none;
 }
-#bb-social-hud.is-panel-dragging {
-    transform: translateX(calc((1 - var(--bb-social-drag-progress, 0)) * 100%));
-    transition: none;
-}
-
 body.bb-hud-popup-active #bb-social-hud,
 body.bb-hud-popup-active #bb-social-hud-backdrop,
 body.bb-hud-popup-active #bb-social-toast-container {
@@ -316,7 +315,7 @@ body.bb-hud-popup-active #bb-social-hud-toggle {
     box-shadow: -6px 0 16px rgba(0,0,0,0.24);
     display: flex; flex-direction: column; align-items: center; gap: 8px;
     backdrop-filter: blur(6px); opacity: 0.62;
-    transition: background 0.2s, color 0.2s, transform 0.34s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s;
+    transition: background 0.2s, color 0.2s, opacity 0.2s;
     overflow: hidden;
     touch-action: none;
     user-select: none;
@@ -332,13 +331,6 @@ body:not(.bb-social-chat-visible) #bb-social-hud-toggle {
 body.bb-social-chat-leaving #bb-social-hud-toggle {
     opacity: 0;
     pointer-events: none;
-}
-body.bb-social-hud-active #bb-social-hud-toggle {
-    transform: translateX(calc(-1 * var(--bb-social-panel-width)));
-}
-body #bb-social-hud-toggle.is-panel-dragging {
-    transform: translateX(calc(-1 * var(--bb-social-panel-width) * var(--bb-social-drag-progress, 0)));
-    transition: none;
 }
 #bb-social-hud-toggle.is-dragging { cursor: grabbing; transition: none; }
 #bb-social-hud-toggle::after {
@@ -360,7 +352,6 @@ body.bb-social-chat-visible:not(.bb-social-chat-leaving) #bb-social-hud-toggle.b
     opacity: 0.35;
 }
 @media (prefers-reduced-motion: reduce) {
-    #bb-social-hud,
     #bb-social-hud-toggle {
         transition: none !important;
     }
@@ -1485,15 +1476,12 @@ body.bb-social-chat-visible:not(.bb-social-chat-leaving) #bb-social-hud-toggle.b
         border-left: none;
         box-shadow: none;
         padding-top: 0;
-        overflow: visible;
-        z-index: 890; 
-        /* ФИКС: Плавный z-index, чтобы панель не прыгала под бар при закрытии */
-        transition: transform 0.34s cubic-bezier(0.4, 0, 0.2, 1), z-index 0s 0.34s;
+        overflow: hidden;
+        transition: z-index 0s 0.34s;
     }
-    
     #bb-social-hud.open {
-        z-index: 9999; 
-        transition: transform 0.34s cubic-bezier(0.4, 0, 0.2, 1), z-index 0s;
+        z-index: 9999;
+        transition: z-index 0s;
     }
 
     /* === ФИКС: Прячем надпись VNE на мобильном язычке === */

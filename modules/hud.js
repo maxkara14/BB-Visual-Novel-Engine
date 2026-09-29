@@ -1330,25 +1330,61 @@ function setHudChatVisibility(visible) {
     else fadeTab();
 }
 
+let hudSlideProgress = 0;
+let hudSlideFrame = null;
+
+function stopHudSlideAnimation() {
+    if (hudSlideFrame !== null) cancelAnimationFrame(hudSlideFrame);
+    hudSlideFrame = null;
+}
+
+function setHudSlideProgress(progress) {
+    const hud = document.getElementById('bb-social-hud');
+    const content = hud?.querySelector('.bb-hud-slide-content');
+    const toggle = document.getElementById('bb-social-hud-toggle');
+    hudSlideProgress = Math.max(0, Math.min(1, progress));
+    if (!hud || !content || !toggle) return;
+    const hiddenPercent = (1 - hudSlideProgress) * 100;
+    hud.style.clipPath = `inset(0 0 0 ${hiddenPercent}%)`;
+    content.style.transform = `translateX(${hiddenPercent}%)`;
+    toggle.style.transform = `translateX(${-hud.getBoundingClientRect().width * hudSlideProgress}px)`;
+}
+
+function animateHudSlideTo(target) {
+    stopHudSlideAnimation();
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        setHudSlideProgress(target);
+        return;
+    }
+    const start = hudSlideProgress;
+    const startedAt = performance.now();
+    const frame = now => {
+        const elapsed = Math.min(1, (now - startedAt) / 340);
+        const eased = elapsed * elapsed * (3 - 2 * elapsed);
+        setHudSlideProgress(start + (target - start) * eased);
+        hudSlideFrame = elapsed < 1 ? requestAnimationFrame(frame) : null;
+    };
+    hudSlideFrame = requestAnimationFrame(frame);
+}
+
 export function openSocialHud() {
     jQuery('#bb-social-hud')
         .removeClass('is-panel-dragging')
-        .css('--bb-social-drag-progress', '1')
         .addClass('open');
     jQuery('#bb-social-hud-backdrop').addClass('open');
     jQuery('body').addClass('bb-social-hud-active');
     jQuery('#bb-social-toast-container').addClass('hud-open');
     jQuery('#bb-hud-arrow').removeClass('fa-chevron-left').addClass('fa-chevron-right');
     renderSocialHud();
+    animateHudSlideTo(1);
     syncToastContainerWithHud();
 }
 
 export function closeSocialHud() {
-    jQuery('#bb-social-hud')
-        .removeClass('is-panel-dragging open')
-        .css('--bb-social-drag-progress', '0');
+    jQuery('#bb-social-hud').removeClass('is-panel-dragging open');
     jQuery('#bb-social-hud-backdrop').removeClass('open');
     jQuery('body').removeClass('bb-social-hud-active');
+    animateHudSlideTo(0);
     jQuery('#bb-social-toast-container').removeClass('hud-open');
     jQuery('#bb-hud-arrow').removeClass('fa-chevron-right').addClass('fa-chevron-left');
     syncToastContainerWithHud();
@@ -1360,9 +1396,11 @@ export function ensureHudContainer() {
         <button type="button" id="bb-social-hud-backdrop" aria-label="Закрыть HUD"></button>
         <button type="button" id="bb-social-hud-mobile-launcher" aria-label="Открыть HUD"><i class="fa-solid fa-users-viewfinder"></i><span>VNE</span></button>
         <div id="bb-social-hud">
-            <div class="bb-hud-header"><div class="bb-hud-header-top"><span class="bb-hud-badge">Visual Novel Engine</span><div class="bb-hud-status-row"><span class="bb-hud-live-dot"><i class="fa-solid fa-circle"></i> активно</span><button type="button" class="bb-hud-mobile-close" aria-label="Закрыть HUD"><i class="fa-solid fa-xmark"></i></button></div></div><div class="bb-hud-title">VNE</div><div class="bb-hud-subtitle">связи · журнал · дневник событий</div></div>
-            <div class="bb-hud-tabs"><div class="bb-hud-tab active" data-tab="chars"><i class="fa-solid fa-heart-pulse"></i><span>Связи</span></div><div class="bb-hud-tab" data-tab="log"><i class="fa-solid fa-terminal"></i><span>Система</span></div><div class="bb-hud-tab" data-tab="moments"><i class="fa-solid fa-book-open"></i><span>Дневник</span></div></div>
-            <div class="bb-hud-content active" id="bb-hud-chars"></div><div class="bb-hud-content" id="bb-hud-log"></div><div class="bb-hud-content" id="bb-hud-moments"></div>
+            <div class="bb-hud-slide-content">
+                <div class="bb-hud-header"><div class="bb-hud-header-top"><span class="bb-hud-badge">Visual Novel Engine</span><div class="bb-hud-status-row"><span class="bb-hud-live-dot"><i class="fa-solid fa-circle"></i> активно</span><button type="button" class="bb-hud-mobile-close" aria-label="Закрыть HUD"><i class="fa-solid fa-xmark"></i></button></div></div><div class="bb-hud-title">VNE</div><div class="bb-hud-subtitle">связи · журнал · дневник событий</div></div>
+                <div class="bb-hud-tabs"><div class="bb-hud-tab active" data-tab="chars"><i class="fa-solid fa-heart-pulse"></i><span>Связи</span></div><div class="bb-hud-tab" data-tab="log"><i class="fa-solid fa-terminal"></i><span>Система</span></div><div class="bb-hud-tab" data-tab="moments"><i class="fa-solid fa-book-open"></i><span>Дневник</span></div></div>
+                <div class="bb-hud-content active" id="bb-hud-chars"></div><div class="bb-hud-content" id="bb-hud-log"></div><div class="bb-hud-content" id="bb-hud-moments"></div>
+            </div>
         </div>
         <div id="bb-social-hud-toggle" title="VNE HUD"><i class="fa-solid fa-users-viewfinder"></i><span class="bb-toggle-label">VNE</span><i class="fa-solid fa-chevron-left" id="bb-hud-arrow"></i></div>
     `;
@@ -1385,7 +1423,7 @@ export function ensureHudContainer() {
     applySavedTogglePosition();
     toggle?.addEventListener('pointerdown', event => {
         if (event.button !== undefined && event.button !== 0) return;
-        dragState = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startTop: toggle.getBoundingClientRect().top, startOpen: hud.classList.contains('open'), mode: null, moved: false };
+        dragState = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startTop: toggle.getBoundingClientRect().top, startProgress: hudSlideProgress, mode: null, moved: false };
         toggle.setPointerCapture?.(event.pointerId);
     });
     toggle?.addEventListener('pointermove', event => {
@@ -1397,11 +1435,10 @@ export function ensureHudContainer() {
         dragState.moved = true;
         if (dragState.mode === 'panel') {
             const panelWidth = hud.getBoundingClientRect().width || 390;
-            const progress = Math.max(0, Math.min(1, dragState.startOpen ? 1 - (deltaX / panelWidth) : -deltaX / panelWidth));
+            const progress = Math.max(0, Math.min(1, dragState.startProgress - deltaX / panelWidth));
+            stopHudSlideAnimation();
+            setHudSlideProgress(progress);
             hud.classList.add('is-panel-dragging');
-            hud.style.setProperty('--bb-social-drag-progress', String(progress));
-            toggle.classList.add('is-panel-dragging');
-            toggle.style.setProperty('--bb-social-drag-progress', String(progress));
             return;
         }
         toggle.classList.add('is-dragging');
@@ -1410,7 +1447,7 @@ export function ensureHudContainer() {
     const finishToggleDrag = event => {
         if (!dragState || event.pointerId !== dragState.pointerId) return;
         if (dragState.mode === 'panel') {
-            const progress = Number.parseFloat(hud.style.getPropertyValue('--bb-social-drag-progress')) || 0;
+            const progress = hudSlideProgress;
             if (progress >= 0.45) openSocialHud(); else closeSocialHud();
             hud.classList.remove('is-panel-dragging');
             toggle.dataset.dragged = 'true';
@@ -1421,8 +1458,6 @@ export function ensureHudContainer() {
             toggle.dataset.dragged = 'true';
         }
         toggle.classList.remove('is-dragging');
-        toggle.classList.remove('is-panel-dragging');
-        toggle.style.removeProperty('--bb-social-drag-progress');
         hud.classList.remove('is-panel-dragging');
         dragState = null;
     };
@@ -1454,6 +1489,7 @@ export function ensureHudContainer() {
 
     window.addEventListener('resize', () => {
         applySavedTogglePosition();
+        setHudSlideProgress(hudSlideProgress);
         if (window.innerWidth > 760) jQuery('#bb-social-hud-backdrop').removeClass('open');
         syncToastContainerWithHud(); scheduleIdle();
     });
