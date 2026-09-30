@@ -4,6 +4,11 @@
 
 ## Русский
 
+### Микрообновление — 30 сентября 2026 (без изменения версии)
+
+- VNE не запускает автоматическое сохранение до загрузки сообщений и идентификатора целого чата. Это защищает существующий файл от перезаписи пустым состоянием при запуске.
+- Крупные изображения персонажей хранятся один раз для истории ревизий. Старый формат уплотняется при следующем сохранении без удаления ревизий; откат ветки восстанавливает нужные изображения.
+
 ### Микрообновление — 29 сентября 2026 (без изменения версии)
 
 - Язычок VNE вынесен из выезжающей панели для совместимости с мобильной Opera; его анимация синхронизирована с панелью.
@@ -66,6 +71,11 @@
 Источник: [78557dc](https://github.com/maxkara14/BB-Visual-Novel-Engine/commit/78557dc), включая версию в manifest. Более ранняя история здесь не реконструирована.
 
 ## English
+
+### Minor update — September 30, 2026 (no version change)
+
+- VNE no longer schedules an automatic save before chat messages and integrity metadata have loaded, protecting an existing file from an empty startup save.
+- Large character portraits are stored once across revision history. Legacy history is compacted on the next save without dropping revisions, and branch restoration resolves the selected portraits.
 
 ### Minor update — September 29, 2026 (no version change)
 

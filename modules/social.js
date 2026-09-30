@@ -6,7 +6,7 @@ import { t, ui } from './i18n.js';
 import { parseSnapshot } from './snapshot.js';
 import { buildOutputLanguageDirective } from './language.js';
 /* global SillyTavern */
-import { setExtensionPrompt, chat_metadata, saveChatDebounced, extension_prompt_roles, extension_prompt_types, callPopup } from '../../../../../script.js';
+import { setExtensionPrompt, chat_metadata, saveChatDebounced as scheduleChatSave, extension_prompt_roles, extension_prompt_types, callPopup } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { 
     currentCalculatedStats, 
@@ -31,6 +31,12 @@ import {
 } from './utils.js';
 import { showStoryMomentToast, notifySuccess, notifyInfo, notifyError, pickToastMoment, getMomentToastPriority } from './toasts.js';
 import { buildChoiceContextPrompt, getActiveChoiceContext, tryBindPendingChoiceContextToMessage } from './generator.js';
+
+function saveChatDebounced() {
+    // Startup can bind persona state before the current chat has loaded.
+    if (!SillyTavern.getContext().chat?.length || !chat_metadata.integrity) return;
+    scheduleChatSave();
+}
 
 function normalizeCharacterLookupName(name = '') {
     return String(name || '')

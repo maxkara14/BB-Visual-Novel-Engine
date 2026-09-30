@@ -5,13 +5,14 @@ import { SourceTextModule, SyntheticModule, createContext } from 'node:vm';
 
 const root = new URL('../modules/', import.meta.url);
 async function harness() {
+    let saves = 0;
     const metadata = { integrity: 'parent' };
     const context = { chat: [], chatId: 'parent', name1: 'Player', substituteParams: text => text.replaceAll('{{user}}', 'Player') };
     const settings = { 'BB-Visual-Novel': {} };
     const sandbox = createContext({ Event, TextEncoder, console, setTimeout, clearTimeout,
         SillyTavern: { getContext: () => context }, window: {}, document: { querySelector: () => null }, jQuery: () => ({ val: () => null }) });
     const mocks = {
-        '../../../../../script.js': { chat_metadata: metadata, saveChatDebounced() {}, setExtensionPrompt() {}, extension_prompt_roles: { SYSTEM: 0 }, extension_prompt_types: { IN_CHAT: 0 }, callPopup: async () => false },
+        '../../../../../script.js': { chat_metadata: metadata, saveChatDebounced() { saves++; }, setExtensionPrompt() {}, extension_prompt_roles: { SYSTEM: 0 }, extension_prompt_types: { IN_CHAT: 0 }, callPopup: async () => false },
         '../../../../extensions.js': { extension_settings: settings },
         './generator.js': { buildChoiceContextPrompt: () => '', getActiveChoiceContext: () => null, tryBindPendingChoiceContextToMessage: () => false },
         './toasts.js': { showStoryMomentToast() {}, notifySuccess() {}, notifyInfo() {}, notifyError() {}, pickToastMoment: (a, b) => b, getMomentToastPriority: () => 0 },
@@ -29,7 +30,7 @@ async function harness() {
     const social = load('./social.js');
     await social.link(load);
     await social.evaluate();
-    return { api: social.namespace, metadata, context };
+    return { api: social.namespace, metadata, context, saves: () => saves };
 }
 
 const snapshot = affinity => ({ schema_version: 1, module: 'BB-Visual-Novel', data: {
@@ -39,6 +40,20 @@ const snapshot = affinity => ({ schema_version: 1, module: 'BB-Visual-Novel', da
 const message = text => ({ name: 'Alex', mes: text, swipe_id: 0, extra: {} });
 const recordsSource = readFileSync(new URL('../modules/snapshot-records.js', import.meta.url), 'utf8');
 const { removeSnapshotRecord, undoSnapshotRecordRemoval } = await import(`data:text/javascript;base64,${Buffer.from(recordsSource).toString('base64')}`);
+
+test('persona initialization does not save an empty chat over an existing file', async () => {
+    const h = await harness();
+    h.api.bindActivePersonaState();
+    assert.equal(h.saves(), 0);
+    h.context.chat.push(message('one'));
+    delete h.metadata.integrity;
+    h.api.recalculateAllStats(false);
+    assert.equal(h.saves(), 0);
+    const loaded = await harness();
+    loaded.context.chat.push(message('one'));
+    loaded.api.bindActivePersonaState();
+    assert.ok(loaded.saves() > 0);
+});
 
 test('a new branch inherits the imported state active at its selected message', async () => {
     const parent = await harness();

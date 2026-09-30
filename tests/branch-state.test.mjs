@@ -113,3 +113,58 @@ test('a different selected swipe does not inherit a snapshot made from the origi
     ensureBranchState(child, { integrity: 'branch', chatLength: 3, chat: changedSwipe, isBranch: true });
     assert.equal(child.snapshot_baseline, null);
 });
+
+test('branch revisions store large portraits once and restore the selected version', () => {
+    const firstPortrait = `data:image/png;base64,${'A'.repeat(4000)}`;
+    const secondPortrait = `data:image/png;base64,${'B'.repeat(4000)}`;
+    const parent = scope();
+    parent.char_registry = { alex: { id: 'alex', avatarSource: firstPortrait } };
+    ensureBranchState(parent, { integrity: 'parent', chatLength: 0 });
+    recordBranchState(parent, { integrity: 'parent', chatLength: 1 });
+    parent.char_registry.alex.avatarSource = secondPortrait;
+    recordBranchState(parent, { integrity: 'parent', chatLength: 2 });
+
+    assert.equal(parent.snapshot_lineage.assets.length, 2);
+    assert.ok(JSON.stringify(parent.snapshot_lineage).length < firstPortrait.length + secondPortrait.length + 2000);
+    const child = structuredClone(parent);
+    ensureBranchState(child, { integrity: 'branch', chatLength: 1, isBranch: true });
+    assert.equal(child.char_registry.alex.avatarSource, firstPortrait);
+    assert.equal(child.snapshot_lineage.assets.length, 1);
+    assert.equal(parent.char_registry.alex.avatarSource, secondPortrait);
+});
+
+test('legacy inline portraits compact without losing branch history', () => {
+    const portrait = `data:image/png;base64,${'C'.repeat(4000)}`;
+    const data = scope();
+    data.char_registry = { alex: { id: 'alex', avatarSource: portrait } };
+    const oldState = { baseline_id: null, char_bases: {}, char_bases_romance: {}, ignored_chars: [],
+        platonic_chars: [], char_registry: structuredClone(data.char_registry), merge_suggestions: [], log_cutoff_index: 0 };
+    data.snapshot_lineage = { owner: 'parent', baselines: [], revisions: [
+        { at: 0, state: structuredClone(oldState) }, { at: 2, state: structuredClone(oldState) },
+    ], current_baseline_id: null };
+
+    assert.equal(ensureBranchState(data, { integrity: 'parent', chatLength: 2 }), true);
+    assert.equal(data.snapshot_lineage.assets.length, 1);
+    assert.equal(ensureBranchState(data, { integrity: 'parent', chatLength: 2 }), false);
+    const child = structuredClone(data);
+    ensureBranchState(child, { integrity: 'branch', chatLength: 1, isBranch: true });
+    assert.equal(child.char_registry.alex.avatarSource, portrait);
+    assert.equal(child.snapshot_lineage.assets.length, 1);
+});
+
+test('import recovery state restores pooled portraits on an older branch', () => {
+    const portrait = `data:image/png;base64,${'D'.repeat(4000)}`;
+    const parent = scope();
+    parent.char_registry = { alex: { id: 'alex', avatarSource: portrait } };
+    parent.snapshot_baseline = { characters: { Alex: { affinity: 25 } } };
+    parent.snapshot_restore_state = { char_registry: structuredClone(parent.char_registry) };
+    parent.snapshot_cutoff_index = 1;
+    ensureBranchState(parent, { integrity: 'parent', chatLength: 1 });
+    recordBranchState(parent, { integrity: 'parent', chatLength: 2 });
+
+    const child = structuredClone(parent);
+    ensureBranchState(child, { integrity: 'branch', chatLength: 1, isBranch: true });
+    assert.equal(child.snapshot_restore_state.char_registry.alex.avatarSource, portrait);
+    assert.equal(child.char_registry.alex.avatarSource, portrait);
+    assert.equal(child.snapshot_lineage.assets.length, 1);
+});
