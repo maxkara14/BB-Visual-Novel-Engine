@@ -4,6 +4,13 @@
 
 ## Русский
 
+### Стиль портретов по профилям — 30 октября 2026 (без изменения версии)
+
+- Каждый профиль подключения изображений сохраняет собственный стиль и восстанавливает его при выборе. Старые профили без стиля загружают пустое значение вместо стиля другого подключения.
+- Поле стиля в мастерской стало временным переопределением до закрытия окна. Генерация, применение аватара, отмена и ошибки не записывают его в настройки.
+- Кнопка «Сохранить стиль в профиль» обновляет только стиль профиля, с которым открыта мастерская. Без профиля, во время запроса, после смены или удаления профиля сохранение недоступно; устаревший редактор не может записать стиль.
+- Обновлены переводы и руководство; добавлены проверки независимых стилей, пустого значения, старых профилей, временных правок и явного сохранения.
+
 ### Обновление трекера после нового ответа — 24 октября 2026 (без изменения версии)
 
 - Исправлен вызов несуществующего `markdownToHtml` после очистки служебного блока в видимом сообщении. Используется штатный `updateMessageBlock` Таверны.
@@ -137,6 +144,13 @@
 Источник: [78557dc](https://github.com/maxkara14/BB-Visual-Novel-Engine/commit/78557dc), включая версию в manifest. Более ранняя история здесь не реконструирована.
 
 ## English
+
+### Portrait styles per profile — October 30, 2026 (no version change)
+
+- Each image connection profile stores and restores its own style. Legacy profiles without a style load an empty value rather than another connection's style.
+- The workshop style field is a temporary override until the window closes. Generation, applying an avatar, cancellation and errors do not persist it.
+- **Save style to profile** changes only the style of the profile used when opening the workshop. Saving is unavailable without a profile, during requests, or after switching or deleting the profile; stale editors cannot save.
+- Updated translations and the guide; added checks for independent styles, empty values, legacy profiles, temporary overrides and explicit saving.
 
 ### Tracker updates after a new reply — October 24, 2026 (no version change)
 

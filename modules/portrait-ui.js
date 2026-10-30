@@ -40,7 +40,7 @@ export function mountPortraitSettings(root) {
     const definitions = [
         ['type', 'Формат API', { choices: [['openai-images','OpenAI Images'],['openai-chat','OpenAI Chat'],['gemini','Gemini'],['naistera','Naistera']] }],
         ['endpoint', 'Адрес сервиса', { type: 'url' }], ['key','API-ключ',{type:'password'}],
-        ['model','Модель',{choices:[]}], ['style','Общий стиль портретов',{rows:3,maxLength:2000}],
+        ['model','Модель',{choices:[]}], ['style','Стиль подключения',{rows:3,maxLength:2000}],
         ['parameterMode','Параметры модели',{choices:[['compatible','Обычный OpenAI-compatible'],['gpt-image','GPT Image 1 / 1.5 / Mini'],['gpt-image-2','GPT Image 2'],['gpt-image-2.5','GPT Image 2.5 (Flare / Sunburst)'],['grok','Grok Imagine Image 2.0']]}],
         ['size','Размер',{choices:[['1024x1024','1024×1024'],['1024x1536','1024×1536'],['1536x1024','1536×1024'],['1024x1792','1024×1792'],['1792x1024','1792×1024']]}],
         ['imageSize','Разрешение',{choices:[['1K','1K'],['2K','2K'],['4K','4K']]}],
@@ -114,7 +114,7 @@ export function mountPortraitSettings(root) {
     const profileBody = node('div', '', 'bb-portrait-fold-body'); profileBox.append(profileBody);
     const profiles = field(profileBody, 'Сохранённое подключение', '', { choices: [] });
     const profileName = field(profileBody, 'Имя профиля', '', { maxLength: 100 });
-    const profileFields = ['type','endpoint','key','model','parameterMode','customSize','size','quality','aspect','imageSize','preset','timeout'];
+    const profileFields = ['type','endpoint','key','model','parameterMode','customSize','size','quality','aspect','imageSize','preset','timeout','style'];
     const savedProfiles = () => Array.isArray(settings().profiles) ? settings().profiles : [];
     function renderProfiles() {
         profiles.replaceChildren();
@@ -267,12 +267,34 @@ export function openPortraitWorkshop({ charName, description, avatar, isEditorCu
     const manual = button('Дополнить вручную', () => { appearanceHelp.hidden = true; prompt.focus(); });
     appearanceActions.append(supplement, manual); appearanceHelp.append(appearanceActions); form.append(appearanceHelp);
     form.append(node('small',t('Напишите свой промпт или соберите внешность из описания и сцены. Если данных мало, уточните внешность вручную.')));
-    const style = field(form,'Общий стиль портретов',settings().style,{rows:2,maxLength:2000});
-    style.addEventListener('change',()=> {
-        extension_settings[MODULE_NAME].portrait={...settings(),style:style.value};saveSettingsDebounced();
+    // Workshop edits are temporary; only the explicit save action updates its profile.
+    const portraitSettings = settings();
+    const profileId = portraitSettings.activeProfile || '';
+    const currentProfile = () => {
+        const current = settings();
+        return profileId && current.activeProfile === profileId && Array.isArray(current.profiles)
+            ? current.profiles.find(profile => profile.id === profileId) : null;
+    };
+    const style = field(form,'Стиль для этой генерации',portraitSettings.style,{rows:2,maxLength:2000});
+    form.append(node('small', t('Изменения стиля действуют до закрытия окна. Для сохранения в профиль используйте отдельную кнопку.')));
+    const saveStyle = button('Сохранить стиль в профиль', () => {
+        if (closed || controller) return;
+        if (!valid()) { status.textContent = t('Чат или карточка изменились. Откройте портрет заново.'); return; }
+        if (!currentProfile()) {
+            status.textContent = t('Профиль подключения изменился или удалён. Откройте портрет заново.');
+            refreshBusy(); return;
+        }
+        const current = settings();
+        extension_settings[MODULE_NAME].portrait = { ...current, style: style.value,
+            profiles: current.profiles.map(profile => profile.id === profileId ? { ...profile, style: style.value } : profile) };
+        saveSettingsDebounced();
         const settingsStyle = document.querySelector('#bb-vn-portrait-settings [data-portrait-field="style"]');
         if (settingsStyle) settingsStyle.value = style.value;
+        status.textContent = t('Стиль сохранён в профиль') + ': ' + currentProfile().label;
     });
+    saveStyle.title = currentProfile() ? t('Сохранить стиль в профиль') + ': ' + currentProfile().label
+        : t('Сначала выберите сохранённый профиль в настройках изображений.');
+    form.append(saveStyle);
     const refsDetails=node('details');refsDetails.append(node('summary',t('Референсы')));form.append(refsDetails);
     const refsList=node('div','','bb-portrait-refs');refsDetails.append(refsList);
     const refs=[];
@@ -393,6 +415,7 @@ export function openPortraitWorkshop({ charName, description, avatar, isEditorCu
         download.disabled=copy.disabled=!!controller||!original;
         galleryUse.disabled=galleryDownload.disabled=galleryCopy.disabled=!!controller||!selectedImage;
         galleryDelete.disabled=!!controller||!selectedId;
+        saveStyle.disabled=!!controller||!currentProfile();
         renderRefs();
     };
     async function run(kind) {

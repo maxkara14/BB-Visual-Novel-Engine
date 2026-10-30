@@ -31,7 +31,8 @@ async function harness({ fetch: fetchImpl, fakeClock = false, uploadFails = fals
     const nodes = () => { const list = []; const visit = n => { list.push(n); n.children.forEach(visit); }; visit(body); return list; };
     const document = {
         body, createElement: tag => new Node(tag),
-        querySelector: selector => selector === '.bb-portrait-dialog' ? nodes().find(n => n.className === 'bb-portrait-dialog') : null,
+        querySelector: selector => selector === '.bb-portrait-dialog' ? nodes().find(n => n.className === 'bb-portrait-dialog')
+            : selector === '#bb-vn-portrait-settings [data-portrait-field="style"]' ? nodes().find(n => n.dataset.portraitField === 'style') : null,
     };
     class Reader {
         readAsDataURL(blob) { blob.arrayBuffer().then(bytes => { this.result = 'data:' + blob.type + ';base64,' + Buffer.from(bytes).toString('base64'); this.onload(); }, () => this.onerror()); }
@@ -79,7 +80,7 @@ async function harness({ fetch: fetchImpl, fakeClock = false, uploadFails = fals
         failDecode: () => { decodeError = true; },
         expire: () => [...timers.values()].forEach(callback => callback()),
         button: text => nodes().find(n => n.tagName === 'button' && n.textContent === text),
-        prompt: () => nodes().find(n => n.tagName === 'textarea'),
+        prompt: () => nodes().find(n => n.tagName === 'textarea' && n.parentElement.children[0]?.textContent === 'Промпт портрета'),
         open(avatar = png) { module.namespace.openPortraitWorkshop({ charName: '<Alex>', description: 'Unsaved hair', avatar, isEditorCurrent: () => editorCurrent, apply: value => applied.push(value) }); },
         close() { nodes().find(n => n.tagName === 'dialog')?.emit('cancel'); },
         mountSettings() { const root = new Node('div'); body.append(root); module.namespace.mountPortraitSettings(root); return root; },
@@ -332,18 +333,152 @@ test('Naistera built-in models are not reported as a verified connection', async
     assert.equal(h.requests.length,0);
 });
 
-test('saved image profiles restore credentials and model but leave shared art style alone', async () => {
+test('saved image profiles restore independent styles, including empty and legacy styles', async () => {
     const h=await harness();h.mountSettings();
     const field=caption=>h.nodes().find(n=>n.tagName==='label' && n.children[0]?.textContent===caption).children[1];
+    field('Стиль подключения').value='ink';field('Стиль подключения').emit('change');
     field('Имя профиля').value='Studio';h.button('Сохранить как новый…').click();
     const id=h.settings['BB-Visual-Novel'].portrait.activeProfile;
+    field('Стиль подключения').value='';field('Стиль подключения').emit('change');
     h.dialogs.name='Second';h.button('Сохранить как новый…').click();
+    const secondId=h.settings['BB-Visual-Novel'].portrait.activeProfile;
     const key=h.nodes().find(n=>n.dataset.portraitField==='key');key.value='changed';key.emit('change');
-    h.settings['BB-Visual-Novel'].portrait.style='ink';
+    h.settings['BB-Visual-Novel'].portrait.style='Unsaved style';
     field('Сохранённое подключение').value=id;field('Сохранённое подключение').emit('change');
     assert.equal(key.value,'test-key');
     assert.equal(h.settings['BB-Visual-Novel'].portrait.style,'ink');
     assert.equal(h.settings['BB-Visual-Novel'].portrait.model,'test-image');
+    assert.equal(field('Стиль подключения').value,'ink');
+    field('Сохранённое подключение').value=secondId;field('Сохранённое подключение').emit('change');
+    assert.equal(h.settings['BB-Visual-Novel'].portrait.style,'');
+    h.settings['BB-Visual-Novel'].portrait.profiles.push({id:'legacy',label:'Legacy',...connection});
+    h.settings['BB-Visual-Novel'].portrait.style='Do not inherit';
+    field('Сохранённое подключение').value='legacy';field('Сохранённое подключение').emit('change');
+    assert.equal(h.settings['BB-Visual-Novel'].portrait.style,'');
+    field('Стиль подключения').value='Updated legacy';field('Стиль подключения').emit('change');
+    h.button('Обновить выбранный').click();
+    assert.equal(h.settings['BB-Visual-Novel'].portrait.profiles.find(p=>p.id==='legacy').style,'Updated legacy');
+});
+
+function workshopStyle(h) {
+    return h.nodes().find(n => n.tagName === 'textarea' && n.parentElement.children[0]?.textContent === 'Стиль для этой генерации');
+}
+
+function createStyledProfiles(h) {
+    h.mountSettings();
+    const input = h.nodes().find(n => n.dataset.portraitField === 'style');
+    for (const [label, style] of [['First', 'ink'], ['Second', 'watercolor']]) {
+        input.value = style; input.emit('change');
+        h.dialogs.name = label; h.button('Сохранить как новый…').click();
+    }
+    return h.settings['BB-Visual-Novel'].portrait.profiles;
+}
+
+test('workshop style is temporary through generation and closing without applying', async () => {
+    const h = await harness(); createStyledProfiles(h);
+    const before = JSON.stringify(h.settings);
+    const saves = h.saves;
+    h.open();
+    try {
+        const style = workshopStyle(h);
+        assert.equal(style.value, 'watercolor');
+        style.value = 'Temporary pencil'; style.emit('change');
+        assert.equal(JSON.stringify(h.settings), before);
+        assert.equal(h.saves, saves);
+        h.prompt().value = 'Alex';
+        await h.button('Сгенерировать портрет').click();
+        const request = h.requests.find(r => r.url.endsWith('/images/generations'));
+        assert.match(JSON.parse(request.init.body).prompt, /Art style: Temporary pencil/);
+        assert.equal(JSON.stringify(h.settings), before);
+        assert.equal(h.applied.length, 0);
+    } finally { h.close(); }
+    h.open();
+    try { assert.equal(workshopStyle(h).value, 'watercolor'); }
+    finally { h.close(); }
+});
+
+test('explicit workshop save changes only its profile style and synchronizes current settings', async () => {
+    const h = await harness(); const profiles = createStyledProfiles(h);
+    const first = JSON.stringify(profiles[0]);
+    const second = { ...profiles[1] };
+    const saves = h.saves;
+    h.open();
+    try {
+        const style = workshopStyle(h);
+        style.value = 'New profile style'; style.emit('change');
+        h.button('Сохранить стиль в профиль').click();
+        const current = h.settings['BB-Visual-Novel'].portrait;
+        assert.equal(JSON.stringify(current.profiles[0]), first);
+        assert.deepEqual({ ...current.profiles[1] }, { ...second, style: 'New profile style' });
+        assert.equal(current.style, 'New profile style');
+        assert.equal(h.nodes().find(n => n.dataset.portraitField === 'style').value, 'New profile style');
+        assert.equal(h.saves, saves + 1);
+        assert.equal(h.requests.length, 0);
+        style.value = ''; style.emit('change');
+        h.button('Сохранить стиль в профиль').click();
+        assert.equal(h.settings['BB-Visual-Novel'].portrait.profiles[1].style, '');
+    } finally { h.close(); }
+    h.open();
+    try { assert.equal(workshopStyle(h).value, ''); }
+    finally { h.close(); }
+});
+
+test('workshop cannot save into a switched, deleted or stale profile context', async () => {
+    for (const invalidate of ['switch', 'delete', 'editor']) {
+        const h = await harness(); const profiles = createStyledProfiles(h);
+        h.open();
+        try {
+            workshopStyle(h).value = 'Do not save';
+            const current = h.settings['BB-Visual-Novel'].portrait;
+            if (invalidate === 'switch') current.activeProfile = profiles[0].id;
+            if (invalidate === 'delete') current.profiles = [profiles[0]];
+            if (invalidate === 'editor') h.invalidateEditor();
+            const before = JSON.stringify(h.settings), saves = h.saves;
+            h.button('Сохранить стиль в профиль').click();
+            assert.equal(JSON.stringify(h.settings), before);
+            assert.equal(h.saves, saves);
+        } finally { h.close(); }
+    }
+});
+
+test('workshop without a saved profile disables style saving', async () => {
+    const h = await harness(); h.open();
+    try {
+        assert.equal(h.button('Сохранить стиль в профиль').disabled, true);
+        const saves = h.saves;
+        workshopStyle(h).value = 'Local only'; workshopStyle(h).emit('change');
+        h.button('Сохранить стиль в профиль').click();
+        assert.equal(h.settings['BB-Visual-Novel'].portrait.style, undefined);
+        assert.equal(h.saves, saves);
+    } finally { h.close(); }
+});
+
+test('portrait failure and cancellation never persist the temporary style', async () => {
+    for (const cancel of [false, true]) {
+        const h = await harness({ fetch: async (_url, init) => {
+            if (cancel) return new Promise((_resolve, reject) => {
+                const release = () => reject(new Error('cancelled'));
+                if (init.signal.aborted) { release(); return; }
+                init.signal.addEventListener('abort', release, { once: true });
+            });
+            return { ok: false, status: 500 };
+        } });
+        createStyledProfiles(h);
+        const before = JSON.stringify(h.settings);
+        h.open();
+        try {
+            workshopStyle(h).value = 'Temporary'; workshopStyle(h).emit('change');
+            h.prompt().value = 'Alex';
+            const request = h.button('Сгенерировать портрет').click();
+            if (cancel) {
+                assert.equal(h.button('Сохранить стиль в профиль').disabled, true);
+                h.nodes().find(n => n.tagName === 'button' && n.textContent === 'Отмена' && !n.hidden && !n.disabled).click();
+            }
+            await request;
+            assert.equal(JSON.stringify(h.settings), before);
+            assert.equal(h.applied.length, 0);
+        } finally { h.close(); }
+    }
 });
 
 test('profile creation, update and confirmed deletion are distinct actions', async () => {

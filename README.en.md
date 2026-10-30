@@ -84,7 +84,7 @@ The unified **relationship editor** is under **Data** in the settings. Search en
 
 Click **Portraits** beside the avatar in the character editor.
 
-**Create:** write a prompt or build one from the description and scene. Add a shared art style and up to four appearance or style references. Preview the result, adjust the crop and save the card.
+**Create:** write a prompt or build one from the description and scene. Each connection profile stores its own style. Override it temporarily in the workshop, or explicitly use **Save style to profile** to update only that profile. Add up to four appearance or style references, preview the result, adjust the crop and save the card.
 
 If appearance details are missing when building a prompt, complete them with AI using the world context or edit the prompt yourself. The builder also uses persona and setting information.
 
