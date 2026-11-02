@@ -626,8 +626,15 @@ export function getToneClass(tone = "") {
     return 'tone-neutral';
 }
 
-export function getMemoryBucket(delta) {
+export function getMemoryBucket(delta, category = '') {
     const absDelta = Math.abs(delta);
+    if (!absDelta) return '';
+    if (category === 'life_changing' || category === 'unforgivable') return 'deep';
+    // A known ordinary category stays ordinary even with a large custom score.
+    if (['none', 'minor_positive', 'minor_negative', 'major_positive', 'major_negative'].includes(category)) {
+        return absDelta >= 2 ? 'soft' : '';
+    }
+    // Older numeric events have no semantic category; preserve their thresholds.
     if (absDelta >= 15) return 'deep';
     if (absDelta >= 2) return 'soft';
     return '';

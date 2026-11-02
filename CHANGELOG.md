@@ -4,6 +4,13 @@
 
 ## Русский
 
+### Незабываемые события и пользовательские шкалы — 2 ноября 2026 (без изменения версии)
+
+- Глубокая память и отметки незабываемых событий теперь зависят от категорий `life_changing` / `unforgivable`, а не от фиксированного порога ±15. Крайние события при ±10 и других ненулевых значениях накапливаются для создания черт. Нулевые и отключённые романтические изменения не создают память.
+- При одинаковом знаке двух шкал незабываемое событие не теряется за обычным изменением с большим числом баллов. Обычные категории не становятся глубокими только из-за увеличенной шкалы. Баллы и правило пяти событий одного знака для черты сохранены.
+- Пересчёт исправляет память ранее сохранённых обычных и восстановленных событий с категорией. Числовые события без категории сохраняют прежние пороги; импортированная готовая память не меняется.
+- Обновлены оба README. Проверены пользовательские шкалы, обе полярности, романтика, алиасы, восстановление, повторный пересчёт, накопление пяти событий и архивирование после записи черты.
+
 ### Направление статусов при восстановлении — 2 ноября 2026 (без изменения версии)
 
 - Восстановление явно запрашивает `user_label`: кем пользователь является для NPC. Добавлены проверка направления фразы и примеры несимметричных связей: телохранитель/подопечный и дочь/родитель. Неизвестная связь остаётся пустой вместо подстановки роли NPC.
@@ -158,6 +165,13 @@
 Источник: [78557dc](https://github.com/maxkara14/BB-Visual-Novel-Engine/commit/78557dc), включая версию в manifest. Более ранняя история здесь не реконструирована.
 
 ## English
+
+### Unforgettable events and custom scales — November 2, 2026 (no version bump)
+
+- Deep memories and unforgettable story moments now depend on `life_changing` / `unforgivable` categories rather than a fixed ±15 threshold. Extreme events at ±10 or any other nonzero score accumulate toward traits. Zero changes and disabled romance do not create memories.
+- For same-sign changes on both scales, an unforgettable event is no longer hidden by an ordinary change with a larger score. Ordinary categories do not become deep merely because their configured score is large. Scores and the five-events-per-polarity trait requirement are unchanged.
+- Recalculation corrects memories for previously saved native and recovered events with categories. Numeric events without categories retain the old thresholds; imported ready-made memories are unchanged.
+- Updated both READMEs. Added checks for custom scales, both polarities, romance, aliases, recovery, repeated recalculation, five-event accumulation, and archiving after a trait record is saved.
 
 ### Relationship label direction during recovery — November 2, 2026 (no version bump)
 

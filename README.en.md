@@ -61,6 +61,8 @@ You can disable the action panel while keeping relationships and memory. The sma
 
 The side panel contains character cards, a log and a diary. Expand a card to see memories and how trust and romance scores are calculated.
 
+**Unforgettable events** depend on category: Life-changing positive (`life_changing`) and Unforgivable negative (`unforgivable`) create deep memories at any nonzero configured score, including ±10. Five unforgettable events of one polarity let you create a positive or negative trait; consumed events move to the archive. Recalculation also respects categories in previously saved events. Legacy numeric events without a category retain the ±15 threshold; imported ready-made memories are not reclassified.
+
 Search, sorting and compact view help navigate a growing cast. **Hidden · N** opens a list with individual and bulk restore. Hiding does not erase events: restoring a character recalculates relationships from stored history.
 
 Edit a character's name, avatar and description. **From template** builds a description from available sources; customize the shared instructions under **Language and replies → Character description prompt**.

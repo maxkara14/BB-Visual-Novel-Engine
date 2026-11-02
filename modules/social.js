@@ -2545,16 +2545,18 @@ function getDominantImpactEntry(friendshipDelta = 0, romanceDelta = 0) {
         : impacts.find(entry => entry.kind === 'friendship') || impacts[0];
 }
 
-function getRecordedImpactEntries(friendshipDelta = 0, romanceDelta = 0) {
+function getRecordedImpactEntries(friendshipDelta = 0, romanceDelta = 0, friendshipCategory = '', romanceCategory = '') {
     const impacts = [];
-    if (friendshipDelta !== 0) impacts.push({ delta: friendshipDelta, kind: 'friendship' });
-    if (romanceDelta !== 0) impacts.push({ delta: romanceDelta, kind: 'romance' });
+    if (friendshipDelta !== 0) impacts.push({ delta: friendshipDelta, kind: 'friendship', bucket: getMemoryBucket(friendshipDelta, friendshipCategory) });
+    if (romanceDelta !== 0) impacts.push({ delta: romanceDelta, kind: 'romance', bucket: getMemoryBucket(romanceDelta, romanceCategory) });
     if (impacts.length <= 1) return impacts;
 
     const signs = new Set(impacts.map(entry => Math.sign(entry.delta)).filter(sign => sign !== 0));
     if (signs.size <= 1) {
+        const deep = impacts.filter(impact => impact.bucket === 'deep');
+        if (deep.length) return [deep.reduce((best, impact) => Math.abs(impact.delta) > Math.abs(best.delta) ? impact : best)];
         const dominant = getDominantImpactEntry(friendshipDelta, romanceDelta);
-        return dominant ? [dominant] : [];
+        return dominant ? impacts.filter(impact => impact.kind === dominant.kind) : [];
     }
 
     const selectedBySign = new Map();
@@ -2571,7 +2573,7 @@ function getRecordedImpactEntries(friendshipDelta = 0, romanceDelta = 0) {
 
 export function appendCharacterMemory(charStats, delta, reason, moodlet = '', options = {}) {
     if (!charStats || !reason || delta === 0) return;
-    const bucket = getMemoryBucket(delta);
+    const bucket = options.bucket ?? getMemoryBucket(delta);
     if (!bucket) return;
     if (!charStats.memories || !Array.isArray(charStats.memories[bucket])) return;
     const memory = {
@@ -3056,10 +3058,10 @@ function recalculateAllStatsNow(isNewMessage = false) {
                 .toLowerCase()
                 .replace(/\s+/g, '_')
                 .replace(/-/g, '_');
-            const parseImpactDelta = (rawImpact, impactMap) => {
+            const parseImpact = (rawImpact, impactMap) => {
                 const token = normalizeImpactToken(rawImpact);
-                if (!token) return 0;
-                if (Object.prototype.hasOwnProperty.call(impactMap, token)) return impactMap[token];
+                if (!token) return { delta: 0, category: '' };
+                if (Object.prototype.hasOwnProperty.call(impactMap, token)) return { delta: impactMap[token], category: token };
 
                 const aliases = {
                     neutral: 'none',
@@ -3086,12 +3088,12 @@ function recalculateAllStatsNow(isNewMessage = false) {
                 };
                 const normalizedAlias = aliases[token];
                 if (normalizedAlias && Object.prototype.hasOwnProperty.call(impactMap, normalizedAlias)) {
-                    return impactMap[normalizedAlias];
+                    return { delta: impactMap[normalizedAlias], category: normalizedAlias };
                 }
 
                 const numeric = parseInt(token, 10);
-                if (!Number.isNaN(numeric)) return Math.max(-20, Math.min(20, numeric));
-                return 0;
+                if (!Number.isNaN(numeric)) return { delta: Math.max(-20, Math.min(20, numeric)), category: '' };
+                return { delta: 0, category: '' };
             };
 
             activeUpdates.forEach((update, updateIndex) => {
@@ -3125,8 +3127,10 @@ function recalculateAllStatsNow(isNewMessage = false) {
                     emotion: typeof eventEdit.mood === 'string' ? eventEdit.mood : (sourceUpdate.emotion || sourceUpdate.moodlet),
                 };
 
-                let f_delta = parseImpactDelta(update.friendship_impact || update.impact_level, FRIENDSHIP_IMPACT_MAP);
-                let r_delta = parseImpactDelta(update.romance_impact || update.romantic_impact || update.love_impact, ROMANCE_IMPACT_MAP);
+                const friendshipImpact = parseImpact(update.friendship_impact || update.impact_level, FRIENDSHIP_IMPACT_MAP);
+                const romanceImpact = parseImpact(update.romance_impact || update.romantic_impact || update.love_impact, ROMANCE_IMPACT_MAP);
+                let f_delta = friendshipImpact.delta;
+                let r_delta = romanceImpact.delta;
                 if (!chat_metadata['bb_vn_platonic_chars']) chat_metadata['bb_vn_platonic_chars'] = [];
                 if (chat_metadata['bb_vn_platonic_chars'].includes(charName)) r_delta = 0;
 
@@ -3217,7 +3221,7 @@ function recalculateAllStatsNow(isNewMessage = false) {
                 const moodlet = sanitizeMoodlet(currentEmotion);
                 const dominantImpact = getDominantImpactEntry(f_delta, r_delta);
                 const dominantDelta = dominantImpact?.delta || 0;
-                const recordedImpacts = getRecordedImpactEntries(f_delta, r_delta);
+                const recordedImpacts = getRecordedImpactEntries(f_delta, r_delta, friendshipImpact.category, romanceImpact.category);
 
                 if (dominantImpact) {
                     newStats[charName].history.push({
@@ -3239,7 +3243,7 @@ function recalculateAllStatsNow(isNewMessage = false) {
                     });
                 }
                 recordedImpacts.forEach(impact => {
-                    appendCharacterMemory(newStats[charName], impact.delta, update.reason || "", moodlet, { allowDuplicate: isDebugInjected, source: sourceUpdate });
+                    appendCharacterMemory(newStats[charName], impact.delta, update.reason || "", moodlet, { allowDuplicate: isDebugInjected, source: sourceUpdate, bucket: impact.bucket });
                 });
 
                 const previousTier = getTierInfo(previousAffinity).label;
@@ -3269,7 +3273,7 @@ function recalculateAllStatsNow(isNewMessage = false) {
                             if (idx === chat.length - 1) queueLiveToastCandidate(liveToastCandidates, scopeKey, `${messageMeta}|${impact.kind}|${impact.delta}|soft`, moment);
                         }
 
-                        if (Math.abs(impact.delta) >= 15) {
+                        if (impact.bucket === 'deep') {
                             const moment = maybeAddStoryMoment({ type: impact.delta > 0 ? 'deep-positive' : 'deep-negative', char: charName, title: 'Незабываемое событие', text: `${charName}: ${update.reason}` });
                             if (impact === dominantImpact) toastMoment = pickToastMoment(toastMoment, moment);
                             if (idx === chat.length - 1) queueLiveToastCandidate(liveToastCandidates, scopeKey, `${messageMeta}|${impact.kind}|${impact.delta}|deep`, moment);

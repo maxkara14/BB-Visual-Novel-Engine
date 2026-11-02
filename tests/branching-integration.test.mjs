@@ -30,7 +30,7 @@ async function harness() {
     const social = load('./social.js');
     await social.link(load);
     await social.evaluate();
-    return { api: social.namespace, metadata, context, saves: () => saves };
+    return { api: social.namespace, metadata, context, settings: settings['BB-Visual-Novel'], saves: () => saves };
 }
 
 const snapshot = affinity => ({ schema_version: 1, module: 'BB-Visual-Novel', data: {
@@ -42,6 +42,75 @@ const recordsSource = readFileSync(new URL('../modules/snapshot-records.js', imp
 const { removeSnapshotRecord, undoSnapshotRecordRemoval } = await import(`data:text/javascript;base64,${Buffer.from(recordsSource).toString('base64')}`);
 const recoverySourceCode = readFileSync(new URL('../modules/history-recovery.js', import.meta.url), 'utf8');
 const { planRecovery, applyRecovery } = await import(`data:text/javascript;base64,${Buffer.from(recoverySourceCode).toString('base64')}`);
+
+test('custom ten-point extremes rebuild deep memories and provide five memories per trait polarity', async () => {
+    const h = await harness();
+    h.settings.friendshipImpactValues = { life_changing: 10, unforgivable: -10 };
+    for (const category of ['life_changing', 'unforgivable']) {
+        for (let i = 0; i < 5; i++) {
+            const msg = message(`Alex: ${category} event ${i}`);
+            msg.extra.bb_social_swipes = { 0: [{ name: 'Alex', friendship_impact: category, romance_impact: 'none', reason: `${category} distinct memory ${i}`, debug_event: true }] };
+            h.context.chat.push(msg);
+        }
+    }
+    h.api.recalculateAllStats(false);
+    const read = () => h.api.exportActivePersonaSnapshot().data;
+    const stats = read().characters.Alex;
+    assert.equal(stats.memories.deep.filter(m => m.tone === 'positive').length, 5);
+    assert.equal(stats.memories.deep.filter(m => m.tone === 'negative').length, 5);
+    assert.equal(stats.memories.soft.length, 0);
+    assert.equal(stats.affinity, 0);
+    assert.ok(read().story_moments.some(m => m.type === 'deep-positive'));
+    assert.ok(read().story_moments.some(m => m.type === 'deep-negative'));
+    h.api.recalculateAllStats(false);
+    assert.equal(read().characters.Alex.memories.deep.length, 10);
+    // The same stored trait record produced by the HUD consumes five of its polarity.
+    const last = h.context.chat.at(-1);
+    last.extra.bb_vn_char_traits_swipes = { 0: [{ charName: 'Alex', trait: 'Верность: Помнит поддержку.', type: 'positive', scope: h.api.getCurrentPersonaScopeKey() }] };
+    h.api.recalculateAllStats(false);
+    assert.equal(read().characters.Alex.core_traits.length, 1);
+    assert.equal(read().characters.Alex.memories.archive.length, 5);
+    assert.equal(read().characters.Alex.memories.deep.filter(m => m.tone === 'positive').length, 0);
+    assert.equal(read().characters.Alex.memories.deep.filter(m => m.tone === 'negative').length, 5);
+});
+
+test('recovered romance extremes and aliases use categories; larger ordinary friendship does not hide them', async () => {
+    const h = await harness();
+    h.settings.friendshipImpactValues = { major_positive: 20 };
+    h.settings.romanceImpactValues = { life_changing: 1 };
+    h.context.chat.push(message('Alex shares a life-changing moment with Player.'));
+    const state = h.api.bindActivePersonaState();
+    applyRecovery(h.context.chat, planRecovery(h.context.chat, 0, 0, state), [{ index: 0, updates: [{ name: 'Alex', friendship_impact: 'major_positive', romance_impact: 'life_changing', reason: 'A new bond.', debug_event: true }] }], state.scopeKey, state.aliasSet);
+    h.api.recalculateAllStats(false);
+    let stats = h.api.exportActivePersonaSnapshot().data.characters.Alex;
+    assert.equal(stats.memories.deep.length, 1);
+    assert.equal(stats.memories.deep[0].delta, 1);
+    assert.equal(stats.affinity, 20); assert.equal(stats.romance, 1);
+    const update = h.context.chat[0].extra.bb_social_swipes[0][0];
+    update.romance_impact = 'huge_positive';
+    h.api.recalculateAllStats(false);
+    assert.equal(h.api.exportActivePersonaSnapshot().data.characters.Alex.memories.deep.length, 1);
+    h.api.bindActivePersonaState().scopeState.platonic_chars.push('Alex');
+    h.api.recalculateAllStats(false);
+    stats = h.api.exportActivePersonaSnapshot().data.characters.Alex;
+    assert.equal(stats.memories.deep.length, 0);
+    assert.equal(stats.memories.soft.length, 1);
+});
+
+test('ordinary categories stay soft while legacy numeric events retain the old deep threshold', async () => {
+    const h = await harness();
+    h.settings.friendshipImpactValues = { major_positive: 20, life_changing: 0 };
+    for (const [name, impact] of [['Alex', 'major_positive'], ['Sam', '20'], ['Zero', 'life_changing']]) {
+        const msg = message(`${name} interacts with Player.`);
+        msg.extra.bb_social_swipes = { 0: [{ name, friendship_impact: impact, romance_impact: 'none', reason: `${name} unique event`, debug_event: true }] };
+        h.context.chat.push(msg);
+    }
+    h.api.recalculateAllStats(false);
+    const chars = h.api.exportActivePersonaSnapshot().data.characters;
+    assert.equal(chars.Alex.memories.deep.length, 0); assert.equal(chars.Alex.memories.soft.length, 1);
+    assert.equal(chars.Sam.memories.deep.length, 1);
+    assert.equal(chars.Zero.memories.deep.length, 0);
+});
 
 test('recovered events survive recalculation, do not double count, and expire on source edits', async () => {
     const h = await harness();
