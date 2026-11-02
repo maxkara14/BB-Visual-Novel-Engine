@@ -2,10 +2,34 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../modules/history-recovery.js', import.meta.url), 'utf8');
-const { planRecovery, recoverySource, recoveryIsCurrent, recoveryBatches, parseRecovery, applyRecovery } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const { planRecovery, recoverySource, recoveryIsCurrent, recoveryBatches, parseRecovery, applyRecovery, recoveryPrompt } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const options = { scopeKey: 'player' };
 const message = (mes = 'Alex speaks to Player') => ({ name: 'Narrator', mes, swipe_id: 0, extra: {} });
 const update = (name = 'Alex') => ({ name, friendship_impact: 'minor_positive', romance_impact: 'none', reason: 'Helped Player', role_dynamic: 'friend' });
+
+test('recovery asks for the player role, explains asymmetric relationships and excludes earlier labels', () => {
+    const prompt = recoveryPrompt([{ message: 1, text: 'NPC is a bodyguard.' }], ['NPC'], 'Player', '', [{ ...update(), role_dynamic: 'WRONG_NPC_ROLE', user_label: 'WRONG_PRIOR_LABEL', status: 'WRONG_STATUS' }]);
+    assert.match(prompt, /who the PLAYER is TO THAT NPC, never who the NPC is to the player/);
+    assert.match(prompt, /\[NPC name\] sees \[player name\] as \[user_label\]/);
+    assert.match(prompt, /never "bodyguard and adviser"/);
+    assert.match(prompt, /never "daughter" or "daughter of the Hand"/);
+    assert.match(prompt, /if unknown, use an empty user_label/);
+    assert.match(prompt, /"user_label":"PLAYER_ROLE_TO_THIS_NPC_OR_EMPTY"/);
+    assert.doesNotMatch(prompt, /WRONG_NPC_ROLE|WRONG_PRIOR_LABEL|WRONG_STATUS/);
+    assert.match(prompt, /Helped Player/);
+});
+
+test('explicit user_label wins over NPC-role legacy data, including a deliberately empty label', () => {
+    const batch = [{ message: 1 }];
+    for (const label of ['мой господин', 'отец', '']) {
+        const raw = JSON.stringify({ messages: [{ message: 1, updates: [{ ...update(), role_dynamic: 'телохранитель', user_label: label }] }] });
+        const parsed = parseRecovery(raw, batch);
+        assert.equal(parsed[0].updates[0].role_dynamic, label);
+        assert.equal(parsed[0].updates[0].friendship_impact, 'minor_positive');
+    }
+    const legacy = parseRecovery(JSON.stringify({ messages: [{ message: 1, updates: [update()] }] }), batch);
+    assert.equal(legacy[0].updates[0].role_dynamic, 'friend');
+});
 
 test('repeat and intersecting ranges skip completed messages including empty results', () => {
     const chat = [message(), message(), message()];

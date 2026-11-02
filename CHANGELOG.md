@@ -4,6 +4,12 @@
 
 ## Русский
 
+### Направление статусов при восстановлении — 2 ноября 2026 (без изменения версии)
+
+- Восстановление явно запрашивает `user_label`: кем пользователь является для NPC. Добавлены проверка направления фразы и примеры несимметричных связей: телохранитель/подопечный и дочь/родитель. Неизвестная связь остаётся пустой вместо подстановки роли NPC.
+- Подписи из предыдущих порций не передаются следующему запросу, чтобы не закреплять ошибочную интерпретацию. Формат сохранённых событий совместим с обычным трекером; баллы и существующие записи автоматически не меняются. Ранее неверные подписи можно исправить через «Изменить статус».
+- Добавлены регрессионные проверки инструкции, приоритета `user_label`, пустых подписей и совместимости старого формата.
+
 ### Восстановление отношений из истории — 2 ноября 2026 (без изменения версии)
 
 - В настройки «Отношения» добавлена ручная кнопка восстановления для уже начатой игры. Можно выбрать последние N сообщений, весь чат или свой диапазон с фрагментами границ; число запросов видно до запуска, прогресс — во время анализа.
@@ -152,6 +158,12 @@
 Источник: [78557dc](https://github.com/maxkara14/BB-Visual-Novel-Engine/commit/78557dc), включая версию в manifest. Более ранняя история здесь не реконструирована.
 
 ## English
+
+### Relationship label direction during recovery — November 2, 2026 (no version bump)
+
+- Recovery explicitly requests `user_label`: who the player is to the NPC. Added a sentence-direction check and asymmetric examples covering bodyguard/ward and daughter/parent. Unsupported relationships remain empty instead of describing the NPC's role.
+- Labels from previous batches are excluded from subsequent requests to avoid reinforcing an inverted interpretation. Stored events remain compatible with the ordinary tracker; scores and existing records are not automatically changed. Previously incorrect labels can be corrected with Edit label.
+- Added regression checks for the prompt, `user_label` precedence, empty labels, and legacy compatibility.
 
 ### Restore relationships from history — November 2, 2026 (no version bump)
 
