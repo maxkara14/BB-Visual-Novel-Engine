@@ -67,6 +67,18 @@ Edit a character's name, avatar and description. **From template** builds a desc
 
 The unified **relationship editor** is under **Data** in the settings. Search entries; edit chat relationship changes (reason, emotion, trust, and attraction); edit or hide memories and traits; and remove unwanted characters, journal entries, and moments from the imported baseline. Editing an event recalculates scores, memories, and the journal. Editing a memory or trait alone does not change scores or the source event.
 
+### Enable tracking in an ongoing game
+
+Open **VNE settings → Relationships → Restore relationships from history**. Choose the last N messages, the entire chat, or a custom range. Excerpts of the first and last messages help verify the boundaries. The message count and number of model requests appear before you start.
+
+Long histories are split into batches of roughly 18,000 characters, including the neighbouring message for context, without splitting messages. Request progress appears during analysis. If a single message is too long, VNE reports it before starting instead of silently truncating the text.
+
+The model proposes characters, relationship labels, and event-based changes to trust and attraction. Review the results, uncheck unwanted suggestions, and select **Save selected**. Only then are records saved and tracking enabled. Model estimates may need manual correction; cumulative scores are never added a second time.
+
+Repeated analysis and overlapping ranges skip messages already processed, including those with no new events and suggestions you unchecked before saving. Turns with ordinary tracker events and messages already covered by an imported baseline are skipped entirely. Recovery does not search those turns for individual missing characters.
+
+Results belong to a persona and swipe. Editing a source message or its immediately preceding message makes the recovered events outdated: recalculation stops counting them, and a new analysis offers replacements. Switching swipes uses the selected variant's events. Request errors, closing the dialog, or switching chats/personas do not save an unfinished analysis.
+
 ## 🖼️ Portraits and gallery
 
 <table>

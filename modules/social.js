@@ -2,6 +2,7 @@ import { resetMemoryEditor, trackEditableRecord, applyMemoryEdits } from './memo
 import { resetRelationshipEventEditor, relationshipEventKey, relationshipEventSignature, relationshipEventEdit, trackRelationshipEvent } from './relationship-event-editor.js';
 import { ensureBranchState, recordBranchState } from './branch-state.js';
 import { rememberRelationshipStart } from './relationship-breakdown.js';
+import { recoverySource, recoveryIsCurrent } from './history-recovery.js';
 import { t, ui } from './i18n.js';
 import { parseSnapshot } from './snapshot.js';
 import { buildOutputLanguageDirective } from './language.js';
@@ -3017,6 +3018,10 @@ function recalculateAllStatsNow(isNewMessage = false) {
         }
 
         let activeUpdates = getStoredSwipeEntries(msg.extra?.bb_social_swipes, swipeId, allowLegacyFallback);
+        if (activeUpdates?.some(update => update.recovery_id)) {
+            const source = recoverySource(chat, idx);
+            activeUpdates = activeUpdates.filter(update => recoveryIsCurrent(update, msg, source));
+        }
 
         if (activeUpdates && Array.isArray(activeUpdates)) {
             const userFilteredActiveUpdates = filterUserPersonaSocialUpdates(activeUpdates);

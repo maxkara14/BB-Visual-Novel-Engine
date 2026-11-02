@@ -4,6 +4,14 @@
 
 ## Русский
 
+### Восстановление отношений из истории — 2 ноября 2026 (без изменения версии)
+
+- В настройки «Отношения» добавлена ручная кнопка восстановления для уже начатой игры. Можно выбрать последние N сообщений, весь чат или свой диапазон с фрагментами границ; число запросов видно до запуска, прогресс — во время анализа.
+- История анализируется порциями примерно по 18 000 символов. Новые персонажи, подписи и изменения доверия/влечения показываются для проверки; лишние предложения можно снять. Сохранение включает трекер и использует обычный пересчёт VNE без повторного прибавления итоговых баллов.
+- Сохранён учёт обработанных сообщений по персоне и свайпу, включая пустые результаты. Повторы и пересекающиеся диапазоны пропускаются. Ходы с обычными событиями трекера и сообщения до границы импортированной основы пропускаются целиком.
+- Изменение исходного или непосредственно предшествующего сообщения исключает устаревшие события из пересчёта; после просмотра новый анализ заменяет их. Ошибки, отмена и смена контекста не сохраняют частичный результат. Полный сброс отношений очищает и отметки восстановления активной персоны.
+- Обновлены русский и английский README и переводы интерфейса. Добавлены проверки повторов, пересечений, свайпов, правок, изоляции персон, формата ответа, безопасного предпросмотра, отмены и настоящего пересчёта. Работа функции подтверждена пользователем на локальной Таверне.
+
 ### Стиль портретов по профилям — 30 октября 2026 (без изменения версии)
 
 - Каждый профиль подключения изображений сохраняет собственный стиль и восстанавливает его при выборе. Старые профили без стиля загружают пустое значение вместо стиля другого подключения.
@@ -144,6 +152,14 @@
 Источник: [78557dc](https://github.com/maxkara14/BB-Visual-Novel-Engine/commit/78557dc), включая версию в manifest. Более ранняя история здесь не реконструирована.
 
 ## English
+
+### Restore relationships from history — November 2, 2026 (no version bump)
+
+- Added a manual recovery button under Relationships for ongoing games. Choose the last N messages, the entire chat, or a custom range with boundary excerpts. Request counts appear before starting and progress appears during analysis.
+- History is analyzed in batches of roughly 18,000 characters. Review proposed characters, labels, and trust/attraction changes and uncheck unwanted suggestions. Saving enables tracking and uses VNE's normal recalculation without adding cumulative scores twice.
+- Processed messages are recorded per persona and swipe, including empty results. Repeated and overlapping ranges are skipped. Turns with ordinary tracker events and messages before an imported baseline's cutoff are skipped entirely.
+- Editing a source message or its immediately preceding message excludes outdated events from recalculation; a reviewed replacement analysis replaces them. Errors, cancellation, and context changes do not save partial results. A full relationship reset also clears the active persona's recovery markers.
+- Updated both READMEs and interface translations. Added regression checks for repeats, overlaps, swipes, edits, persona isolation, response validation, safe previews, cancellation, and real recalculation. The user confirmed the feature works in their local Tavern.
 
 ### Portrait styles per profile — October 30, 2026 (no version change)
 

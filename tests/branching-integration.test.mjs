@@ -40,6 +40,26 @@ const snapshot = affinity => ({ schema_version: 1, module: 'BB-Visual-Novel', da
 const message = text => ({ name: 'Alex', mes: text, swipe_id: 0, extra: {} });
 const recordsSource = readFileSync(new URL('../modules/snapshot-records.js', import.meta.url), 'utf8');
 const { removeSnapshotRecord, undoSnapshotRecordRemoval } = await import(`data:text/javascript;base64,${Buffer.from(recordsSource).toString('base64')}`);
+const recoverySourceCode = readFileSync(new URL('../modules/history-recovery.js', import.meta.url), 'utf8');
+const { planRecovery, applyRecovery } = await import(`data:text/javascript;base64,${Buffer.from(recoverySourceCode).toString('base64')}`);
+
+test('recovered events survive recalculation, do not double count, and expire on source edits', async () => {
+    const h = await harness();
+    h.context.chat.push(message('Alex helps Player.'));
+    const state = h.api.bindActivePersonaState();
+    const plan = planRecovery(h.context.chat, 0, 0, state);
+    applyRecovery(h.context.chat, plan, [{ index: 0, updates: [{ name: 'Alex', friendship_impact: 'minor_positive', romance_impact: 'none', reason: 'Alex helps Player.', role_dynamic: 'friend' }] }], state.scopeKey, state.aliasSet);
+    h.api.recalculateAllStats(false);
+    const first = h.api.exportActivePersonaSnapshot().data.characters.Alex.affinity;
+    assert.ok(first > 0);
+    h.api.recalculateAllStats(false);
+    assert.equal(h.api.exportActivePersonaSnapshot().data.characters.Alex.affinity, first);
+    assert.equal(planRecovery(h.context.chat, 0, 0, h.api.bindActivePersonaState()).pending.length, 0);
+    h.context.chat[0].mes = 'Alex is absent.';
+    h.api.recalculateAllStats(false);
+    assert.equal(h.api.exportActivePersonaSnapshot().data.characters.Alex, undefined);
+    assert.equal(planRecovery(h.context.chat, 0, 0, h.api.bindActivePersonaState()).pending.length, 1);
+});
 
 test('persona initialization does not save an empty chat over an existing file', async () => {
     const h = await harness();

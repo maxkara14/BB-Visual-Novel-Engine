@@ -1,5 +1,6 @@
 import { DEFAULT_DESCRIPTION_PROMPT, DESCRIPTION_PROMPT_LIMIT, normalizeDescriptionPrompt, resolveDescriptionPrompt } from './description-prompt.js';
 import { openHiddenCharacters } from './hidden-characters-ui.js';
+import { openHistoryRecovery } from './history-recovery-ui.js';
 import { mountPortraitSettings } from './portrait-ui.js';
 import { mountSettingsAnimations } from './settings-animation.js';
 import { refreshSnapshotControls, snapshotRemovalPrompt, snapshotRecordRemovalPrompt, listRelationshipEditorRecords } from './snapshot-controls.js';
@@ -194,6 +195,11 @@ export function wipeAllSocialData() {
                 msg.extra.bb_social_swipes[sId] = msg.extra.bb_social_swipes[sId].filter(update => update?.scope && !aliasSet.has(update.scope));
             }
         }
+        if (msg.extra?.bb_vn_recovery) {
+            for (const records of Object.values(msg.extra.bb_vn_recovery)) {
+                for (const scope of Object.keys(records)) if (aliasSet.has(scope)) delete records[scope];
+            }
+        }
         if (msg.extra && msg.extra.bb_vn_options_swipes) delete msg.extra.bb_vn_options_swipes;
         if (msg.extra && msg.extra.bb_vn_char_traits_swipes) {
             for (const sId in msg.extra.bb_vn_char_traits_swipes) {
@@ -381,6 +387,7 @@ export function setupExtensionSettings() {
                     <summary><i class="fa-solid fa-heart bb-vn-section-icon" aria-hidden="true"></i><span>Отношения</span></summary>
                     <div class="bb-vn-settings-section-body">
                         <label class="checkbox_label bb-vn-setting-pill"><input type="checkbox" id="bb-vn-cfg-disable-tracker" ${s.disableRelationshipTracker ? 'checked' : ''}><span>Отключить трекер отношений</span></label>
+                        <button type="button" id="bb-vn-recover-history" class="menu_button bb-vn-settings-button">Восстановить отношения из истории</button>
                         <label class="checkbox_label bb-vn-setting-pill bb-vn-setting-pill--single"><input type="checkbox" id="bb-vn-cfg-usemacro" ${s.useMacro ? 'checked' : ''}><span>Использовать макрос {{bb_vn}}</span></label>
 
                         <span class="bb-vn-settings-note">Здесь вы можете задать свои значения для шкал дружбы и романтики. После изменения отношения сразу пересчитываются по всей истории.</span>
@@ -635,6 +642,7 @@ export function setupExtensionSettings() {
         restoreVNOptions(false);
         injectCombinedSocialPrompt();
     });
+    jQuery('#bb-vn-recover-history').on('click', openHistoryRecovery);
     jQuery('#bb-vn-cfg-disable-tracker').on('change', function() {
         extension_settings[MODULE_NAME].disableRelationshipTracker = jQuery(this).is(':checked');
         saveSettingsDebounced();
