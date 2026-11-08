@@ -280,7 +280,9 @@ function normalizeParsedJsonResult(parsed, prefer = 'array') {
 
 export function parseModelJson(raw = "", options = {}) {
     const prefer = options.prefer === 'object' ? 'object' : 'array';
-    const cleaned = cleanupMarkdownFences(raw);
+    // Models can copy decorative spaces into JSON syntax as well as its text.
+    // Normalize before parsing so this does not need a model repair request.
+    const cleaned = cleanupMarkdownFences(normalizeVneText(raw));
     const candidates = [];
     const pushCandidate = (value) => {
         const text = String(value || '').trim();

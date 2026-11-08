@@ -883,6 +883,36 @@ test('validator accepts wrappers and markdown, rejects bad types and duplicates'
     assert.equal(api.parseVnOptions(JSON.stringify(mixed)).options.length,2);
     assert.equal(api.parseVnOptions('[null,{}]').ok,false);
 });
+
+test('options parser accepts decorative Unicode spaces in JSON syntax and text', async () => {
+    const h = await harness();
+    const api = await h.loadApi('./structured-output.js');
+    const entries = options.map((option, index) => ({ ...option,
+        message: `Строка ${index} 👩‍💻\n\nСледующая строка с "кавычками" и \\слешем`,
+    }));
+    const valid = JSON.stringify({ options: entries }, null, 2);
+    const expected = JSON.stringify(api.parseVnOptions(valid).options);
+    for (const space of ['\u2800', '\u00A0', '\u2009', '\u200B', '\u202F', '\u3164']) {
+        const raw = valid.replace(/ /g, space);
+        assert.throws(() => JSON.parse(raw));
+        const result = api.parseVnOptions(raw);
+        assert.equal(result.ok, true);
+        assert.equal(JSON.stringify(result.options), expected);
+    }
+    assert.equal(api.parseVnOptions('{"options": [broken]}').ok, false);
+});
+
+for (const custom of [false, true]) {
+    test(`decorative JSON spaces render options without a repair request (${custom ? 'custom' : 'main'})`, async () => {
+        const h = await harness({ custom });
+        const run = h.api.bbVnGenerateOptionsFlow();
+        h.respond(0, JSON.stringify({ options }, null, 2).replace(/ /g, '\u2800'));
+        await run;
+        assert.equal(h.calls.length, 1);
+        assert.equal(h.rendered.length, 1);
+        assert.deepEqual(h.errors, []);
+    });
+}
 test('main Auto omits schema while explicit schema preserves invalid text',async()=>{
     for(const mode of ['auto','schema']) {
         const h=await harness();h.settings['BB-Visual-Novel'].vnJsonMode=mode;
