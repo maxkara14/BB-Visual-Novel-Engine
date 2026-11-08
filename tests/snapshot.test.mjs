@@ -35,6 +35,33 @@ async function harness() {
 }
 const fixture = () => ({schema_version:1,module:'BB-Visual-Novel',persona_label:'Original persona',data:{characters:{Alex:{affinity:25,romance:0,status:'Friend',history:[],memories:{soft:[],deep:[],archive:[]},core_traits:[]}},char_bases:{Alex:3},char_bases_romance:{},global_log:[{time:'12:00',type:'system',text:'Saved log'}],story_moments:[]}});
 
+test('VNE normalizes incoming blank characters while preserving roleplay text and scores', async () => {
+    const h = await harness();
+    const scene = 'Alex\u2800waves. 👩‍💻\nNext\tline.';
+    const block = '<bb-social-updates><bb-social-update><name>Alex</name><friendship_impact>minor_positive</friendship_impact><romance_impact>none</romance_impact><reason>Shared\u2800an\u200Bumbrella</reason><emotion>Very\u3164happy</emotion></bb-social-update></bb-social-updates>';
+    const msg = { name: 'Alex', mes: scene + block, swipe_id: 0, extra: {} };
+    h.context.chat.push(msg);
+    h.api.scanAndCleanMessage(msg, 0);
+    assert.equal(msg.mes, scene);
+    const update = msg.extra.bb_social_swipes[0][0];
+    assert.equal(update.reason, 'Shared an umbrella');
+    assert.equal(update.emotion, 'Very happy');
+    h.api.recalculateAllStats(false);
+    const score = h.state.currentCalculatedStats.Alex.affinity;
+    assert.ok(score > 0);
+    assert.equal(h.state.currentCalculatedStats.Alex.memories.soft[0].text, 'Shared an umbrella');
+    const record = h.editor.memoryEditorEntries('Alex')[0];
+    h.editor.changeMemoryEntry(record.index, record.revision, 'edit', 'New\u2800memory\nwith\u202Fspace');
+    h.api.recalculateAllStats(false);
+    assert.equal(h.state.currentCalculatedStats.Alex.memories.soft[0].text, 'New memory\nwith space');
+    assert.equal(h.state.currentCalculatedStats.Alex.affinity, score);
+    h.api.updateCharacterProfile('Alex', { description: 'A\uFFA0friend\n👩‍💻', relationshipStatus: 'Close\u2800friend' });
+    const profile = h.api.getCharacterProfile('Alex');
+    assert.equal(profile.description, 'A friend\n👩‍💻');
+    assert.equal(profile.relationshipStatus, 'Close friend');
+    assert.equal(msg.mes, scene);
+});
+
 test('valid v1 export/import round trip keeps relationships and log',async()=>{
     const h=await harness();h.api.importActivePersonaSnapshot(fixture());h.api.recalculateAllStats(false);
     assert.equal(h.state.currentCalculatedStats.Alex.affinity,25);

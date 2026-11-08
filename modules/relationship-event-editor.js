@@ -1,5 +1,7 @@
 // Editor overrides belong to chat metadata, leaving parsed message events intact.
 // This lets branches restore the override state at their selected message.
+import { normalizeVneText } from './text-normalization.js';
+
 let revision = 0;
 let ownerChat = null;
 let entries = [];
@@ -76,8 +78,8 @@ export function changeRelationshipEvent(scope, index, expectedRevision, action, 
         else {
             next.friendshipDelta = values.friendshipDelta;
             next.romanceDelta = values.romanceDelta;
-            next.reason = values.reason.trim();
-            next.mood = values.mood.trim();
+            next.reason = normalizeVneText(values.reason).trim();
+            next.mood = normalizeVneText(values.mood).trim();
             next.disabled = false;
         }
     }

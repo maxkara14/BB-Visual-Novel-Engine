@@ -1,4 +1,5 @@
 import { resetMemoryEditor, trackEditableRecord, applyMemoryEdits } from './memory-editor.js';
+import { normalizeVneText } from './text-normalization.js';
 import { resetRelationshipEventEditor, relationshipEventKey, relationshipEventSignature, relationshipEventEdit, trackRelationshipEvent } from './relationship-event-editor.js';
 import { ensureBranchState, recordBranchState } from './branch-state.js';
 import { rememberRelationshipStart } from './relationship-breakdown.js';
@@ -750,7 +751,7 @@ function clampZoomValue(value = 100, fallback = 100) {
 }
 
 function normalizeCharacterDescription(value = '') {
-    return String(value || '')
+    return normalizeVneText(value || '')
         .replace(/\r/g, '')
         .trim();
 }
@@ -2577,7 +2578,7 @@ export function appendCharacterMemory(charStats, delta, reason, moodlet = '', op
     if (!bucket) return;
     if (!charStats.memories || !Array.isArray(charStats.memories[bucket])) return;
     const memory = {
-        text: reason,
+        text: normalizeVneText(reason),
         delta,
         tone: getMemoryTone(delta),
         moodlet: sanitizeMoodlet(moodlet),
@@ -2596,6 +2597,7 @@ export function appendCharacterMemory(charStats, delta, reason, moodlet = '', op
 
 export function maybeAddStoryMoment(moment) {
     if (!moment || !moment.title || !moment.text) return;
+    moment = { ...moment, title: normalizeVneText(moment.title), text: normalizeVneText(moment.text) };
     currentStoryMoments.push(moment);
     if (currentStoryMoments.length > 30) currentStoryMoments.shift();
     return moment;
@@ -2604,7 +2606,7 @@ export function maybeAddStoryMoment(moment) {
 export function addGlobalLog(type, text, timeString) {
     if (!chat_metadata['bb_vn_global_log']) chat_metadata['bb_vn_global_log'] = [];
     const time = timeString || new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-    chat_metadata['bb_vn_global_log'].push({ time, type, text });
+    chat_metadata['bb_vn_global_log'].push({ time, type, text: normalizeVneText(text) });
     if (chat_metadata['bb_vn_global_log'].length > 100) chat_metadata['bb_vn_global_log'].shift();
 }
 
@@ -2653,7 +2655,7 @@ export function tryParseSocialUpdates(rawText) {
             const item = match[1] || '';
             const readTag = (tag) => {
                 const found = item.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
-                return found ? String(found[1]).replace(/<[^>]+>/g, '').trim() : '';
+                return found ? normalizeVneText(found[1]).replace(/<[^>]+>/g, '').trim() : '';
             };
             return {
                 name: readTag('name'),
@@ -2731,7 +2733,7 @@ export function scanAndCleanMessage(msg, messageId, trackDebug = false) {
     const existingUpdates = getStoredSwipeEntries(msg.extra?.bb_social_swipes, swipeId, allowLegacyFallback);
     
     const originalMes = msg.mes;
-    let currentMes = String(msg.mes || '').replace(/[\u200B-\u200D\uFEFF]/g, '');
+    let currentMes = String(msg.mes || '');
 
     if (trackDebug) {
         setSocialParseDebug('checking', t('Проверка текущего ответа'));

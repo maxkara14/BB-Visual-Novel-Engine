@@ -1,5 +1,7 @@
 // Edits live on the original source record, per persona and memory/trait slot.
 // Derived stats receive copies only; event scores and journal text are untouched.
+import { normalizeVneText } from './text-normalization.js';
+
 const bindings = new WeakMap();
 let revision = 0;
 let entries = [];
@@ -60,7 +62,7 @@ export function changeMemoryEntry(index, expectedRevision, action, text = '') {
         next = { ...history[history.length - 1], undo: history.slice(0, -1) };
     } else {
         if (!['edit', 'delete'].includes(action)) throw new Error('EDITOR_ACTION');
-        const value = String(text).trim();
+        const value = normalizeVneText(text).trim();
         if (action === 'edit' && (!value || value.length > (entry.kind === 'trait' ? 240 : 2000)
             || (entry.kind === 'trait' && !value.includes(':')))) throw new Error('EDITOR_TEXT');
         const previous = {};

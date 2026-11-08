@@ -1,4 +1,5 @@
 import { t as translateUi, ui } from './i18n.js';
+import { normalizeVneText } from './text-normalization.js';
 /**
  * Экранирует HTML символы
  */
@@ -350,7 +351,7 @@ function pickTraitObjectCandidate(value) {
 }
 
 export function sanitizeTraitOutput(raw = "") {
-    let text = String(raw || '').trim();
+    let text = normalizeVneText(raw || '').trim();
     if (!text) return '';
 
     text = text
@@ -367,9 +368,9 @@ export function sanitizeTraitOutput(raw = "") {
                 const traitName = parsed.trait_type || parsed.trait || parsed.name || parsed.title || '';
                 const traitDesc = parsed.description || parsed.desc || parsed.text || '';
                 if (traitName && traitDesc) {
-                    return `${String(traitName).trim()}: ${String(traitDesc).trim()}`;
+                    return `${normalizeVneText(traitName).trim()}: ${normalizeVneText(traitDesc).trim()}`;
                 }
-                if (traitName) return String(traitName).trim();
+                if (traitName) return normalizeVneText(traitName).trim();
             }
         } catch (e) {
             void e;
@@ -404,9 +405,9 @@ export function normalizeTraitResponse(raw = "") {
             const traitName = traitObject.trait_type || traitObject.trait || traitObject.name || traitObject.title || traitObject.label || '';
             const traitDesc = traitObject.description || traitObject.desc || traitObject.text || traitObject.summary || '';
             if (traitName && traitDesc) {
-                return `${String(traitName).trim()}: ${String(traitDesc).trim()}`;
+                return `${normalizeVneText(traitName).trim()}: ${normalizeVneText(traitDesc).trim()}`;
             }
-            if (traitName) return String(traitName).trim();
+            if (traitName) return normalizeVneText(traitName).trim();
         }
     }
 
@@ -547,7 +548,7 @@ export function extractJsonStringMatches(input = "", field = "") {
 }
 
 export function normalizeStatusLabel(value = "") {
-    return String(value || '')
+    return normalizeVneText(value || '')
         .replace(/_/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
@@ -560,7 +561,7 @@ export function sanitizeRelationshipStatus(value = "") {
 }
 
 export function sanitizeMoodlet(value = "") {
-    const normalized = String(value || '')
+    const normalized = normalizeVneText(value || '')
         .replace(/_/g, ' ')
         .replace(/\s+/g, ' ')
         .replace(/[.!?;]+$/g, '')
